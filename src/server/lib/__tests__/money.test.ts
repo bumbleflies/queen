@@ -63,6 +63,15 @@ describe('invoiceTotals (invoice 20230511-01 fixture)', () => {
     const totals = invoiceTotals([{ quantity: 1, unitNetCents: 5000, vatRate: 0 }]);
     expect(totals).toEqual({ netCents: 5000, vatCents: 0, grossCents: 5000 });
   });
+  it('0% line keeps vatNote and contributes 0 VAT', () => {
+    const vatNote = '§ 4 Nr. 21 a) bb) UStG steuerbefreit';
+    const lines = [{ quantity: 1, unitNetCents: 5000, vatRate: 0, vatNote }];
+    const totals = invoiceTotals(lines);
+    expect(totals).toEqual({ netCents: 5000, vatCents: 0, grossCents: 5000 });
+    // passthrough: totals() reads only quantity/unitNetCents/vatRate —
+    // the note survives untouched on the caller's object.
+    expect(lines[0].vatNote).toBe(vatNote);
+  });
 });
 
 describe('formatGermanEUR', () => {

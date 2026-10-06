@@ -39,6 +39,7 @@ export interface InvoiceLineInput {
   quantity: number;
   unitNetCents: number;
   vatRate: number;
+  vatNote?: string;
 }
 
 export interface InvoiceTotals {
