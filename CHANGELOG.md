@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.1](https://github.com/bumbleflies/queen/compare/queen-v0.5.0...queen-v0.5.1) (2026-10-06)
+
+
+### Bug Fixes
+
+* **import:** find filed PDFs in year subfolders and with "Gebucht - " prefix ([0a42e93](https://github.com/bumbleflies/queen/commit/0a42e936a1ccfa5592ffa1f1ca994a27386f1077))
+* **import:** find filed PDFs in year subfolders and with "Gebucht - " prefix ([750ff05](https://github.com/bumbleflies/queen/commit/750ff055e0b7e9f8c1d6e5d9727df8cce0b78082))
+
 ## [0.5.0](https://github.com/bumbleflies/queen/compare/queen-v0.4.0...queen-v0.5.0) (2026-10-06)
 
 
