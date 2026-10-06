@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/bumbleflies/queen/compare/queen-v0.4.0...queen-v0.5.0) (2026-10-06)
+
+
+### Features
+
+* **ui:** redesign login screen with branded centered card ([#13](https://github.com/bumbleflies/queen/issues/13)) ([ce37b6c](https://github.com/bumbleflies/queen/commit/ce37b6cc643f73a938a96678ae462fca9ef893cb))
+
 ## [0.4.0](https://github.com/bumbleflies/queen/compare/queen-v0.3.0...queen-v0.4.0) (2026-10-06)
 
 
