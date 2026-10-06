@@ -17,8 +17,6 @@ const bankTransactionSchema = new Schema(
   { timestamps: true },
 );
 
-bankTransactionSchema.index({ fireflyJournalId: 1 }, { unique: true });
-
 export type BankTransactionDoc = InferSchemaType<typeof bankTransactionSchema> & {
   _id: mongoose.Types.ObjectId;
 };
