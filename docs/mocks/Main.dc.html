@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>queen – Dashboard</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F4F3EF;color:#1B1B1F;font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:15px}
+a{color:#1F4E8C}a:hover{color:#123462}
+.nav a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;color:#3A3A40;text-decoration:none;font-weight:500;min-height:24px}
+.nav a:hover{background:#E9E7E0;color:#1B1B1F}
+.nav a.on{background:#1B1B1F;color:#FFFFFF}
+.card{background:#FFFFFF;border:1px solid #E2E0D8;border-radius:12px;padding:20px}
+.num{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:13px;font-weight:600}
+.b-draft{background:#E6E6E9;color:#3A3A40}.b-sent{background:#DCE7F7;color:#1F4E8C}.b-over{background:#FBE7C2;color:#7A4A00}.b-paid{background:#D7EEDD;color:#1E5B32}.b-cancel{background:#F6DAD7;color:#8A2219}.b-part{background:#EFE3F8;color:#5B2A86}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#5E5D66;font-weight:600;padding:10px 12px;border-bottom:1px solid #E2E0D8}
+td{padding:12px;border-bottom:1px solid #EEECE6;vertical-align:middle}
+.btn{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 18px;border-radius:8px;border:1px solid #1B1B1F;background:#1B1B1F;color:#FFFFFF;font:600 14px 'IBM Plex Sans',sans-serif;cursor:pointer;text-decoration:none}
+.btn:hover{background:#000000;color:#FFFFFF}
+.btn.ghost{background:#FFFFFF;color:#1B1B1F;border-color:#CFCCC2}
+.btn.ghost:hover{background:#F4F3EF;color:#1B1B1F}
+@media (max-width: 760px){
+.shell{flex-direction:column}
+.nav{max-width:none!important;flex:0 0 auto!important;flex-direction:row!important;align-items:center;overflow-x:auto;padding:8px 12px!important;border-right:0!important;border-bottom:1px solid #E2E0D8;gap:2px!important}
+.nav .brand{padding:0 12px 0 4px!important}
+.nav a{white-space:nowrap;min-height:44px;box-sizing:border-box}
+.main{padding:20px 16px 32px 16px!important}
+.main h1{font-size:24px!important}
+table.resp{min-width:0!important}
+table.resp thead{display:none}
+table.resp tr{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;padding:14px 16px;border-bottom:1px solid #EEECE6}
+table.resp td{border:0;padding:0;text-align:left!important}
+table.resp td[data-l]::before{content:attr(data-l);display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#5E5D66;font-weight:600;margin-bottom:2px}
+table.resp td.w{grid-column:1/-1}
+.acts .btn{flex:1 1 auto;justify-content:center}
+}
+</style>
+</helmet>
+<div class="shell" style="display: flex; flex-wrap: wrap; min-height: 100vh">
+  <nav class="nav" aria-label="Hauptnavigation" style="flex: 1 1 220px; max-width: 260px; box-sizing: border-box; padding: 24px 16px; background: #FBFAF7; border-right: 1px solid #E2E0D8; display: flex; flex-direction: column; gap: 4px">
+    <div class="brand" style="display: flex; align-items: center; gap: 10px; padding: 4px 12px 24px 12px">
+      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><path d="M14 2 25 8.5v11L14 26 3 19.5v-11Z" fill="#E0A100" stroke="#1B1B1F" stroke-width="2" stroke-linejoin="round"></path><path d="M9 12.5 11.5 15 14 11l2.5 4L19 12.5 18 18H10Z" fill="#1B1B1F"></path></svg>
+      <span style="font-weight: 700; font-size: 20px; letter-spacing: -0.01em">queen</span>
+    </div>
+    <a class="on" href="Main.dc.html">Dashboard</a>
+    <a href="Invoices.dc.html">Rechnungen</a>
+    <a href="Invoices.dc.html">Kunden</a>
+    <a href="Bank.dc.html">Bankabgleich</a>
+    <a href="Main.dc.html">Berichte</a>
+    <a href="Main.dc.html">Einstellungen</a>
+  </nav>
+  <main class="main" style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 32px 40px 48px 40px; display: flex; flex-direction: column; gap: 28px">
+    <header style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px">
+      <div>
+        <h1 style="margin: 0; font-size: 28px; letter-spacing: -0.01em">Dashboard</h1>
+        <p style="margin: 4px 0 0 0; color: #5E5D66">Dienstag, 6. Oktober 2026</p>
+      </div>
+      <a class="btn" href="InvoiceEdit.dc.html">+ Neue Rechnung</a>
+    </header>
+
+    <section aria-label="Kennzahlen" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px">
+      <div class="card">
+        <div style="color: #5E5D66; font-size: 13px; font-weight: 600">Offene Posten</div>
+        <div class="num" style="font-size: 28px; font-weight: 500; margin-top: 8px">8.972,20 €</div>
+        <div style="color: #5E5D66; font-size: 13px; margin-top: 4px">4 Rechnungen gesendet</div>
+      </div>
+      <div class="card" style="border-color: #E8B85A">
+        <div style="color: #7A4A00; font-size: 13px; font-weight: 600">Überfällig</div>
+        <div class="num" style="font-size: 28px; font-weight: 500; margin-top: 8px">1.071,00 €</div>
+        <div style="color: #5E5D66; font-size: 13px; margin-top: 4px">1 Rechnung · 8 Tage</div>
+      </div>
+      <div class="card">
+        <div style="color: #5E5D66; font-size: 13px; font-weight: 600">Bezahlt 2026</div>
+        <div class="num" style="font-size: 28px; font-weight: 500; margin-top: 8px">18.640,50 €</div>
+        <div style="color: #5E5D66; font-size: 13px; margin-top: 4px">brutto, nach Zahlungseingang</div>
+      </div>
+      <div class="card">
+        <div style="color: #5E5D66; font-size: 13px; font-weight: 600">Entwürfe</div>
+        <div class="num" style="font-size: 28px; font-weight: 500; margin-top: 8px">2</div>
+        <div style="color: #5E5D66; font-size: 13px; margin-top: 4px">noch nicht gesendet</div>
+      </div>
+    </section>
+
+    <section class="card" aria-label="Bankabgleich Status" style="display: flex; flex-wrap: wrap; gap: 24px; align-items: center; justify-content: space-between">
+      <div style="display: flex; gap: 32px; flex-wrap: wrap">
+        <div>
+          <div style="font-size: 13px; color: #5E5D66; font-weight: 600">GLS-Import (Firefly)</div>
+          <div style="margin-top: 6px; display: flex; align-items: center; gap: 8px"><span class="badge b-paid">OK</span> heute 06:00</div>
+        </div>
+        <div>
+          <div style="font-size: 13px; color: #5E5D66; font-weight: 600">Abgleich</div>
+          <div style="margin-top: 6px; display: flex; align-items: center; gap: 8px"><span class="badge b-paid">OK</span> heute 07:30 · 6 Buchungen · 2 zugeordnet</div>
+        </div>
+        <div>
+          <div style="font-size: 13px; color: #5E5D66; font-weight: 600">Offene Buchungen</div>
+          <div style="margin-top: 6px; display: flex; align-items: center; gap: 8px"><span class="badge b-over">2 prüfen</span></div>
+        </div>
+      </div>
+      <a class="btn ghost" href="Bank.dc.html">Zum Bankabgleich</a>
+    </section>
+
+    <section class="card" style="padding: 0; overflow: hidden">
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 18px 20px">
+        <h2 style="margin: 0; font-size: 18px">Fällig &amp; überfällig</h2>
+        <a href="Invoices.dc.html">Alle Rechnungen</a>
+      </div>
+      <div style="overflow-x: auto">
+        <table class="resp">
+          <thead><tr><th>Nr.</th><th>Kunde</th><th>Titel</th><th>Fällig</th><th style="text-align: right">Brutto</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td data-l="Nr." class="num"><a href="InvoiceDetail.dc.html">20260829-01</a></td><td data-l="Kunde" class="w">AFV Beispielland e.V. <span class="num" style="color: #5E5D66">10009</span></td><td data-l="Titel">LeagueSphere Saison 2026</td><td data-l="Fällig" class="num">28.09.2026</td><td data-l="Brutto" class="num" style="text-align: right">1.071,00 €</td><td data-l="Status"><span class="badge b-over">überfällig · 8 T</span></td></tr>
+            <tr><td data-l="Nr." class="num"><a href="InvoiceDetail.dc.html">20260915-01</a></td><td data-l="Kunde" class="w">Nordlicht Consulting GmbH <span class="num" style="color: #5E5D66">10016</span></td><td data-l="Titel">Moderation Strategietag</td><td data-l="Fällig" class="num">15.10.2026</td><td data-l="Brutto" class="num" style="text-align: right">4.855,20 €</td><td data-l="Status"><span class="badge b-sent">gesendet</span></td></tr>
+            <tr><td data-l="Nr." class="num"><a href="InvoiceDetail.dc.html">20260921-01</a></td><td data-l="Kunde" class="w">Musterakademie GbR <span class="num" style="color: #5E5D66">10006</span></td><td data-l="Titel">Übungsgruppe Q3</td><td data-l="Fällig" class="num">21.10.2026</td><td data-l="Brutto" class="num" style="text-align: right">380,00 €</td><td data-l="Status"><span class="badge b-part">teilbezahlt</span></td></tr>
+            <tr><td data-l="Nr." class="num"><a href="InvoiceDetail.dc.html">20261002-01</a></td><td data-l="Kunde" class="w">AFCV Beispielverband e.V. <span class="num" style="color: #5E5D66">10010</span></td><td data-l="Titel">LeagueSphere Saison 2026</td><td data-l="Fällig" class="num">01.11.2026</td><td data-l="Brutto" class="num" style="text-align: right">2.856,00 €</td><td data-l="Status"><span class="badge b-sent">gesendet</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1040}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

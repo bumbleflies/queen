@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>queen – Rechnung 20260915-01</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F4F3EF;color:#1B1B1F;font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:15px}
+a{color:#1F4E8C}a:hover{color:#123462}
+.nav a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;color:#3A3A40;text-decoration:none;font-weight:500;min-height:24px}
+.nav a:hover{background:#E9E7E0;color:#1B1B1F}
+.nav a.on{background:#1B1B1F;color:#FFFFFF}
+.card{background:#FFFFFF;border:1px solid #E2E0D8;border-radius:12px;padding:20px}
+.num{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:13px;font-weight:600;white-space:nowrap}
+.b-sent{background:#DCE7F7;color:#1F4E8C}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#5E5D66;font-weight:600;padding:10px 12px;border-bottom:1px solid #E2E0D8;white-space:nowrap}
+td{padding:12px;border-bottom:1px solid #EEECE6;vertical-align:top}
+.btn{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 18px;border-radius:8px;border:1px solid #1B1B1F;background:#1B1B1F;color:#FFFFFF;font:600 14px 'IBM Plex Sans',sans-serif;cursor:pointer;text-decoration:none}
+.btn:hover{background:#000000;color:#FFFFFF}
+.btn.ghost{background:#FFFFFF;color:#1B1B1F;border-color:#CFCCC2}
+.btn.ghost:hover{background:#F4F3EF;color:#1B1B1F}
+.btn.danger{background:#FFFFFF;color:#8A2219;border-color:#E3B3AD}
+.btn.danger:hover{background:#FBEDEB;color:#8A2219}
+.btn.dangerfill{background:#A3281D;border-color:#A3281D;color:#FFFFFF}
+.lbl{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#5E5D66;font-weight:600}
+.field{min-height:44px;box-sizing:border-box;padding:10px 14px;border-radius:8px;border:1px solid #CFCCC2;background:#FFFFFF;font:400 15px 'IBM Plex Sans',sans-serif;color:#1B1B1F;width:100%}
+@media (max-width: 760px){
+.shell{flex-direction:column}
+.nav{max-width:none!important;flex:0 0 auto!important;flex-direction:row!important;align-items:center;overflow-x:auto;padding:8px 12px!important;border-right:0!important;border-bottom:1px solid #E2E0D8;gap:2px!important}
+.nav .brand{padding:0 12px 0 4px!important}
+.nav a{white-space:nowrap;min-height:44px;box-sizing:border-box}
+.main{padding:20px 16px 32px 16px!important}
+.main h1{font-size:24px!important}
+table.resp{min-width:0!important}
+table.resp thead{display:none}
+table.resp tr{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;padding:14px 16px;border-bottom:1px solid #EEECE6}
+table.resp td{border:0;padding:0;text-align:left!important}
+table.resp td[data-l]::before{content:attr(data-l);display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#5E5D66;font-weight:600;margin-bottom:2px}
+table.resp td.w{grid-column:1/-1}
+.acts .btn{flex:1 1 auto;justify-content:center}
+}
+</style>
+</helmet>
+<div class="shell" style="display: flex; flex-wrap: wrap; min-height: 100vh">
+  <nav class="nav" aria-label="Hauptnavigation" style="flex: 1 1 220px; max-width: 260px; box-sizing: border-box; padding: 24px 16px; background: #FBFAF7; border-right: 1px solid #E2E0D8; display: flex; flex-direction: column; gap: 4px">
+    <div class="brand" style="display: flex; align-items: center; gap: 10px; padding: 4px 12px 24px 12px">
+      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><path d="M14 2 25 8.5v11L14 26 3 19.5v-11Z" fill="#E0A100" stroke="#1B1B1F" stroke-width="2" stroke-linejoin="round"></path><path d="M9 12.5 11.5 15 14 11l2.5 4L19 12.5 18 18H10Z" fill="#1B1B1F"></path></svg>
+      <span style="font-weight: 700; font-size: 20px; letter-spacing: -0.01em">queen</span>
+    </div>
+    <a href="Main.dc.html">Dashboard</a>
+    <a class="on" href="Invoices.dc.html">Rechnungen</a>
+    <a href="Invoices.dc.html">Kunden</a>
+    <a href="Bank.dc.html">Bankabgleich</a>
+    <a href="Main.dc.html">Berichte</a>
+    <a href="Main.dc.html">Einstellungen</a>
+  </nav>
+  <main class="main" style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 32px 40px 48px 40px; display: flex; flex-direction: column; gap: 20px">
+    <a href="Invoices.dc.html" style="font-size: 14px">← Rechnungen</a>
+    <header style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 16px">
+      <div>
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+          <h1 class="num" style="margin: 0; font-size: 28px; font-weight: 500">20260915-01</h1>
+          <span class="badge b-sent">gesendet · fällig in 9 Tagen</span>
+        </div>
+        <p style="margin: 6px 0 0 0; font-size: 18px">Moderation Strategietag</p>
+      </div>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap">
+        <a class="btn ghost" href="InvoiceDetail.dc.html">PDF öffnen</a>
+        <a class="btn ghost" href="Bank.dc.html">Zahlung zuordnen</a>
+        <button type="button" class="btn ghost" onClick="{{markPaid}}">Als bezahlt markieren</button>
+        <button type="button" class="btn danger" onClick="{{openCancel}}">Stornieren</button>
+      </div>
+    </header>
+
+    <sc-if value="{{showCancel}}" hint-placeholder-val="{{false}}">
+      <section class="card" role="dialog" aria-label="Rechnung stornieren" style="border-color: #E3B3AD; background: #FFFBFA; display: flex; flex-direction: column; gap: 14px">
+        <h2 style="margin: 0; font-size: 18px; color: #8A2219">Rechnung stornieren</h2>
+        <p style="margin: 0; color: #3A3A40; max-width: 70ch">Gesendete Rechnungen werden nicht gelöscht. queen erzeugt die Stornorechnung <span class="num">20261006-03</span> mit allen Positionen negiert, legt sie als PDF in Drive ab und setzt diese Rechnung auf „storniert“.</p>
+        <label style="display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: 14px">Grund (erscheint auf der Stornorechnung)
+          <input class="field" type="text" placeholder="z. B. falscher Leistungszeitraum">
+        </label>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap">
+          <button type="button" class="btn dangerfill" onClick="{{closeCancel}}">Stornorechnung erstellen</button>
+          <button type="button" class="btn ghost" onClick="{{closeCancel}}">Abbrechen</button>
+        </div>
+      </section>
+    </sc-if>
+    <sc-if value="{{paidNote}}" hint-placeholder-val="{{false}}">
+      <section class="card" role="status" style="border-color: #9ACDA9; background: #F3FAF5">Manuell als bezahlt markiert (Mock). In queen fragt der Dialog nach Zahlungsdatum und Notiz.</section>
+    </sc-if>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px">
+      <section class="card" style="display: flex; flex-direction: column; gap: 8px">
+        <div class="lbl">Rechnungsadresse</div>
+        <div style="white-space: pre-line">Nordlicht Consulting GmbH
+z. H. [Ansprechperson]
+[Straße Nr.]
+[PLZ Ort]</div>
+        <div style="font-size: 14px; color: #5E5D66">Kundennr. <span class="num">10016</span> · <a href="Invoices.dc.html">Kundenkonto</a></div>
+      </section>
+      <section class="card" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 20px">
+        <div><div class="lbl">Rechnungsdatum</div><div class="num" style="margin-top: 4px">15.09.2026</div></div>
+        <div><div class="lbl">Leistungszeitraum</div><div class="num" style="margin-top: 4px">09.2026</div></div>
+        <div><div class="lbl">Zahlungsziel</div><div style="margin-top: 4px">30 Tage</div></div>
+        <div><div class="lbl">Fällig am</div><div class="num" style="margin-top: 4px">15.10.2026</div></div>
+        <div style="grid-column: span 2"><div class="lbl">Verwendungszweck</div><div class="num" style="margin-top: 4px; font-size: 17px">10016-20260915-01</div></div>
+      </section>
+    </div>
+
+    <section class="card" style="padding: 0; overflow: hidden">
+      <h2 style="margin: 0; font-size: 18px; padding: 18px 20px">Positionen</h2>
+      <div style="overflow-x: auto">
+        <table class="resp">
+          <thead><tr><th>Pos.</th><th>Beschreibung</th><th style="text-align: right">Menge</th><th style="text-align: right">Einzel netto</th><th style="text-align: right">USt.</th><th style="text-align: right">Netto</th></tr></thead>
+          <tbody>
+            <tr><td data-l="Pos." class="num">1</td><td data-l="Beschreibung" class="w">Moderation Strategietag inkl. Vorbereitung</td><td data-l="Menge" class="num" style="text-align: right">1</td><td data-l="Einzel netto" class="num" style="text-align: right">3.200,00 €</td><td data-l="USt." class="num" style="text-align: right">19 %</td><td data-l="Netto" class="num" style="text-align: right">3.200,00 €</td></tr>
+            <tr><td data-l="Pos." class="num">1.1</td><td data-l="Beschreibung" class="w">Konzeption Workshop-Formate</td><td data-l="Menge" class="num" style="text-align: right">1</td><td data-l="Einzel netto" class="num" style="text-align: right">600,00 €</td><td data-l="USt." class="num" style="text-align: right">19 %</td><td data-l="Netto" class="num" style="text-align: right">600,00 €</td></tr>
+            <tr><td data-l="Pos." class="num">1.2</td><td data-l="Beschreibung" class="w">Reisekostenpauschale</td><td data-l="Menge" class="num" style="text-align: right">1</td><td data-l="Einzel netto" class="num" style="text-align: right">400,00 €</td><td data-l="USt." class="num" style="text-align: right">19 %</td><td data-l="Netto" class="num" style="text-align: right">400,00 €</td></tr>
+            <tr><td data-l="Pos." class="num">1.3</td><td data-l="Beschreibung" class="w">Nachlass Reisekosten 30 %</td><td data-l="Menge" class="num" style="text-align: right">1</td><td data-l="Einzel netto" class="num" style="text-align: right">−120,00 €</td><td data-l="USt." class="num" style="text-align: right">19 %</td><td data-l="Netto" class="num" style="text-align: right">−120,00 €</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="display: flex; justify-content: flex-end; padding: 16px 20px; background: #FBFAF7">
+        <div style="display: grid; grid-template-columns: auto auto; gap: 6px 32px; font-size: 15px">
+          <span>Netto</span><span class="num" style="text-align: right">4.080,00 €</span>
+          <span>USt. 19 % auf 4.080,00 €</span><span class="num" style="text-align: right">775,20 €</span>
+          <span style="font-weight: 700; padding-top: 6px; border-top: 1px solid #CFCCC2">Brutto</span><span class="num" style="text-align: right; font-weight: 500; padding-top: 6px; border-top: 1px solid #CFCCC2">4.855,20 €</span>
+        </div>
+      </div>
+    </section>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px">
+      <section class="card" style="display: flex; flex-direction: column; gap: 10px">
+        <h2 style="margin: 0; font-size: 18px">Zahlungen</h2>
+        <p style="margin: 0; color: #5E5D66">Noch kein Zahlungseingang. Nächster Bankabgleich morgen 07:30.</p>
+        <div style="display: flex; justify-content: space-between; font-size: 14px; border-top: 1px solid #EEECE6; padding-top: 10px"><span>Offen</span><span class="num" style="font-weight: 500">4.855,20 €</span></div>
+      </section>
+      <section class="card" style="display: flex; flex-direction: column; gap: 10px">
+        <h2 style="margin: 0; font-size: 18px">Verlauf</h2>
+        <ol style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 14px">
+          <li><span class="num">15.09.2026 10:12</span> gesendet, PDF in Drive abgelegt · <a href="InvoiceDetail.dc.html">2026-09.20260915-01 - Nordlicht Consulting GmbH 10016 - Moderation Strategietag.pdf</a></li>
+          <li><span class="num">14.09.2026 17:40</span> Entwurf erstellt</li>
+        </ol>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1040}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { showCancel: false, paidNote: false };
+  }
+  renderVals() {
+    var self = this;
+    return {
+      showCancel: this.state.showCancel,
+      paidNote: this.state.paidNote,
+      openCancel: function () { self.setState({ showCancel: true, paidNote: false }); },
+      closeCancel: function () { self.setState({ showCancel: false }); },
+      markPaid: function () { self.setState({ paidNote: true, showCancel: false }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

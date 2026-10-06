@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>queen mobil – Rechnung</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F4F3EF;color:#1B1B1F;font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:15px}
+a{color:#1F4E8C}a:hover{color:#123462}
+.num{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.b-sent{background:#DCE7F7;color:#1F4E8C}
+.card{background:#FFFFFF;border:1px solid #E2E0D8;border-radius:12px;padding:16px}
+.lbl{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#5E5D66;font-weight:600}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 16px;border-radius:10px;border:1px solid #1B1B1F;background:#1B1B1F;color:#FFFFFF;font:600 15px 'IBM Plex Sans',sans-serif;cursor:pointer;text-decoration:none}
+.btn.ghost{background:#FFFFFF;color:#1B1B1F;border-color:#CFCCC2}
+.sheetbtn{display:flex;align-items:center;min-height:52px;padding:0 16px;border:0;border-bottom:1px solid #EEECE6;background:#FFFFFF;font:500 16px 'IBM Plex Sans',sans-serif;color:#1B1B1F;text-align:left;width:100%;cursor:pointer;text-decoration:none}
+.sheetbtn.red{color:#8A2219}
+.line{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #EEECE6;font-size:14px}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; display: flex; flex-direction: column; overflow: hidden; background: #F4F3EF">
+  <header style="display: flex; align-items: center; gap: 8px; padding: 12px 8px 8px 8px">
+    <a href="MobileInvoices.dc.html" aria-label="Zurück zu Rechnungen" style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; color: #1B1B1F"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg></a>
+    <h1 class="num" style="margin: 0; font-size: 18px; font-weight: 500">20260915-01</h1>
+  </header>
+  <div style="flex: 1 1 auto; overflow-y: auto; padding: 0 16px 100px 16px; display: flex; flex-direction: column; gap: 12px">
+    <section style="display: flex; flex-direction: column; gap: 6px; padding: 4px 0 8px 0">
+      <span class="badge b-sent" style="align-self: flex-start">gesendet · fällig in 9 Tagen</span>
+      <div style="font-size: 20px; font-weight: 600">Nordlicht Consulting GmbH</div>
+      <div style="color: #3A3A40">Moderation Strategietag</div>
+      <div class="num" style="font-size: 32px; font-weight: 500; margin-top: 4px">4.855,20 €</div>
+      <div style="font-size: 13px; color: #5E5D66">brutto · offen 4.855,20 €</div>
+    </section>
+    <section class="card" style="display: flex; flex-direction: column; gap: 6px">
+      <div class="lbl">Verwendungszweck</div>
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px">
+        <span class="num" style="font-size: 17px">10016-20260915-01</span>
+        <button type="button" class="btn ghost" style="min-height: 44px" onClick="{{copy}}">{{copyLabel}}</button>
+      </div>
+    </section>
+    <section class="card" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+      <div><div class="lbl">Datum</div><div class="num" style="margin-top: 2px">15.09.2026</div></div>
+      <div><div class="lbl">Fällig</div><div class="num" style="margin-top: 2px">15.10.2026</div></div>
+      <div><div class="lbl">Zeitraum</div><div class="num" style="margin-top: 2px">09.2026</div></div>
+      <div><div class="lbl">Kunde</div><div class="num" style="margin-top: 2px">10016</div></div>
+    </section>
+    <section class="card" style="padding: 4px 16px">
+      <button type="button" onClick="{{toggleLines}}" style="display: flex; justify-content: space-between; align-items: center; width: 100%; min-height: 48px; border: 0; background: transparent; padding: 0; font: 600 15px 'IBM Plex Sans', sans-serif; color: #1B1B1F; cursor: pointer">
+        <span>4 Positionen</span><span aria-hidden="true">{{chev}}</span>
+      </button>
+      <sc-if value="{{showLines}}" hint-placeholder-val="{{false}}">
+        <div>
+          <div class="line"><span><span class="num">1</span> Moderation Strategietag</span><span class="num">3.200,00 €</span></div>
+          <div class="line"><span><span class="num">1.1</span> Konzeption</span><span class="num">600,00 €</span></div>
+          <div class="line"><span><span class="num">1.2</span> Reisekostenpauschale</span><span class="num">400,00 €</span></div>
+          <div class="line"><span><span class="num">1.3</span> Nachlass Reisekosten 30 %</span><span class="num">−120,00 €</span></div>
+          <div class="line" style="border: 0"><span>USt. 19 %</span><span class="num">775,20 €</span></div>
+        </div>
+      </sc-if>
+    </section>
+    <section class="card" style="display: flex; flex-direction: column; gap: 6px">
+      <div class="lbl">Zahlungen</div>
+      <div style="color: #5E5D66; font-size: 14px">Noch kein Eingang. Nächster Abgleich morgen 07:30.</div>
+    </section>
+    <a href="MobileInvoice.dc.html" class="card" style="display: flex; align-items: center; gap: 10px; text-decoration: none">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1F4E8C" stroke-width="2" aria-hidden="true"><path d="M6 2h9l5 5v15H6zM14 2v6h6"></path></svg>
+      <span>PDF in Drive öffnen</span>
+    </a>
+  </div>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; display: flex; gap: 10px; padding: 12px 16px 20px 16px; background: #FBFAF7; border-top: 1px solid #E2E0D8">
+    <a class="btn" href="MobileBank.dc.html" style="flex: 1 1 auto">Zahlung zuordnen</a>
+    <button type="button" class="btn ghost" aria-label="Weitere Aktionen" onClick="{{openSheet}}" style="width: 56px; padding: 0"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle></svg></button>
+  </div>
+
+  <sc-if value="{{sheet}}" hint-placeholder-val="{{false}}">
+    <div style="position: absolute; inset: 0; background: rgba(20, 20, 24, 0.45); display: flex; flex-direction: column; justify-content: flex-end">
+      <button type="button" aria-label="Schließen" onClick="{{closeSheet}}" style="flex: 1 1 auto; border: 0; background: transparent; cursor: pointer"></button>
+      <div role="dialog" aria-label="Aktionen" style="background: #FFFFFF; border-radius: 16px 16px 0 0; overflow: hidden; padding-bottom: 16px">
+        <div style="width: 40px; height: 4px; border-radius: 2px; background: #CFCCC2; margin: 10px auto"></div>
+        <button type="button" class="sheetbtn" onClick="{{closeSheet}}">Als bezahlt markieren …</button>
+        <button type="button" class="sheetbtn" onClick="{{closeSheet}}">PDF teilen</button>
+        <button type="button" class="sheetbtn" onClick="{{closeSheet}}">Zahlungserinnerung senden</button>
+        <button type="button" class="sheetbtn red" onClick="{{closeSheet}}">Stornieren (Stornorechnung)</button>
+        <button type="button" class="sheetbtn" style="border: 0; color: #5E5D66" onClick="{{closeSheet}}">Abbrechen</button>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { lines: false, sheet: false, copied: false };
+  }
+  renderVals() {
+    var self = this;
+    return {
+      showLines: this.state.lines,
+      chev: this.state.lines ? '▴' : '▾',
+      toggleLines: function () { self.setState({ lines: !self.state.lines }); },
+      sheet: this.state.sheet,
+      openSheet: function () { self.setState({ sheet: true }); },
+      closeSheet: function () { self.setState({ sheet: false }); },
+      copyLabel: this.state.copied ? 'Kopiert' : 'Kopieren',
+      copy: function () { self.setState({ copied: true }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

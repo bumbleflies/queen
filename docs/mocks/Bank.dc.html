@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>queen – Bankabgleich</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F4F3EF;color:#1B1B1F;font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:15px}
+a{color:#1F4E8C}a:hover{color:#123462}
+.nav a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;color:#3A3A40;text-decoration:none;font-weight:500;min-height:24px}
+.nav a:hover{background:#E9E7E0;color:#1B1B1F}
+.nav a.on{background:#1B1B1F;color:#FFFFFF}
+.card{background:#FFFFFF;border:1px solid #E2E0D8;border-radius:12px;padding:20px}
+.num{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:13px;font-weight:600;white-space:nowrap}
+.b-sent{background:#DCE7F7;color:#1F4E8C}.b-over{background:#FBE7C2;color:#7A4A00}.b-paid{background:#D7EEDD;color:#1E5B32}.b-draft{background:#E6E6E9;color:#3A3A40}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#5E5D66;font-weight:600;padding:10px 12px;border-bottom:1px solid #E2E0D8;white-space:nowrap}
+td{padding:12px;border-bottom:1px solid #EEECE6;vertical-align:middle}
+.btn{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 18px;border-radius:8px;border:1px solid #1B1B1F;background:#1B1B1F;color:#FFFFFF;font:600 14px 'IBM Plex Sans',sans-serif;cursor:pointer;text-decoration:none}
+.btn:hover{background:#000000;color:#FFFFFF}
+.btn.ghost{background:#FFFFFF;color:#1B1B1F;border-color:#CFCCC2}
+.btn.ghost:hover{background:#F4F3EF;color:#1B1B1F}
+.tab{min-height:44px;padding:0 16px;border:0;border-bottom:3px solid transparent;background:transparent;font:600 15px 'IBM Plex Sans',sans-serif;color:#5E5D66;cursor:pointer}
+.tab.on{color:#1B1B1F;border-bottom-color:#E0A100}
+.sug{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid #E2E0D8;border-radius:8px}
+@media (max-width: 760px){
+.shell{flex-direction:column}
+.nav{max-width:none!important;flex:0 0 auto!important;flex-direction:row!important;align-items:center;overflow-x:auto;padding:8px 12px!important;border-right:0!important;border-bottom:1px solid #E2E0D8;gap:2px!important}
+.nav .brand{padding:0 12px 0 4px!important}
+.nav a{white-space:nowrap;min-height:44px;box-sizing:border-box}
+.main{padding:20px 16px 32px 16px!important}
+.main h1{font-size:24px!important}
+table.resp{min-width:0!important}
+table.resp thead{display:none}
+table.resp tr{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;padding:14px 16px;border-bottom:1px solid #EEECE6}
+table.resp td{border:0;padding:0;text-align:left!important}
+table.resp td[data-l]::before{content:attr(data-l);display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#5E5D66;font-weight:600;margin-bottom:2px}
+table.resp td.w{grid-column:1/-1}
+.acts .btn{flex:1 1 auto;justify-content:center}
+}
+</style>
+</helmet>
+<div class="shell" style="display: flex; flex-wrap: wrap; min-height: 100vh">
+  <nav class="nav" aria-label="Hauptnavigation" style="flex: 1 1 220px; max-width: 260px; box-sizing: border-box; padding: 24px 16px; background: #FBFAF7; border-right: 1px solid #E2E0D8; display: flex; flex-direction: column; gap: 4px">
+    <div class="brand" style="display: flex; align-items: center; gap: 10px; padding: 4px 12px 24px 12px">
+      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><path d="M14 2 25 8.5v11L14 26 3 19.5v-11Z" fill="#E0A100" stroke="#1B1B1F" stroke-width="2" stroke-linejoin="round"></path><path d="M9 12.5 11.5 15 14 11l2.5 4L19 12.5 18 18H10Z" fill="#1B1B1F"></path></svg>
+      <span style="font-weight: 700; font-size: 20px; letter-spacing: -0.01em">queen</span>
+    </div>
+    <a href="Main.dc.html">Dashboard</a>
+    <a href="Invoices.dc.html">Rechnungen</a>
+    <a href="Invoices.dc.html">Kunden</a>
+    <a class="on" href="Bank.dc.html">Bankabgleich</a>
+    <a href="Main.dc.html">Berichte</a>
+    <a href="Main.dc.html">Einstellungen</a>
+  </nav>
+  <main class="main" style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 32px 40px 48px 40px; display: flex; flex-direction: column; gap: 20px">
+    <header style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px">
+      <div>
+        <h1 style="margin: 0; font-size: 28px; letter-spacing: -0.01em">Bankabgleich</h1>
+        <p style="margin: 4px 0 0 0; color: #5E5D66">GLS Geschäftskonto via Firefly · Import 06:00 · Abgleich 07:30</p>
+      </div>
+      <div class="acts" style="display: flex; gap: 10px; flex-wrap: wrap; width: 100%; max-width: 420px; justify-content: flex-end">
+        <button type="button" class="btn ghost" onClick="{{sync}}">Jetzt synchronisieren</button>
+      </div>
+    </header>
+
+    <section class="card" style="display: flex; flex-wrap: wrap; gap: 12px 32px; align-items: center; padding: 14px 20px">
+      <span style="display: flex; align-items: center; gap: 8px"><span class="badge b-paid">OK</span> {{runLabel}}</span>
+      <span style="color: #5E5D66; font-size: 14px">Zeitraum: 29.09.–06.10.2026 · 6 Eingänge · 2 automatisch zugeordnet</span>
+    </section>
+
+    <div role="tablist" aria-label="Buchungen" style="display: flex; gap: 4px; border-bottom: 1px solid #E2E0D8; overflow-x: auto">
+      <sc-for list="{{tabs}}" as="t" hint-placeholder-count="3">
+        <button type="button" role="tab" class="{{t.cls}}" onClick="{{t.pick}}">{{t.label}}</button>
+      </sc-for>
+    </div>
+
+    <sc-if value="{{isOpen}}" hint-placeholder-val="{{true}}">
+      <div style="display: flex; flex-direction: column; gap: 16px">
+        <sc-for list="{{open}}" as="tx" hint-placeholder-count="2">
+          <article class="card" style="display: flex; flex-direction: column; gap: 14px">
+            <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; align-items: flex-start">
+              <div style="min-width: 0">
+                <div style="font-weight: 600">{{tx.who}}</div>
+                <div class="num" style="font-size: 13px; color: #5E5D66; margin-top: 2px; overflow-wrap: anywhere">{{tx.iban}} · {{tx.date}}</div>
+              </div>
+              <div class="num" style="font-size: 22px; font-weight: 500; color: #1E5B32">{{tx.amount}}</div>
+            </div>
+            <div style="background: #FBFAF7; border-radius: 8px; padding: 10px 12px; font-size: 14px">
+              <span style="color: #5E5D66">Verwendungszweck:</span> <span class="num" style="overflow-wrap: anywhere">{{tx.ref}}</span>
+              <div style="margin-top: 6px; color: #7A4A00; font-weight: 600">{{tx.reason}}</div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px">
+              <div style="font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: #5E5D66; font-weight: 600">Vorschläge</div>
+              <sc-for list="{{tx.sugs}}" as="s" hint-placeholder-count="2">
+                <div class="sug">
+                  <div style="min-width: 0">
+                    <span class="num">{{s.nr}}</span> · {{s.client}}
+                    <div style="font-size: 13px; color: #5E5D66">{{s.why}}</div>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 12px">
+                    <span class="num">{{s.open}}</span>
+                    <button type="button" class="btn" onClick="{{s.assign}}">Zuordnen</button>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+            <div class="acts" style="display: flex; gap: 10px; flex-wrap: wrap">
+              <a class="btn ghost" href="Invoices.dc.html">Andere Rechnung wählen …</a>
+              <button type="button" class="btn ghost" onClick="{{tx.ignore}}">Keine Rechnungszahlung</button>
+            </div>
+          </article>
+        </sc-for>
+        <sc-if value="{{allDone}}" hint-placeholder-val="{{false}}">
+          <section class="card" style="text-align: center; color: #5E5D66; padding: 40px 20px">Alles zugeordnet. Nächster Abgleich morgen 07:30.</section>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{isDone}}" hint-placeholder-val="{{false}}">
+      <section class="card" style="padding: 0; overflow: hidden">
+        <table class="resp">
+          <thead><tr><th>Datum</th><th>Auftraggeber</th><th>Rechnung</th><th>Methode</th><th style="text-align: right">Betrag</th><th>Ergebnis</th></tr></thead>
+          <tbody>
+            <sc-for list="{{done}}" as="d" hint-placeholder-count="3">
+              <tr>
+                <td class="num" data-l="Datum">{{d.date}}</td>
+                <td data-l="Auftraggeber">{{d.who}}</td>
+                <td class="num" data-l="Rechnung"><a href="InvoiceDetail.dc.html">{{d.nr}}</a></td>
+                <td data-l="Methode">{{d.method}}</td>
+                <td class="num" data-l="Betrag" style="text-align: right">{{d.amount}}</td>
+                <td data-l="Ergebnis"><span class="{{d.cls}}">{{d.result}}</span></td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{isIgnored}}" hint-placeholder-val="{{false}}">
+      <section class="card" style="padding: 0; overflow: hidden">
+        <table class="resp">
+          <thead><tr><th>Datum</th><th>Auftraggeber</th><th>Verwendungszweck</th><th style="text-align: right">Betrag</th></tr></thead>
+          <tbody>
+            <sc-for list="{{ignored}}" as="d" hint-placeholder-count="2">
+              <tr>
+                <td class="num" data-l="Datum">{{d.date}}</td>
+                <td data-l="Auftraggeber">{{d.who}}</td>
+                <td class="num w" data-l="Verwendungszweck">{{d.ref}}</td>
+                <td class="num" data-l="Betrag" style="text-align: right">{{d.amount}}</td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </section>
+    </sc-if>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1040}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      tab: 'open',
+      synced: false,
+      open: [
+        { id: 'a', who: 'AFV BEISPIELLAND E.V.', iban: 'DE12 3456 7890 1234 5678 90', date: '05.10.2026', amount: '+1.071,00 €', ref: 'Rechnung LeagueSphere 2026 AFV', reason: 'Kein Verwendungszweck im Format Kundennr-Rechnungsnr erkannt',
+          sugs: [{ nr: '20260829-01', client: 'AFV Beispielland e.V.', why: 'Betrag exakt · Auftraggeber ≈ Kunde 10009', open: '1.071,00 €' }] },
+        { id: 'b', who: 'MUSTERAKADEMIE GBR', iban: 'DE98 7654 3210 9876 5432 10', date: '02.10.2026', amount: '+190,00 €', ref: '10060-20260921-01 Rest', reason: 'Kundennummer 10060 passt nicht zu Rechnung 20260921-01 (Kunde 10006)',
+          sugs: [{ nr: '20260921-01', client: 'Musterakademie GbR', why: 'Rechnungsnr. passt · Betrag = offener Rest', open: '190,00 €' }] }
+      ],
+      done: [
+        { date: '01.10.2026', who: 'HAFENBLICK TRAINING GMBH', nr: '20260714-01', method: 'Referenz', amount: '3.808,00 €', result: 'bezahlt', cls: 'badge b-paid' },
+        { date: '25.09.2026', who: 'MUSTERAKADEMIE GBR', nr: '20260921-01', method: 'Referenz', amount: '190,00 €', result: 'teilbezahlt', cls: 'badge b-sent' }
+      ],
+      ignored: [
+        { date: '30.09.2026', who: 'GLS BANK', ref: 'Kontoführung 09/2026', amount: '+0,12 €' }
+      ]
+    };
+  }
+  renderVals() {
+    var self = this;
+    var st = this.state;
+    var move = function (tx, s) {
+      self.setState({
+        open: st.open.filter(function (x) { return x.id !== tx.id; }),
+        done: [{ date: tx.date, who: tx.who, nr: s.nr, method: 'manuell', amount: tx.amount.replace('+', ''), result: 'bezahlt', cls: 'badge b-paid' }].concat(st.done)
+      });
+    };
+    var open = st.open.map(function (tx) {
+      return Object.assign({}, tx, {
+        sugs: tx.sugs.map(function (s) { return Object.assign({}, s, { assign: function () { move(tx, s); } }); }),
+        ignore: function () {
+          self.setState({ open: st.open.filter(function (x) { return x.id !== tx.id; }), ignored: [{ date: tx.date, who: tx.who, ref: tx.ref, amount: tx.amount }].concat(st.ignored) });
+        }
+      });
+    });
+    var defs = [['open', 'Offen', st.open.length], ['done', 'Zugeordnet', st.done.length], ['ignored', 'Ignoriert', st.ignored.length]];
+    var tabs = defs.map(function (d) {
+      return { label: d[1] + ' (' + d[2] + ')', cls: d[0] === st.tab ? 'tab on' : 'tab', pick: function () { self.setState({ tab: d[0] }); } };
+    });
+    return {
+      tabs: tabs, open: open, done: st.done, ignored: st.ignored,
+      isOpen: st.tab === 'open', isDone: st.tab === 'done', isIgnored: st.tab === 'ignored',
+      allDone: st.open.length === 0,
+      runLabel: st.synced ? 'Synchronisiert gerade eben' : 'Letzter Abgleich heute 07:30',
+      sync: function () { self.setState({ synced: true }); }
+    };
+  }
+}
+</script>
+</body>
+</html>
