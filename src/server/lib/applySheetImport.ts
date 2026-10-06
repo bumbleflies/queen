@@ -14,6 +14,8 @@ import type { ImportPlan, PlannedInvoice } from './sheetImport';
 export interface DriveFileRef {
   fileId: string;
   link: string;
+  /** Actual Drive name (may carry a "Gebucht - " prefix). */
+  name?: string;
 }
 
 export interface ApplyOptions {
@@ -187,7 +189,7 @@ export async function applySheetImport(
       ...invoiceDoc(inv, clientIds.get(inv.customerNumber)),
       driveMetadata: inv.driveFileName
         ? {
-            fileName: inv.driveFileName,
+            fileName: drive?.name ?? inv.driveFileName,
             ...(drive ? { fileId: drive.fileId, link: drive.link, folderId: options.folderId } : {}),
           }
         : undefined,
