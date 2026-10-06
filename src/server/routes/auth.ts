@@ -2,7 +2,7 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import passport from 'passport';
 import { Strategy as GoogleStrategy, type VerifyCallback } from 'passport-google-oauth20';
 import { User } from '../models/User';
-import { isAdmin, isAllowed, parseBearerToken, signToken, verifyToken } from '../services/AuthService';
+import { isAdmin, parseBearerToken, signToken, verifyToken } from '../services/AuthService';
 import { userRoleSchema } from '../../shared/schemas/user';
 
 export const AUTH_COOKIE = 'queen_token';
@@ -72,7 +72,6 @@ async function upsertUserFromProfile(profile: GoogleProfile, refreshToken?: stri
   if (!email) {
     throw new Error('no email on google profile');
   }
-  const allowed = isAllowed(email);
   const role = isAdmin(email) ? 'admin' : 'user';
   const existing = await User.findOne({ $or: [{ googleId: profile.id }, { email }] });
   if (existing) {
@@ -81,7 +80,6 @@ async function upsertUserFromProfile(profile: GoogleProfile, refreshToken?: stri
       email,
       name: profile.displayName ?? existing.get('name'),
       role,
-      allowed,
       ...(refreshToken ? { refreshToken } : {}),
     });
     await existing.save();
@@ -93,7 +91,6 @@ async function upsertUserFromProfile(profile: GoogleProfile, refreshToken?: stri
     role,
     googleId: profile.id,
     ...(refreshToken ? { refreshToken } : {}),
-    allowed,
   });
 }
 
@@ -151,8 +148,8 @@ export function createAuthRouter() {
           return;
         }
         const email = profileEmail(profile);
-        if (!email || !isAllowed(email)) {
-          res.status(403).json({ error: 'email not allowed' });
+        if (!email) {
+          res.status(403).json({ error: 'no email on google profile' });
           return;
         }
         const user = await upsertUserFromProfile(profile, profile._refreshToken);

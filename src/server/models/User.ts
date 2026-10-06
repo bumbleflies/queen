@@ -8,7 +8,6 @@ const userSchema = new Schema(
     googleId: { type: String },
     // TODO: encrypt refreshToken at rest (e.g. AES-GCM with a KMS key) — plain for now. Follow-up before prod.
     refreshToken: { type: String },
-    allowed: { type: Boolean, required: true, default: true },
   },
   { timestamps: true },
 );

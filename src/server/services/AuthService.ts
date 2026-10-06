@@ -50,32 +50,14 @@ function matchesEntry(entry: string, email: string): boolean {
   return at > 0 && normalised.slice(0, at) === entry && normalised.slice(at + 1) === BUMBLEFLIES_EMAIL_DOMAIN;
 }
 
-export function getAllowedEmails(): string[] {
-  return parseEmailList(process.env.ALLOWED_EMAILS);
-}
-
 /**
- * Optional stricter allowlist. queen reuses the bumbleflies Google OAuth client,
- * whose consent screen is restricted to the bumbleflies.de domain, so an empty
- * `ALLOWED_EMAILS` already allows only bumbleflies users. Set it only for
- * defense-in-depth.
- */
-export function isAllowed(email: string): boolean {
-  const allowed = getAllowedEmails();
-  if (allowed.length === 0) return true;
-  return allowed.some((entry) => matchesEntry(entry, email));
-}
-
-/**
- * Explicit admins from `ADMIN_EMAILS`, else every `ALLOWED_EMAILS` entry, else
- * (both unset) every authenticated user — a bumbleflies-only deployment has no
- * user population to distinguish, and this keeps the app usable with zero
- * email configuration.
+ * Explicit admins from `ADMIN_EMAILS`. Bare entries are usernames at
+ * bumbleflies.de. When unset, every authenticated user is an admin — the
+ * bumbleflies-only OAuth client is the access boundary, so there is no other
+ * user population to distinguish.
  */
 export function getAdminEmails(): string[] {
-  const explicit = parseEmailList(process.env.ADMIN_EMAILS);
-  if (explicit.length > 0) return explicit;
-  return getAllowedEmails();
+  return parseEmailList(process.env.ADMIN_EMAILS);
 }
 
 export function isAdmin(email: string): boolean {
