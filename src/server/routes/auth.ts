@@ -110,6 +110,16 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   }
 }
 
+/** Must run after {@link requireAuth}; rejects authenticated non-admins. */
+export function requireAdmin(_req: Request, res: Response, next: NextFunction): void {
+  const user = res.locals.user as { role?: string } | undefined;
+  if (user?.role !== 'admin') {
+    res.status(403).json({ error: 'forbidden' });
+    return;
+  }
+  next();
+}
+
 export function createAuthRouter() {
   const router = Router();
 
