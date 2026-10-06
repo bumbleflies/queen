@@ -1,6 +1,8 @@
 import jwt from 'jsonwebtoken';
 import type { JwtPayload } from '../../shared/types';
 import { userRoleSchema } from '../../shared/schemas/user';
+import { User } from '../models/User';
+import { createOAuth2Client } from './DriveService';
 
 export function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
@@ -39,6 +41,27 @@ export function isAllowed(email: string): boolean {
 
 export function signToken(payload: JwtPayload): string {
   return jwt.sign(payload, getJwtSecret(), { expiresIn: '12h' });
+}
+
+export interface GoogleAccess {
+  accessToken: string;
+  refreshToken: string;
+}
+
+/**
+ * Exchange a user's stored Google refresh token for a fresh access token.
+ * The job fetches this at run time (never captures tokens in job data, which
+ * would expire before retries).
+ */
+export async function getGoogleAccessTokenForUser(userId: string): Promise<GoogleAccess> {
+  const user = await User.findById(userId);
+  if (!user?.refreshToken) {
+    throw new Error(`No Google refresh token stored for user ${userId}`);
+  }
+  const client = createOAuth2Client(user.refreshToken);
+  const { token } = await client.getAccessToken();
+  if (!token) throw new Error('Failed to obtain Google access token');
+  return { accessToken: token, refreshToken: user.refreshToken };
 }
 
 export function verifyToken(token: string): JwtPayload {
