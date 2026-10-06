@@ -3,6 +3,9 @@ import { expect, afterEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import * as matchers from '@testing-library/jest-dom/matchers';
 
+// Test env fallbacks — fail-fast JWT_SECRET in app boot must not break the suite.
+process.env.JWT_SECRET ??= 'test-jwt-secret-for-suite-only';
+
 // Register jest-dom matchers with vitest
 expect.extend(matchers);
 
