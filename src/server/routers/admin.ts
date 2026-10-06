@@ -6,6 +6,7 @@ import { buildImportPlan } from '../lib/sheetImport';
 import { applySheetImport, type DriveFileRef } from '../lib/applySheetImport';
 import { getGoogleAccessTokenForUser } from '../services/AuthService';
 import { createOAuth2Client } from '../services/DriveService';
+import { createInvoicePdfFinder, type DriveListLike } from '../services/driveLookup';
 
 const importSheetSchema = z.object({
   clientsCsv: z.string().min(1),
@@ -14,11 +15,7 @@ const importSheetSchema = z.object({
   dryRun: z.boolean().default(true),
 });
 
-function escapeDriveQueryValue(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-}
-
-/** Read-only Drive lookup in the invoices folder using the caller's refresh token. */
+/** Read-only Drive lookup in the invoices folder tree using the caller's refresh token. */
 async function driveResolver(
   userId: string,
   folderId: string,
@@ -27,17 +24,7 @@ async function driveResolver(
   const auth = createOAuth2Client(refreshToken);
   auth.setCredentials({ refresh_token: refreshToken, access_token: accessToken });
   const drive = google.drive({ version: 'v3', auth });
-  return async (fileName) => {
-    const res = await drive.files.list({
-      q: `'${escapeDriveQueryValue(folderId)}' in parents and name = '${escapeDriveQueryValue(
-        fileName,
-      )}' and trashed = false`,
-      fields: 'files(id, webViewLink)',
-      spaces: 'drive',
-    });
-    const file = res.data.files?.[0];
-    return file?.id ? { fileId: file.id, link: file.webViewLink ?? '' } : null;
-  };
+  return createInvoicePdfFinder(drive as unknown as DriveListLike, folderId);
 }
 
 export const adminRouter = router({

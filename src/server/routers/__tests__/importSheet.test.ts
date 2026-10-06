@@ -118,14 +118,20 @@ describe('applySheetImport', () => {
       dryRun: false,
       folderId: 'folder-1',
       resolveDriveFile: async (name) =>
-        name.includes('20230511-01') ? { fileId: 'file-1', link: 'https://drive/file-1' } : null,
+        name.includes('20230511-01')
+          ? { fileId: 'file-1', link: 'https://drive/file-1', name: `Gebucht - ${name}` }
+          : null,
     });
     expect(report.drive.resolved).toEqual(['20230511-01']);
     expect(report.drive.missing).toEqual(
       expect.arrayContaining(['1001', '20241209-01', '20250821-01']),
     );
     const inv = await Invoice.findOne({ invoiceNumber: '20230511-01' });
-    expect(inv!.driveMetadata).toMatchObject({ fileId: 'file-1', folderId: 'folder-1' });
+    expect(inv!.driveMetadata).toMatchObject({
+      fileId: 'file-1',
+      folderId: 'folder-1',
+      fileName: 'Gebucht - 2023-05.20230511-01 - beispiel - Moderation Teammeeting.pdf',
+    });
   });
 
   it('parity: counts and gross per year/state match between sheet and db', async (ctx) => {
