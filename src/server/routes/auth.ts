@@ -2,9 +2,29 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import passport from 'passport';
 import { Strategy as GoogleStrategy, type VerifyCallback } from 'passport-google-oauth20';
 import { User } from '../models/User';
-import { isAllowed, signToken, verifyToken } from '../services/AuthService';
+import { isAllowed, parseBearerToken, signToken, verifyToken } from '../services/AuthService';
+import { userRoleSchema } from '../../shared/schemas/user';
 
 export const AUTH_COOKIE = 'queen_token';
+
+function authCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: 'lax' as const,
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: 12 * 60 * 60 * 1000,
+  };
+}
+
+function googleOAuthUnavailable(_req: Request, res: Response, next: NextFunction): void {
+  const { clientID, clientSecret } = googleCreds();
+  if (!clientID || !clientSecret) {
+    res.status(501).json({ error: 'google oauth not configured' });
+    return;
+  }
+  next();
+}
 
 // Drive scope only — no Sheets scope (plan Task 2).
 const GOOGLE_SCOPES = [
@@ -52,13 +72,14 @@ async function upsertUserFromProfile(profile: GoogleProfile, refreshToken?: stri
   if (!email) {
     throw new Error('no email on google profile');
   }
+  const allowed = isAllowed(email);
   const existing = await User.findOne({ $or: [{ googleId: profile.id }, { email }] });
   if (existing) {
     existing.set({
       googleId: profile.id,
       email,
       name: profile.displayName ?? existing.get('name'),
-      allowed: true,
+      allowed,
       ...(refreshToken ? { refreshToken } : {}),
     });
     await existing.save();
@@ -70,15 +91,12 @@ async function upsertUserFromProfile(profile: GoogleProfile, refreshToken?: stri
     role: 'user',
     googleId: profile.id,
     ...(refreshToken ? { refreshToken } : {}),
-    allowed: true,
+    allowed,
   });
 }
 
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
-  const header = req.headers.authorization;
-  const bearer = header?.toLowerCase().startsWith('bearer ')
-    ? header.slice(7)
-    : undefined;
+  const bearer = parseBearerToken(req.headers.authorization);
   const token = bearer ?? req.cookies?.[AUTH_COOKIE];
   if (!token) {
     res.status(401).json({ error: 'unauthorized' });
@@ -97,14 +115,7 @@ export function createAuthRouter() {
 
   router.get(
     '/google',
-    (req, res, next) => {
-      const { clientID, clientSecret } = googleCreds();
-      if (!clientID || !clientSecret) {
-        res.status(501).json({ error: 'google oauth not configured' });
-        return;
-      }
-      next();
-    },
+    googleOAuthUnavailable,
     passport.authenticate('google', {
       session: false,
       accessType: 'offline',
@@ -115,12 +126,18 @@ export function createAuthRouter() {
 
   router.get(
     '/google/callback',
+    googleOAuthUnavailable,
+    // failureRedirect is browser-flow-only (HTML redirect, not a JSON API).
     passport.authenticate('google', { session: false, failureRedirect: '/login' }),
     async (req: Request, res: Response) => {
       try {
-        const profile = req.user as unknown as GoogleProfile & {
+        const profile = req.user as unknown as (GoogleProfile & {
           _refreshToken?: string;
-        };
+        }) | undefined;
+        if (!profile) {
+          res.status(401).json({ error: 'unauthorized' });
+          return;
+        }
         const email = profileEmail(profile);
         if (!email || !isAllowed(email)) {
           res.status(403).json({ error: 'email not allowed' });
@@ -128,14 +145,10 @@ export function createAuthRouter() {
         }
         const user = await upsertUserFromProfile(profile, profile._refreshToken);
         const userId = String(user.get('_id'));
-        const role = user.get('role') as 'admin' | 'user';
+        const roleParsed = userRoleSchema.safeParse(user.get('role'));
+        const role = roleParsed.success ? roleParsed.data : 'user';
         const token = signToken({ sub: userId, email, role });
-        res.cookie(AUTH_COOKIE, token, {
-          httpOnly: true,
-          sameSite: 'lax',
-          secure: process.env.NODE_ENV === 'production',
-          maxAge: 12 * 60 * 60 * 1000,
-        });
+        res.cookie(AUTH_COOKIE, token, authCookieOptions());
         res.redirect('/');
       } catch {
         res.status(500).json({ error: 'login failed' });
@@ -144,7 +157,13 @@ export function createAuthRouter() {
   );
 
   router.post('/logout', (_req: Request, res: Response) => {
-    res.clearCookie(AUTH_COOKIE);
+    const cookieOptions = authCookieOptions();
+    res.clearCookie(AUTH_COOKIE, {
+      httpOnly: cookieOptions.httpOnly,
+      sameSite: cookieOptions.sameSite,
+      secure: cookieOptions.secure,
+      path: cookieOptions.path,
+    });
     res.json({ ok: true });
   });
 

@@ -6,7 +6,7 @@ const userSchema = new Schema(
     name: { type: String },
     role: { type: String, enum: ['admin', 'user'], default: 'user', required: true },
     googleId: { type: String },
-    // TODO: encrypt refreshToken at rest (e.g. AES-GCM with a KMS key) — plain for now.
+    // TODO: encrypt refreshToken at rest (e.g. AES-GCM with a KMS key) — plain for now. Follow-up before prod.
     refreshToken: { type: String },
     allowed: { type: Boolean, required: true, default: true },
   },

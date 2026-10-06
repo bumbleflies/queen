@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { initTRPC, TRPCError } from '@trpc/server';
 import type { JwtPayload } from '../shared/types';
-import { verifyToken } from './services/AuthService';
+import { parseBearerToken, verifyToken } from './services/AuthService';
 
 export interface Context {
   user?: JwtPayload;
@@ -24,17 +24,6 @@ export function isServiceTokenValid(
   return crypto.timingSafeEqual(a, b);
 }
 
-function bearerToken(authHeader: string | undefined): string | undefined {
-  if (!authHeader) {
-    return undefined;
-  }
-  const [scheme, token] = authHeader.split(' ');
-  if (scheme?.toLowerCase() !== 'bearer' || !token) {
-    return undefined;
-  }
-  return token;
-}
-
 // Pure, unit-testable context builder. The bearer token is either the
 // QUEEN_SERVICE_TOKEN (→ serviceAuth) or a user JWT (→ user).
 export function buildContext(options: {
@@ -42,14 +31,14 @@ export function buildContext(options: {
   cookieToken?: string;
   serviceToken?: string;
 }): Context {
-  const bearer = bearerToken(options.authHeader);
+  const bearer = parseBearerToken(options.authHeader);
   if (bearer && isServiceTokenValid(bearer, options.serviceToken)) {
     return { user: undefined, serviceAuth: true };
   }
-  const jwt = bearer ?? options.cookieToken;
-  if (jwt) {
+  const token = bearer ?? options.cookieToken;
+  if (token) {
     try {
-      return { user: verifyToken(jwt), serviceAuth: false };
+      return { user: verifyToken(token), serviceAuth: false };
     } catch {
       return { user: undefined, serviceAuth: false };
     }

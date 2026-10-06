@@ -1,13 +1,35 @@
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 
-function getToken(): string | null {
-  return localStorage.getItem('queen_token');
-}
+type SessionStatus = 'loading' | 'authed' | 'unauthed';
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const location = useLocation();
-  if (!getToken()) {
+  const [status, setStatus] = useState<SessionStatus>('loading');
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/auth/me', { credentials: 'include' })
+      .then((res) => {
+        if (!cancelled) {
+          setStatus(res.ok ? 'authed' : 'unauthed');
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStatus('unauthed');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (status === 'loading') {
+    return <p>Laden …</p>;
+  }
+  if (status === 'unauthed') {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   }
   return <>{children}</>;

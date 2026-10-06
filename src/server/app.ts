@@ -6,10 +6,14 @@ import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { healthHandler } from './health';
 import { appRouter, buildContext } from './trpc';
 import { AUTH_COOKIE, createAuthRouter, initPassport } from './routes/auth';
+import { getJwtSecret } from './services/AuthService';
 
 initPassport();
 
 export function createApp() {
+  // Fail fast when JWT_SECRET is missing — buildContext would otherwise swallow
+  // the per-request error and every authed route would 401 silently.
+  getJwtSecret();
   const app = express();
 
   app.use(express.json());

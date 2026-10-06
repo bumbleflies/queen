@@ -1,12 +1,28 @@
 import jwt from 'jsonwebtoken';
 import type { JwtPayload } from '../../shared/types';
+import { userRoleSchema } from '../../shared/schemas/user';
 
-function getJwtSecret(): string {
+export function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
-    throw new Error('JWT_SECRET env is not set');
+    throw new Error('JWT_SECRET is not set');
   }
   return secret;
+}
+
+export function parseBearerToken(authHeader: string | undefined): string | undefined {
+  if (!authHeader) {
+    return undefined;
+  }
+  const parts = authHeader.trim().split(/\s+/);
+  if (parts.length < 2) {
+    return undefined;
+  }
+  const [scheme, token] = parts;
+  if (scheme?.toLowerCase() !== 'bearer' || !token) {
+    return undefined;
+  }
+  return token;
 }
 
 export function getAllowedEmails(): string[] {
@@ -31,8 +47,9 @@ export function verifyToken(token: string): JwtPayload {
     throw new Error('invalid token payload');
   }
   const { sub, email, role } = decoded as Partial<JwtPayload>;
-  if (typeof sub !== 'string' || typeof email !== 'string' || (role !== 'admin' && role !== 'user')) {
+  const roleParsed = userRoleSchema.safeParse(role);
+  if (typeof sub !== 'string' || typeof email !== 'string' || !roleParsed.success) {
     throw new Error('invalid token payload');
   }
-  return { sub, email, role };
+  return { sub, email, role: roleParsed.data };
 }

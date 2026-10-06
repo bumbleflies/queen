@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { TRPCError } from '@trpc/server';
-import { appRouter, isServiceTokenValid } from '../trpc';
+import { appRouter, buildContext, isServiceTokenValid } from '../trpc';
 
 async function expectTrpcCode(promise: Promise<unknown>, code: string) {
   try {
@@ -43,5 +43,17 @@ describe('tRPC auth procedures', () => {
     expect(isServiceTokenValid('correct-token', 'correct-token')).toBe(true);
     const caller = appRouter.createCaller({ user: undefined, serviceAuth: true });
     await expect(caller.servicePing()).resolves.toEqual({ ok: true });
+  });
+
+  it.each([
+    ['wrong token', 'Bearer wrong-token'],
+    ['empty header', undefined],
+    ['empty bearer', 'Bearer '],
+    ['mismatched length', 'Bearer short'],
+  ])('buildContext with %s → serviceAuth false + servicePing UNAUTHORIZED', async (_label, authHeader) => {
+    const ctx = buildContext({ authHeader, serviceToken: 'correct-token-long-enough' });
+    expect(ctx.serviceAuth).toBe(false);
+    const caller = appRouter.createCaller(ctx);
+    await expectTrpcCode(caller.servicePing(), 'UNAUTHORIZED');
   });
 });
