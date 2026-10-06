@@ -1,0 +1,46 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": true,
+    "semanticCommitType": "fix"
+  },
+  "packageRules": [
+    {
+      "description": "Group react and react-dom to keep versions in sync",
+      "matchPackageNames": [
+        "react",
+        "react-dom"
+      ],
+      "groupName": "react monorepo",
+      "automerge": true,
+      "semanticCommitType": "fix"
+    },
+    {
+      "description": "Automerge non-major updates",
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "automerge": true,
+      "semanticCommitType": "fix"
+    },
+    {
+      "description": "Automerge dev dependencies",
+      "matchDepTypes": [
+        "devDependencies"
+      ],
+      "automerge": true,
+      "semanticCommitType": "fix"
+    },
+    {
+      "description": "Automerge docker GitHub Actions",
+      "matchManagers": ["github-actions"],
+      "automerge": true,
+      "semanticCommitType": "fix"
+    }
+  ]
+}
