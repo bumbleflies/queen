@@ -27,30 +27,61 @@ export function parseBearerToken(authHeader: string | undefined): string | undef
   return token;
 }
 
+function parseEmailList(raw: string | undefined): string[] {
+  return (raw ?? '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter((e) => e.length > 0);
+}
+
+/** Domain guaranteed by the bumbleflies Google OAuth client. */
+const BUMBLEFLIES_EMAIL_DOMAIN = 'bumbleflies.de';
+
+/**
+ * Match a configured entry against a signed-in email. Because the bumbleflies
+ * Google OAuth client only admits the bumbleflies.de domain, an entry without
+ * '@' is treated as the username (local part) — `christian.daehn` matches
+ * `christian.daehn@bumbleflies.de`.
+ */
+function matchesEntry(entry: string, email: string): boolean {
+  const normalised = email.trim().toLowerCase();
+  if (entry.includes('@')) return entry === normalised;
+  const at = normalised.lastIndexOf('@');
+  return at > 0 && normalised.slice(0, at) === entry && normalised.slice(at + 1) === BUMBLEFLIES_EMAIL_DOMAIN;
+}
+
 export function getAllowedEmails(): string[] {
-  const raw = process.env.ALLOWED_EMAILS ?? '';
-  return raw
-    .split(',')
-    .map((e) => e.trim().toLowerCase())
-    .filter((e) => e.length > 0);
+  return parseEmailList(process.env.ALLOWED_EMAILS);
 }
 
+/**
+ * Optional stricter allowlist. queen reuses the bumbleflies Google OAuth client,
+ * whose consent screen is restricted to the bumbleflies.de domain, so an empty
+ * `ALLOWED_EMAILS` already allows only bumbleflies users. Set it only for
+ * defense-in-depth.
+ */
 export function isAllowed(email: string): boolean {
-  return getAllowedEmails().includes(email.trim().toLowerCase());
+  const allowed = getAllowedEmails();
+  if (allowed.length === 0) return true;
+  return allowed.some((entry) => matchesEntry(entry, email));
 }
 
-/** Explicit admins from `ADMIN_EMAILS`; falls back to every allowed email so a
- *  deployment that only sets `ALLOWED_EMAILS` still has an admin. */
+/**
+ * Explicit admins from `ADMIN_EMAILS`, else every `ALLOWED_EMAILS` entry, else
+ * (both unset) every authenticated user — a bumbleflies-only deployment has no
+ * user population to distinguish, and this keeps the app usable with zero
+ * email configuration.
+ */
 export function getAdminEmails(): string[] {
-  const explicit = (process.env.ADMIN_EMAILS ?? '')
-    .split(',')
-    .map((e) => e.trim().toLowerCase())
-    .filter((e) => e.length > 0);
-  return explicit.length > 0 ? explicit : getAllowedEmails();
+  const explicit = parseEmailList(process.env.ADMIN_EMAILS);
+  if (explicit.length > 0) return explicit;
+  return getAllowedEmails();
 }
 
 export function isAdmin(email: string): boolean {
-  return getAdminEmails().includes(email.trim().toLowerCase());
+  const admins = getAdminEmails();
+  if (admins.length === 0) return true;
+  return admins.some((entry) => matchesEntry(entry, email));
 }
 
 export function signToken(payload: JwtPayload): string {
