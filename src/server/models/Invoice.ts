@@ -74,6 +74,8 @@ const invoiceSchema = new Schema(
       required: true,
       default: 'unmatched',
     },
+    // Imported from the Sheet as paid: payment date/transaction unknown (paidAt stays empty).
+    importedPaid: { type: Boolean, default: false },
     filingUserId: { type: String },
     driveMetadata: { type: driveMetadataSchema },
     source: { type: sourceSchema },

@@ -1,0 +1,19 @@
+"invoiceId","clientId","invoiceAddress","invoiceName","invoiceDate","jobPeriod","invoiceCurrency","paymentTerm","state","finalInvoiceUrl","netSum","grossSum","vatSum","invoicePdfGenerationUrl","nameTemplate","",""
+"1001","10001","Muster Wohnen GmbH
+Musterstr. 1
+80335 München","Jahresretro","21.12.2020","12.2020","€","14","paid","2021-01.001 - 2020-12.1001 - muster - Jahresretro.pdf","1.600,00 €","1.856,00 €","256,00 €","https://example.invalid/gen?invoiceId=1001","x","",""
+"20230511-01","10002","Beispiel Agile GmbH
+Beispielplatz 9
+81539 München","Moderation Teammeeting","12.05.2023","05.2023","€","30","paid","Gebucht - 2023-05.20230511-01 - beispiel - Moderation Teammeeting.pdf","4.720,00 €","5.616,80 €","896,80 €","","","",""
+"20241209-01","10003","Max Mustermann
+Testweg 15
+22609 Hamburg","Übungsgruppe","09.12.2024","12.2024","€","30","open","2024-12.20241209-01 - mustermann - Übungsgruppe.pdf","380,00 €","380,00 €","0,00 €","","","",""
+"20250617-01","10002","Beispiel Agile GmbH
+Beispielplatz 9
+81539 München","Workshop","17.06.2025","5.2025","€","30","draft","","4.950,00 €","5.890,50 €","940,50 €","","","",""
+"20250821-01","10001","Muster Wohnen GmbH
+Musterstr. 1
+80335 München","Lizenz 2026","29.01.2026","01.2026","€","30","canceled","2026-01.20250821-01 - muster - Lizenz 2026.pdf","900,00 €","1.071,00 €","171,00 €","","","",""
+"20250901-01","10003","Max Mustermann
+Testweg 15
+22609 Hamburg","Coaching","01.09.2025","8.2025","€","30","overdue","","100,00 €","119,00 €","20,00 €","","","",""
