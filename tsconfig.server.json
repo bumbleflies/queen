@@ -8,6 +8,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "outDir": "dist",
+    "rootDir": ".",
     "types": ["vitest/globals"],
     "paths": {
       "@shared/*": ["./shared/*"]

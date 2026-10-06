@@ -16,7 +16,7 @@ beforeAll(async () => {
 afterAll(async () => {
   try {
     await disconnectMongo();
-  } catch (err: any) {
+  } catch {
     // Ignore disconnect errors
   }
 });

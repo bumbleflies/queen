@@ -1,0 +1,55 @@
+name: Build and Publish Docker (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Release version (e.g. queen-v1.2.3) to tag the image with. Leave empty to skip version tags."
+        required: false
+        type: string
+        default: ""
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: bumblecode/queen
+
+jobs:
+  docker-build-test:
+    uses: ./.github/workflows/docker-build-test.yml
+    with:
+      version: ${{ inputs.version }}
+
+  push:
+    runs-on: ubuntu-latest
+    needs: docker-build-test
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: docker-image-queen
+          path: /tmp
+
+      - name: Load Docker image
+        run: |
+          docker load --input /tmp/queen.tar
+          docker image ls -a
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Push Docker image
+        run: |
+          docker push bumblecode/queen:latest
+          # Also push the sha-tagged version if it exists
+          docker images --no-trunc --quiet bumblecode/queen | while read image_id; do
+            docker images bumblecode/queen --format="{{.Repository}}:{{.Tag}}" | grep -v latest | while read tag; do
+              docker push "$tag" || true
+            done
+          done

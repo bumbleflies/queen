@@ -1,0 +1,10 @@
+name: Push Tests
+
+on:
+  push:
+    branches-ignore:
+      - master
+
+jobs:
+  call-pr-tests:
+    uses: ./.github/workflows/pr-tests.yml

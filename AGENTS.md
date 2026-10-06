@@ -17,6 +17,12 @@ Scaffold must include: `package.json`, `tsconfig.json`, `tsconfig.server.json`, 
 - **Payment reference on PDFs:** `Verwendungszweck: <customerNumber>-<invoiceNumber>`. Reconcile regex must tolerate bank-inserted spaces/line breaks; customer number must match or → unmatched.
 - **Standalone:** no dependency on LeagueSphere MySQL. League origins attach as optional `source` metadata, never required FKs.
 
+## CI / Docker publish (mirrors `bumbleflies/edu`, not leagues.finance)
+
+- Workflows: `pr-tests` (lint + test + typechecks) on PRs/pushes/master; `docker-build-test` (build + container healthcheck) on PRs/master; `release-please.yml` (GitHub App token, auto-merge) cuts `queen-v*` tags; `release.yml` publishes `bumblecode/queen` (`:latest` + semver + sha) on those tags.
+- Registry login = `DOCKERHUB_USERNAME` + `DOCKER_TOKEN` secrets. Release = `RELEASE_PLEASE_APP_ID` + `RELEASE_PLEASE_APP_PRIVATE_KEY`. Secrets live only in GitHub, never in git.
+- `Dockerfile` is the one leagues.finance-derived file (Node 24 multi-stage); it runs as non-root `node` and healthchecks `/health`.
+
 ## Repo / data hygiene
 
 - Repo `bumbleflies/queen` is **public**: no customer data in git. Fixtures anonymised, secrets in container git-crypt only.

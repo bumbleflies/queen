@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.git/
+.github/
+.env
+*.local
+.DS_Store
+client_secret_*.json
+.idea/
+playwright-report/
+test-results/
+coverage/

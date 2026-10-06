@@ -1,0 +1,14 @@
+name: PR Tests
+
+on:
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  call-pr-tests:
+    uses: ./.github/workflows/pr-tests.yml
+
+  docker-build-test:
+    needs: call-pr-tests
+    uses: ./.github/workflows/docker-build-test.yml
