@@ -1,0 +1,11 @@
+"clientId","clientName","standardInvoiceAddress","clientDomain"
+"10001","Muster Wohnen GmbH","Muster Wohnen GmbH
+z.H. Erika Muster
+Musterstr. 1
+80335 München","muster-wohnen.example "
+"10002","Beispiel Agile GmbH","Beispiel Agile GmbH
+Beispielplatz 9
+81539 München","beispiel.example"
+"10003","Max Mustermann","Max Mustermann
+Testweg 15
+22609 Hamburg",""

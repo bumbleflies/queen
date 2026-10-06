@@ -4,6 +4,7 @@ import { invoicesRouter } from './routers/invoices';
 import { bankRouter } from './routers/bank';
 import { reconcileRouter } from './routers/reconcile';
 import { reportsRouter } from './routers/reports';
+import { adminRouter } from './routers/admin';
 
 export * from './trpcInit';
 
@@ -18,6 +19,7 @@ export const appRouter = router({
   bank: bankRouter,
   reconcile: reconcileRouter,
   reports: reportsRouter,
+  admin: adminRouter,
 });
 
 export type AppRouter = typeof appRouter;
