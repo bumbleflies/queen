@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.0](https://github.com/bumbleflies/queen/compare/queen-v0.3.0...queen-v0.4.0) (2026-10-06)
+
+
+### Features
+
+* sheet import (admin.importSheet) with parity report ([338f107](https://github.com/bumbleflies/queen/commit/338f107f1b8aa3d6e1bf1f1675a753d9569eda6e))
+* sheet import (admin.importSheet) with parity report ([e037928](https://github.com/bumbleflies/queen/commit/e037928544ddc25272e30f27805a9cbf957ba648))
+
+
+### Bug Fixes
+
+* **models:** drop duplicate fireflyJournalId index ([#9](https://github.com/bumbleflies/queen/issues/9)) ([d35c61d](https://github.com/bumbleflies/queen/commit/d35c61daeb226ebb92e2c95420fefd0fd8eed267))
+* **models:** drop duplicate fireflyJournalId index (issue [#9](https://github.com/bumbleflies/queen/issues/9)) ([98c3f57](https://github.com/bumbleflies/queen/commit/98c3f5729f523aad0eb12f0425e5e6794b89a2b8))
+
 ## [0.3.0](https://github.com/bumbleflies/queen/compare/queen-v0.2.1...queen-v0.3.0) (2026-10-06)
 
 
