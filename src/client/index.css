@@ -562,6 +562,59 @@ th.right {
   text-align: center;
 }
 
+/* Auth / login */
+.auth {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 50% -10%, rgba(224, 161, 0, 0.18), rgba(224, 161, 0, 0) 55%),
+    var(--ground);
+}
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+  padding: 36px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(27, 27, 31, 0.06);
+}
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.auth-intro {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.auth-intro h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+}
+.auth-intro p {
+  margin: 0;
+  font-size: 14px;
+}
+.auth-google {
+  width: 100%;
+  margin-top: 4px;
+}
+.auth-foot {
+  margin: 0;
+  font-size: 12px;
+}
+
 /* Responsive: sidebar → top bar, tables → labelled cards */
 @media (max-width: 760px) {
   .shell {
