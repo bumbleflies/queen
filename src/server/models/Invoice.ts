@@ -74,6 +74,7 @@ const invoiceSchema = new Schema(
       required: true,
       default: 'unmatched',
     },
+    filingUserId: { type: String },
     driveMetadata: { type: driveMetadataSchema },
     source: { type: sourceSchema },
     footerNotes: { type: [String], default: [] },

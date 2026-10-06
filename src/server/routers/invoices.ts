@@ -158,7 +158,7 @@ export const invoicesRouter = router({
 
   markSent: adminProcedure
     .input(z.object({ id: z.string().min(1), invoiceDate: z.coerce.date().optional() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const invoice = await getInvoiceOrThrow(input.id);
       assertTransition(invoice.status, 'markSent');
       const lines = await InvoiceLine.find({ invoiceId: invoice._id });
@@ -193,6 +193,7 @@ export const invoicesRouter = router({
       invoice.totals = totals;
       invoice.status = 'sent';
       invoice.sentAt = new Date();
+      invoice.filingUserId = ctx.user?.sub;
       await invoice.save();
       await enqueueFileInvoice(invoice._id.toString());
       return invoice;
@@ -225,12 +226,13 @@ export const invoicesRouter = router({
       const original = await getInvoiceOrThrow(input.id);
       assertTransition(original.status, 'cancel');
       const lines = await InvoiceLine.find({ invoiceId: original._id });
-      const negatedInputs = lines.map((l) => ({
-        quantity: l.quantity,
-        unitNetCents: -l.unitNetCents,
-        vatRate: l.vatRate,
-      }));
-      const totals = invoiceTotals(negatedInputs);
+      // Exact negation of the stored totals: recomputing from negated lines can
+      // differ by a cent because per-line VAT rounds half toward +∞.
+      const totals = {
+        netCents: -original.totals.netCents,
+        vatCents: -original.totals.vatCents,
+        grossCents: -original.totals.grossCents,
+      };
       const invoiceNumber = await allocateInvoiceNumber(new Date());
       const now = new Date();
       const dueDate = new Date(now);
@@ -270,6 +272,7 @@ export const invoicesRouter = router({
           })),
         );
       }
+      await enqueueFileInvoice(creditNote._id.toString());
       original.status = 'canceled';
       original.canceledAt = new Date();
       await original.save();

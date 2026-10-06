@@ -2,11 +2,12 @@ import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router, adminProcedure } from '../trpcInit';
 import { BankTransaction } from '../models/BankTransaction';
+import { Invoice } from '../models/Invoice';
 import { ReconcileRun } from '../models/ReconcileRun';
 import { FireflyClient } from '../services/FireflyClient';
 import { computeSyncWindow, syncBankTransactions } from '../lib/bankSync';
 import { findLastSuccessfulRun, readFireflyEnv } from '../lib/fireflyEnv';
-import { reversePayment } from '../lib/reconcile';
+import { assignBankTransactionToInvoice, reversePayment } from '../lib/reconcile';
 
 export interface BankListFilterInput {
   unmatchedOnly?: boolean;
@@ -41,13 +42,17 @@ export const bankRouter = router({
   assign: adminProcedure
     .input(z.object({ bankTxId: z.string().min(1), invoiceId: z.string().min(1) }))
     .mutation(async ({ input }) => {
-      const tx = await BankTransaction.findByIdAndUpdate(
-        input.bankTxId,
-        { matchedInvoiceId: input.invoiceId, matchMethod: 'manual' },
-        { new: true },
-      );
+      const tx = await BankTransaction.findById(input.bankTxId);
       if (!tx) throw new TRPCError({ code: 'NOT_FOUND', message: 'Bank transaction not found' });
-      return tx;
+      const invoice = await Invoice.findById(input.invoiceId);
+      if (!invoice) throw new TRPCError({ code: 'NOT_FOUND', message: 'Invoice not found' });
+      if (invoice.kind === 'credit_note' || invoice.status === 'canceled') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Cannot assign a payment to a credit note or a canceled invoice',
+        });
+      }
+      return assignBankTransactionToInvoice(tx, invoice._id);
     }),
 
   unassign: adminProcedure

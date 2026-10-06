@@ -63,6 +63,13 @@ export const clientsRouter = router({
     const client = await Client.findById(id);
     if (!client) throw new TRPCError({ code: 'NOT_FOUND', message: 'Client not found' });
     if (patch.customerNumber !== undefined && patch.customerNumber !== client.customerNumber) {
+      const referencing = await Invoice.countDocuments({ clientId: client._id });
+      if (referencing > 0) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'customerNumber is immutable once invoices exist',
+        });
+      }
       const existing = await Client.findOne({ customerNumber: patch.customerNumber });
       if (existing) {
         throw new TRPCError({

@@ -50,6 +50,23 @@ describe('clients router', () => {
     ).rejects.toMatchObject({ code: 'CONFLICT' });
   });
 
+  it('customerNumber cannot change once invoices exist (BAD_REQUEST)', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    const client = await caller.clients.create({
+      name: 'Acme GmbH',
+      invoiceAddress: 'Musterstr. 1\n12345 Berlin',
+    });
+    await caller.invoices.createDraft({
+      clientId: client._id.toString(),
+      title: 'Beratung',
+      servicePeriod: '05.2025',
+    });
+    await expect(
+      caller.clients.update({ id: client._id.toString(), customerNumber: 99999 }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
   it('client with invoices cannot be deleted (BAD_REQUEST)', async (ctx) => {
     skipIfNoDb(ctx);
     const caller = adminCaller();

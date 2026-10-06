@@ -2,7 +2,7 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import passport from 'passport';
 import { Strategy as GoogleStrategy, type VerifyCallback } from 'passport-google-oauth20';
 import { User } from '../models/User';
-import { isAllowed, parseBearerToken, signToken, verifyToken } from '../services/AuthService';
+import { isAdmin, isAllowed, parseBearerToken, signToken, verifyToken } from '../services/AuthService';
 import { userRoleSchema } from '../../shared/schemas/user';
 
 export const AUTH_COOKIE = 'queen_token';
@@ -73,12 +73,14 @@ async function upsertUserFromProfile(profile: GoogleProfile, refreshToken?: stri
     throw new Error('no email on google profile');
   }
   const allowed = isAllowed(email);
+  const role = isAdmin(email) ? 'admin' : 'user';
   const existing = await User.findOne({ $or: [{ googleId: profile.id }, { email }] });
   if (existing) {
     existing.set({
       googleId: profile.id,
       email,
       name: profile.displayName ?? existing.get('name'),
+      role,
       allowed,
       ...(refreshToken ? { refreshToken } : {}),
     });
@@ -88,7 +90,7 @@ async function upsertUserFromProfile(profile: GoogleProfile, refreshToken?: stri
   return User.create({
     email,
     name: profile.displayName,
-    role: 'user',
+    role,
     googleId: profile.id,
     ...(refreshToken ? { refreshToken } : {}),
     allowed,

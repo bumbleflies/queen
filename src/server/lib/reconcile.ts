@@ -1,6 +1,6 @@
 import type { HydratedDocument, Types } from 'mongoose';
 import { BankTransaction, type BankTransactionDoc } from '../models/BankTransaction';
-import { Invoice } from '../models/Invoice';
+import { Invoice, type InvoiceDoc } from '../models/Invoice';
 
 /**
  * Reconcile logic lives here in two layers:
@@ -134,6 +134,32 @@ export interface ReconcileOutcome {
   reason?: string;
 }
 
+/** Append the payment, update status/reconcileState and link the bank transaction. */
+async function applyPayment(
+  invoice: HydratedDocument<InvoiceDoc>,
+  bankTx: HydratedDocument<BankTransactionDoc>,
+  decision: PaymentDecision,
+  matchMethod: 'reference' | 'manual',
+): Promise<void> {
+  invoice.payments.push({
+    bankTxId: bankTx.fireflyJournalId,
+    amountCents: bankTx.amountCents,
+    date: bankTx.date,
+    counterpartyIban: bankTx.counterpartyIban ?? undefined,
+    reference: bankTx.description,
+  });
+  invoice.reconcileState = decision.reconcileState;
+  if (decision.paidAt) {
+    invoice.status = 'paid';
+    invoice.paidAt = decision.paidAt;
+  }
+  await invoice.save();
+
+  bankTx.matchedInvoiceId = invoice._id;
+  bankTx.matchMethod = matchMethod;
+  await bankTx.save();
+}
+
 /**
  * DB apply step: resolve the referenced invoice and, when eligible, append the
  * payment, update status/reconcileState and mark the bank transaction matched.
@@ -173,24 +199,53 @@ export async function reconcileBankTransaction(
     return { outcome: 'unmatched', reason: decision.reason };
   }
 
-  invoice.payments.push({
-    bankTxId: bankTx.fireflyJournalId,
-    amountCents: bankTx.amountCents,
-    date: bankTx.date,
-    counterpartyIban: bankTx.counterpartyIban ?? undefined,
-    reference: bankTx.description,
-  });
-  invoice.reconcileState = decision.reconcileState;
-  if (decision.paidAt) {
-    invoice.status = 'paid';
-    invoice.paidAt = decision.paidAt;
+  await applyPayment(invoice, bankTx, decision, 'reference');
+  return { outcome: decision.action };
+}
+
+/**
+ * Manual counterpart of {@link reconcileBankTransaction}: the admin picks the
+ * invoice, so there is no reference/customer check. Credit notes and canceled
+ * invoices are never assignable. Already-processed transactions are a no-op.
+ */
+export async function assignBankTransactionToInvoice(
+  bankTx: HydratedDocument<BankTransactionDoc>,
+  invoiceId: string | Types.ObjectId,
+): Promise<ReconcileOutcome> {
+  if (isAlreadyProcessed(bankTx)) {
+    return { outcome: 'unmatched', reason: 'already processed' };
   }
-  await invoice.save();
 
-  bankTx.matchedInvoiceId = invoice._id;
-  bankTx.matchMethod = 'reference';
-  await bankTx.save();
+  const invoice = await Invoice.findById(invoiceId);
+  if (!invoice) return { outcome: 'unmatched', reason: 'invoice not found' };
+  if (invoice.kind === 'credit_note') {
+    return { outcome: 'unmatched', reason: 'credit note is never assigned' };
+  }
+  if (invoice.status === 'canceled') {
+    return { outcome: 'unmatched', reason: 'canceled invoice is never assigned' };
+  }
 
+  const existingPayments = invoice.payments
+    .filter((p) => p.bankTxId !== bankTx.fireflyJournalId)
+    .map((p) => ({ amountCents: p.amountCents }));
+
+  const decision = classifyPayment({
+    txAmountCents: bankTx.amountCents,
+    txDate: bankTx.date,
+    invoice: {
+      kind: invoice.kind,
+      status: invoice.status,
+      customerNumber: invoice.customerNumber,
+      totals: { grossCents: invoice.totals.grossCents },
+    },
+    existingPayments,
+  });
+
+  if (decision.action === 'unmatched') {
+    return { outcome: 'unmatched', reason: decision.reason };
+  }
+
+  await applyPayment(invoice, bankTx, decision, 'manual');
   return { outcome: decision.action };
 }
 

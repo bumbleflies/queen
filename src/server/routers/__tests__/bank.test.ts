@@ -4,6 +4,9 @@ import { appRouter } from '../../trpc';
 import { buildBankListFilter } from '../bank';
 import { BankTransaction } from '../../models/BankTransaction';
 import { ReconcileRun } from '../../models/ReconcileRun';
+import { Client } from '../../models/Client';
+import { Invoice } from '../../models/Invoice';
+import { InvoiceLine } from '../../models/InvoiceLine';
 
 function dbAvailable(): boolean {
   return mongoose.connection.readyState === 1;
@@ -30,7 +33,34 @@ beforeEach(async () => {
   if (!dbAvailable()) return;
   await BankTransaction.deleteMany({});
   await ReconcileRun.deleteMany({});
+  await Client.deleteMany({});
+  await Invoice.deleteMany({});
+  await InvoiceLine.deleteMany({});
 });
+
+const assignLine = {
+  position: '1',
+  description: 'Beratung',
+  quantity: 1,
+  unitNetCents: 10000,
+  vatRate: 0.19 as const,
+};
+
+async function createSentInvoice(caller: ReturnType<typeof adminCaller>): Promise<string> {
+  const client = (await caller.clients.create({
+    name: 'Acme GmbH',
+    invoiceAddress: 'Musterstr. 1\n12345 Berlin',
+  })) as any;
+  const draft = (await caller.invoices.createDraft({
+    clientId: client._id.toString(),
+    title: 'Beratung',
+    servicePeriod: '05.2025',
+  })) as any;
+  const invoiceId = draft._id.toString();
+  await caller.invoices.setLines({ id: invoiceId, lines: [assignLine] });
+  await caller.invoices.markSent({ id: invoiceId });
+  return invoiceId;
+}
 
 describe('buildBankListFilter (pure)', () => {
   it('unmatchedOnly = not matched and not ignored', () => {
@@ -49,25 +79,66 @@ describe('buildBankListFilter (pure)', () => {
 });
 
 describe('bank router', () => {
-  it('assign records the manual link without touching invoice status', async (ctx) => {
+  it('assign applies the manual payment and updates the invoice', async (ctx) => {
     skipIfNoDb(ctx);
     const caller = adminCaller();
+    const invoiceId = await createSentInvoice(caller);
     const tx = await BankTransaction.create({
       fireflyJournalId: '42:0',
       date: new Date('2025-01-15T00:00:00Z'),
-      amountCents: 107100,
+      amountCents: 11900,
       currency: 'EUR',
-      description: 'Rechnung 10001-20250101-01',
+      description: 'ohne Verwendungszweck',
     });
-    const updated = await caller.bank.assign({
-      bankTxId: tx._id.toString(),
-      invoiceId: new mongoose.Types.ObjectId().toString(),
+
+    const result = await caller.bank.assign({ bankTxId: tx._id.toString(), invoiceId });
+    expect(result.outcome).toBe('paid');
+
+    const invoice = await Invoice.findById(invoiceId);
+    expect(invoice!.payments).toHaveLength(1);
+    expect(invoice!.payments[0].amountCents).toBe(11900);
+    expect(invoice!.status).toBe('paid');
+    expect(invoice!.reconcileState).toBe('matched');
+
+    const linked = await BankTransaction.findById(tx._id);
+    expect(linked!.matchedInvoiceId!.toString()).toBe(invoiceId);
+    expect(linked!.matchMethod).toBe('manual');
+  });
+
+  it('assign with unknown bank transaction or invoice → NOT_FOUND', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    const unknown = new mongoose.Types.ObjectId().toString();
+    const tx = await BankTransaction.create({
+      fireflyJournalId: '44:0',
+      date: new Date('2025-01-17T00:00:00Z'),
+      amountCents: 1000,
+      currency: 'EUR',
+      description: 'x',
     });
-    expect(updated.matchedInvoiceId).toBeTruthy();
-    expect(updated.matchMethod).toBe('manual');
-    const unassigned = await caller.bank.unassign({ bankTxId: tx._id.toString() });
-    expect(unassigned.matchedInvoiceId ?? null).toBeNull();
-    expect(unassigned.matchMethod ?? null).toBeNull();
+    await expect(caller.bank.assign({ bankTxId: unknown, invoiceId: unknown })).rejects.toMatchObject(
+      { code: 'NOT_FOUND' },
+    );
+    await expect(
+      caller.bank.assign({ bankTxId: tx._id.toString(), invoiceId: unknown }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('assign to a canceled invoice → BAD_REQUEST', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    const invoiceId = await createSentInvoice(caller);
+    await caller.invoices.cancel({ id: invoiceId });
+    const tx = await BankTransaction.create({
+      fireflyJournalId: '45:0',
+      date: new Date('2025-01-18T00:00:00Z'),
+      amountCents: 1000,
+      currency: 'EUR',
+      description: 'x',
+    });
+    await expect(
+      caller.bank.assign({ bankTxId: tx._id.toString(), invoiceId }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 
   it('ignore marks a transaction ignored and unignore reverses it', async (ctx) => {

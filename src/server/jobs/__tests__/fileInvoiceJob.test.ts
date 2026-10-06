@@ -135,6 +135,14 @@ describe('processFileInvoice', () => {
     expect(invoice.save).toHaveBeenCalled();
   });
 
+  it('prefers the invoice filingUserId when no explicit user override is given', async () => {
+    const invoice = { ...makeInvoice(), filingUserId: 'owner1' };
+    (Invoice.findById as any).mockResolvedValue(invoice);
+    const upload = vi.fn(async () => ({ fileId: 'f1', link: 'https://drive/f1' }));
+    await processFileInvoice('inv1', deps({ userId: undefined, upload }) as any);
+    expect(getAccessToken).toHaveBeenCalledWith('owner1');
+  });
+
   it('retries 5xx uploads then succeeds', async () => {
     let calls = 0;
     const upload = vi.fn(async () => {

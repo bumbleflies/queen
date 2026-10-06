@@ -93,6 +93,7 @@ describe('invoices router', () => {
     );
     expect(diffDays).toBe(sent.paymentTermDays);
     expect(sent.invoiceAddress).toContain('Musterstr. 1');
+    expect(sent.filingUserId).toBe('admin-id-1');
     expect(enqueueFileInvoice).toHaveBeenCalledTimes(1);
     expect(enqueueFileInvoice).toHaveBeenCalledWith(id);
   });
@@ -108,10 +109,35 @@ describe('invoices router', () => {
     expect(result.creditNote.kind).toBe('credit_note');
     expect(result.creditNote.cancels.toString()).toBe(id);
     expect(result.creditNote.status).toBe('sent');
-    expect(result.creditNote.totals.grossCents).toBe(-11900);
+    expect(result.creditNote.totals).toMatchObject({
+      netCents: -10000,
+      vatCents: -1900,
+      grossCents: -11900,
+    });
     const creditLines = await caller.invoices.get({ id: result.creditNote._id.toString() });
     expect((creditLines as any).lines[0].unitNetCents).toBe(-10000);
     expect(result.original.status).toBe('canceled');
+    expect(enqueueFileInvoice).toHaveBeenCalledWith(result.creditNote._id.toString());
+  });
+
+  it('cancel negates the stored totals exactly (no per-line re-rounding)', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    const { draft } = await createClientWithDraft(caller);
+    const id = (draft as any)._id.toString();
+    // 50 @ 19% → VAT rounds 9.5 up to 10 (gross 60); re-rounding the negated
+    // line would yield -9 (gross -59) instead of the exact -10 / -60.
+    await caller.invoices.setLines({
+      id,
+      lines: [{ position: '1', description: 'Rundung', quantity: 1, unitNetCents: 50, vatRate: 0.19 }],
+    });
+    await caller.invoices.markSent({ id });
+    const result = (await caller.invoices.cancel({ id })) as any;
+    expect(result.creditNote.totals).toMatchObject({
+      netCents: -50,
+      vatCents: -10,
+      grossCents: -60,
+    });
   });
 
   it('cancel on paid → BAD_REQUEST', async (ctx) => {

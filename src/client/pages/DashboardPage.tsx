@@ -17,6 +17,7 @@ interface DashboardInvoice {
   status: string;
   paidAt?: string | Date | null;
   totals?: { grossCents: number } | null;
+  reconcileState?: string | null;
 }
 
 interface ReconcileRunRow {
@@ -45,6 +46,8 @@ export function DashboardPage() {
     .filter((inv) => inv.status === 'paid' && toDate(inv.paidAt)?.getFullYear() === currentYear)
     .reduce((sum, inv) => sum + (inv.totals?.grossCents ?? 0), 0);
   const draftCount = list.filter((inv) => inv.status === 'draft').length;
+  const overpaid = list.filter((inv) => inv.reconcileState === 'overpaid');
+  const overpaidCents = overpaid.reduce((sum, inv) => sum + (inv.totals?.grossCents ?? 0), 0);
 
   const overdueCount = openItems?.items.filter((i) => i.overdue).length ?? 0;
   const dueTableItems = (openItems?.items ?? []).filter((i) => i.kind !== 'credit_note');
@@ -88,6 +91,11 @@ export function DashboardPage() {
           <div className="kpi-label">Entwürfe</div>
           <div className="kpi-value num">{draftCount}</div>
           <div className="kpi-sub">noch nicht gesendet</div>
+        </div>
+        <div className="card warn">
+          <div className="kpi-label">Überzahlt</div>
+          <div className="kpi-value num">{formatEUR(overpaidCents)}</div>
+          <div className="kpi-sub">{overpaid.length} Rechnung(en) überzahlt</div>
         </div>
       </section>
 

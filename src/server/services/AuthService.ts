@@ -39,6 +39,20 @@ export function isAllowed(email: string): boolean {
   return getAllowedEmails().includes(email.trim().toLowerCase());
 }
 
+/** Explicit admins from `ADMIN_EMAILS`; falls back to every allowed email so a
+ *  deployment that only sets `ALLOWED_EMAILS` still has an admin. */
+export function getAdminEmails(): string[] {
+  const explicit = (process.env.ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter((e) => e.length > 0);
+  return explicit.length > 0 ? explicit : getAllowedEmails();
+}
+
+export function isAdmin(email: string): boolean {
+  return getAdminEmails().includes(email.trim().toLowerCase());
+}
+
 export function signToken(payload: JwtPayload): string {
   return jwt.sign(payload, getJwtSecret(), { expiresIn: '12h' });
 }

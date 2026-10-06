@@ -113,7 +113,7 @@ export async function processFileInvoice(
   const client = await Client.findById(invoice.clientId);
   if (!client) throw new Error(`Client ${String(invoice.clientId)} not found`);
 
-  const userId = deps.userId ?? (await resolveFilingUserId());
+  const userId = deps.userId ?? invoice.filingUserId ?? (await resolveFilingUserId());
   const getAccessToken = deps.getAccessToken ?? getGoogleAccessTokenForUser;
   const generatePdf = deps.generatePdf ?? generateInvoicePdf;
   const upload = deps.upload ?? uploadInvoicePdf;
