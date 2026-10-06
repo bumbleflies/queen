@@ -3,41 +3,21 @@
   "extends": [
     "config:recommended"
   ],
-  "lockFileMaintenance": {
-    "enabled": true,
-    "automerge": true,
-    "semanticCommitType": "fix"
-  },
   "packageRules": [
     {
-      "description": "Group react and react-dom to keep versions in sync",
-      "matchPackageNames": [
-        "react",
-        "react-dom"
-      ],
-      "groupName": "react monorepo",
-      "automerge": true,
-      "semanticCommitType": "fix"
-    },
-    {
       "description": "Automerge non-major updates",
-      "matchUpdateTypes": [
-        "minor",
-        "patch"
-      ],
+      "matchUpdateTypes": ["minor", "patch"],
       "automerge": true,
       "semanticCommitType": "fix"
     },
     {
       "description": "Automerge dev dependencies",
-      "matchDepTypes": [
-        "devDependencies"
-      ],
+      "matchDepTypes": ["devDependencies"],
       "automerge": true,
       "semanticCommitType": "fix"
     },
     {
-      "description": "Automerge docker GitHub Actions",
+      "description": "Automerge GitHub Actions",
       "matchManagers": ["github-actions"],
       "automerge": true,
       "semanticCommitType": "fix"
