@@ -21,6 +21,23 @@ export function parseGermanAmount(s: string): number {
   return Math.round(euros * 100);
 }
 
+/**
+ * Parse a Firefly III amount string into integer cents. Firefly emits plain
+ * decimal strings with '.' as the decimal separator and no thousands
+ * separators (e.g. "1071.00", "-12.34", "0") — unlike {@link parseGermanAmount}.
+ * Throws on unparseable input.
+ */
+export function fireflyAmountToCents(s: string): number {
+  if (typeof s !== 'string') throw new Error(`Unparseable amount: ${String(s)}`);
+  const t = s.trim();
+  if (!/^-?\d+(\.\d+)?$/.test(t)) {
+    throw new Error(`Unparseable amount: ${JSON.stringify(s)}`);
+  }
+  const cents = Math.round(Number(t) * 100);
+  if (!Number.isFinite(cents)) throw new Error(`Unparseable amount: ${JSON.stringify(s)}`);
+  return cents === 0 ? 0 : cents;
+}
+
 /** Net cents for one line; decimal quantities allowed. */
 export function lineNetCents(quantity: number, unitNetCents: number): number {
   return Math.round(quantity * unitNetCents);

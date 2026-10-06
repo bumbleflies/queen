@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseGermanAmount,
+  fireflyAmountToCents,
   lineNetCents,
   lineVatCents,
   invoiceTotals,
@@ -26,6 +27,20 @@ describe('parseGermanAmount', () => {
   it('throws on unparseable input', () => {
     expect(() => parseGermanAmount('abc')).toThrow();
     expect(() => parseGermanAmount('')).toThrow();
+  });
+});
+
+describe('fireflyAmountToCents', () => {
+  it('parses Firefly decimal strings ("." decimal, no thousands separators)', () => {
+    expect(fireflyAmountToCents('1071.00')).toBe(107100);
+    expect(fireflyAmountToCents('-12.34')).toBe(-1234);
+    expect(fireflyAmountToCents('0')).toBe(0);
+    expect(fireflyAmountToCents('9329.6')).toBe(932960);
+  });
+  it('throws on unparseable input (incl. German thousands separators)', () => {
+    expect(() => fireflyAmountToCents('1.600,00')).toThrow();
+    expect(() => fireflyAmountToCents('abc')).toThrow();
+    expect(() => fireflyAmountToCents('')).toThrow();
   });
 });
 

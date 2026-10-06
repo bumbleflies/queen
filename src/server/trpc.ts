@@ -1,6 +1,7 @@
 import { router, publicProcedure, authedProcedure, adminProcedure, serviceProcedure } from './trpcInit';
 import { clientsRouter } from './routers/clients';
 import { invoicesRouter } from './routers/invoices';
+import { bankRouter } from './routers/bank';
 
 export * from './trpcInit';
 
@@ -12,6 +13,7 @@ export const appRouter = router({
   servicePing: serviceProcedure.query(() => ({ ok: true as const })),
   clients: clientsRouter,
   invoices: invoicesRouter,
+  bank: bankRouter,
 });
 
 export type AppRouter = typeof appRouter;
