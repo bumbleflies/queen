@@ -2,6 +2,7 @@ import { router, publicProcedure, authedProcedure, adminProcedure, serviceProced
 import { clientsRouter } from './routers/clients';
 import { invoicesRouter } from './routers/invoices';
 import { bankRouter } from './routers/bank';
+import { reconcileRouter } from './routers/reconcile';
 
 export * from './trpcInit';
 
@@ -14,6 +15,7 @@ export const appRouter = router({
   clients: clientsRouter,
   invoices: invoicesRouter,
   bank: bankRouter,
+  reconcile: reconcileRouter,
 });
 
 export type AppRouter = typeof appRouter;

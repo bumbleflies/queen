@@ -5,6 +5,8 @@ import { BankTransaction } from '../models/BankTransaction';
 import { ReconcileRun } from '../models/ReconcileRun';
 import { FireflyClient } from '../services/FireflyClient';
 import { computeSyncWindow, syncBankTransactions } from '../lib/bankSync';
+import { findLastSuccessfulRun, readFireflyEnv } from '../lib/fireflyEnv';
+import { reversePayment } from '../lib/reconcile';
 
 export interface BankListFilterInput {
   unmatchedOnly?: boolean;
@@ -22,31 +24,6 @@ export function buildBankListFilter(input: BankListFilterInput = {}): Record<str
   if (input.ignored === true) filter.ignored = true;
   else if (input.ignored === false) filter.ignored = { $ne: true };
   return filter;
-}
-
-function readFireflyEnv() {
-  const baseUrl = process.env.FIREFLY_URL;
-  const pat = process.env.FIREFLY_PAT;
-  const glsAccountId = process.env.FIREFLY_GLS_ACCOUNT_ID;
-  const bankStartRaw = process.env.QUEEN_BANK_START;
-  if (!baseUrl || !pat || !glsAccountId || !bankStartRaw) {
-    throw new Error(
-      'Firefly not configured (FIREFLY_URL, FIREFLY_PAT, FIREFLY_GLS_ACCOUNT_ID, QUEEN_BANK_START)',
-    );
-  }
-  const bankStart = new Date(bankStartRaw);
-  if (Number.isNaN(bankStart.getTime())) {
-    throw new Error(`QUEEN_BANK_START is not a valid date: ${bankStartRaw}`);
-  }
-  return { baseUrl, pat, glsAccountId, bankStart };
-}
-
-/** Most recent run that finished without an error. */
-async function findLastSuccessfulRun() {
-  return ReconcileRun.findOne({
-    finishedAt: { $ne: null },
-    $or: [{ error: { $exists: false } }, { error: null }],
-  }).sort({ finishedAt: -1 });
 }
 
 export const bankRouter = router({
@@ -76,13 +53,17 @@ export const bankRouter = router({
   unassign: adminProcedure
     .input(z.object({ bankTxId: z.string().min(1) }))
     .mutation(async ({ input }) => {
-      const tx = await BankTransaction.findByIdAndUpdate(
+      const tx = await BankTransaction.findById(input.bankTxId);
+      if (!tx) throw new TRPCError({ code: 'NOT_FOUND', message: 'Bank transaction not found' });
+      if (tx.matchedInvoiceId) {
+        await reversePayment(tx.matchedInvoiceId, tx.fireflyJournalId);
+      }
+      const updated = await BankTransaction.findByIdAndUpdate(
         input.bankTxId,
         { $unset: { matchedInvoiceId: '', matchMethod: '' } },
         { new: true },
       );
-      if (!tx) throw new TRPCError({ code: 'NOT_FOUND', message: 'Bank transaction not found' });
-      return tx;
+      return updated!;
     }),
 
   ignore: adminProcedure
