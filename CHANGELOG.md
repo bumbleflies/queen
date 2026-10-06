@@ -20,6 +20,8 @@
 
 * address final review (admin bootstrap, manual assign, exact storno, credit-note filing, overpaid flag) ([62840e7](https://github.com/bumbleflies/queen/commit/62840e77defbec49d4f700c2e349f2af45fad7dd))
 * address Task 2 review findings (session check, logout, token tests, env fail-fast) ([ccc783a](https://github.com/bumbleflies/queen/commit/ccc783a5ddf0622da8bdcaa36e5ae8978ee93f64))
+* **deps:** update dependency dotenv to v18.0.6 ([779ceb0](https://github.com/bumbleflies/queen/commit/779ceb06eabe191e57564fc6339569e15c4653c3))
+* **deps:** update dependency dotenv to v18.0.6 ([9770dfc](https://github.com/bumbleflies/queen/commit/9770dfca58d8a1ba5a29d8a28f05a11169e90673))
 * Task 3 spec gaps (vatNote passthrough, numbering logic tests) ([33c0089](https://github.com/bumbleflies/queen/commit/33c0089c93a2739f0b2ffae7319537835f8cdde9))
 
 ## [0.2.1](https://github.com/bumbleflies/queen/compare/queen-v0.2.0...queen-v0.2.1) (2026-10-06)
