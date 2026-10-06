@@ -1,0 +1,24 @@
+# AGENTS.md — queen
+
+Finance & ops app for bumbleflies (clients, invoices, credit notes, GLS/Firefly III auto-reconcile). Status: **planning** — source of truth is `docs/plans/2026-10-06-queen.md`. README is a one-paragraph pointer; trust the plan doc.
+
+## Planned stack (no code yet — Task 1 scaffolds it)
+
+TypeScript: React 19 + Vite client, Express + tRPC 11 server, Mongoose 9 (MongoDB = sole ledger), valkey + Bull, pdfkit, googleapis (Drive only), Firefly III API v1, Docker + Traefik + Ofelia. Clone dependency set from `leagues.finance/package.json` **minus `mysql2`**; vitest + `mongodb-memory-server` (`MONGO_URI` unset → in-memory).
+
+Scaffold must include: `package.json`, `tsconfig.json`, `tsconfig.server.json`, `vite.config.ts`, `vitest.config.ts`, `src/server/{index,app,health}.ts`, `src/client/main.tsx`, `.env.example`, `renovate.json`, `.gitignore`. Verify with `npm install && npm run typecheck && npm run typecheck:server && npm test`.
+
+## Invariants (enforce in code, do not relax)
+
+- **GoBD:** issued invoices are never deleted/reopened. Correction = Stornorechnung (credit note, own number, negative lines, `cancels: <invoiceId>`). `draft` delete is the only delete.
+- **Money = integer cents** everywhere. Parse German formats (`1.600,00 €`, `9329,6`, negative `-100,00 €`); VAT per line, half-up.
+- **Numbering:** queen owns `customerNumber` + `invoiceNumber`. New = `YYYYMMDD-NN` via atomic `Counter` (`findOneAndUpdate` `$inc`); date = draft-creation date, not invoice date. Legacy imports keep arbitrary numbers with `legacy: true`.
+- **State machine** (`draft → sent → paid`, `sent → canceled` via credit note only; `overdue` is computed, not stored): single `invoiceStateMachine.ts`, unit-tested; only `draft` is editable; `markSent` requires ≥1 line, gross ≠ 0.
+- **Payment reference on PDFs:** `Verwendungszweck: <customerNumber>-<invoiceNumber>`. Reconcile regex must tolerate bank-inserted spaces/line breaks; customer number must match or → unmatched.
+- **Standalone:** no dependency on LeagueSphere MySQL. League origins attach as optional `source` metadata, never required FKs.
+
+## Repo / data hygiene
+
+- Repo `bumbleflies/queen` is **public**: no customer data in git. Fixtures anonymised, secrets in container git-crypt only.
+- Service lives in `container/finance/docker-compose.yml` next to Firefly (same project → `http://firefly:8080` works). Reconcile = Ofelia `job-exec` `0 30 7 * * *` → `node dist/server/cron/reconcile.js` (after 06:00 GLS import).
+- Deploy: test on **servyy-test first** (`ansible ./servyy-test.sh`), verify health + Ofelia run. **Prod needs explicit approval.** Until leagues.finance integration ships (plan Task 11), the Sheet stays source for LeagueSphere invoices — do not cut over early.
