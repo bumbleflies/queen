@@ -26,7 +26,10 @@ The Bankabgleich page lists incoming payments only (`direction != 'out'`), so th
 
 ## Deployment results
 
-- TODO after merge/release: servyy-test first, then production. Verify the 2026 inbox shows both directions and the balance banner agrees with Firefly.
+- Merged to `master` (PR #52, after merging `origin/master` for the parallel resync-dialog fix #50; resync now lives on the Bank page as an inline card dialog). Released in `queen-v0.16.0` (release PR #53).
+- servyy-test: ansible finance converge + explicit queen pull/recreate (compose `state: present` doesn't pull `:latest` on its own); healthy, `/health` 200, served bundle contains the Buchen UI.
+- Production: same procedure; healthy on the `0.16.0` build, `/health` 200, served bundle contains the Buchen UI.
+- 2026 ledger coverage after rollout: all 9 invoice entries posted via backfill (2026-00001…00009); payments 0 (3 imported-paid without date correctly skipped, no incoming bank payments matched); outgoing await booking decisions in `/bookings`.
 
 ## Verification commands
 

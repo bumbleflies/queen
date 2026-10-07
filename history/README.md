@@ -21,4 +21,4 @@ The plans in `docs/plans/` say what was intended. These logs say what actually s
 | 2026-10-06 | [First version: invoicing, Drive filing, bank reconcile](2026-10-06_queen-v1-invoicing-reconcile.md) | `queen-v0.2.0` – `0.9.0` |
 | 2026-10-07 | [Accounting phase 1: ledger foundation](2026-10-07_accounting-ledger-phase1.md) | `queen-v0.10.0` |
 | 2026-10-07 | [Ledger backfill UI](2026-10-07_ledger-backfill-ui.md) | `queen-v0.15.0` |
-| 2026-10-07 | [Buchen page](2026-10-07_buchen-page.md) | unreleased |
+| 2026-10-07 | [Buchen page](2026-10-07_buchen-page.md) | `queen-v0.16.0` |
