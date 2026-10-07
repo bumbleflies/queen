@@ -320,6 +320,10 @@ export const de = {
   'settings.csv': 'Rechnungen als CSV exportieren',
   'settings.deName': 'Deutsch',
   'settings.enName': 'Englisch',
+  'settings.toggleTheme': 'Design umschalten',
+  'settings.themeSystem': 'System',
+  'settings.themeLight': 'Hell',
+  'settings.themeDark': 'Dunkel',
 };
 
 export type Dict = typeof de;

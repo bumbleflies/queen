@@ -1,11 +1,13 @@
 import { Link } from 'react-router-dom';
 import { trpc } from '../lib/trpc';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useTheme } from '../theme/ThemeContext';
 
 export function SettingsPage() {
   const me = trpc.me.useQuery();
   const user = me.data?.user;
   const { lang, setLang, t } = useLanguage();
+  const { theme, setTheme } = useTheme();
 
   return (
     <>
@@ -34,6 +36,33 @@ export function SettingsPage() {
           >
             EN
           </button>
+        </div>
+      </section>
+
+      <section
+        className="card"
+        style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+      >
+        <h2 style={{ margin: 0, fontSize: 18 }}>{t('settings.theme')}</h2>
+        <div className="row" role="group" aria-label={t('settings.theme')}>
+          {(
+            [
+              ['system', 'settings.themeSystem'],
+              ['light', 'settings.themeLight'],
+              ['dark', 'settings.themeDark'],
+            ] as const
+          ).map(([value, key]) => (
+            <button
+              key={value}
+              type="button"
+              className={`btn${theme === value ? '' : ' ghost'}`}
+              aria-pressed={theme === value}
+              title={t(key)}
+              onClick={() => setTheme(value)}
+            >
+              {t(key)}
+            </button>
+          ))}
         </div>
       </section>
 

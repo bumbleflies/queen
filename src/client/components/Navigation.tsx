@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Brand } from './Brand';
 import { trpc } from '../lib/trpc';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useTheme } from '../theme/ThemeContext';
 import type { DictKey } from '../i18n/de';
 
 type IconName = 'home' | 'invoices' | 'clients' | 'bank' | 'reports' | 'settings' | 'logout';
@@ -72,6 +73,7 @@ export function Navigation({ onLogout }: { onLogout?: () => void }) {
   const unmatched = trpc.bank.list.useQuery({ unmatchedOnly: true });
   const bankCount = unmatched.data?.length ?? 0;
   const { lang, setLang, t } = useLanguage();
+  const { setTheme, resolved } = useTheme();
 
   const badge = (item: NavItem) =>
     item.badge === 'bank' && bankCount > 0 ? (
@@ -109,6 +111,44 @@ export function Navigation({ onLogout }: { onLogout?: () => void }) {
             ))}
           </nav>
           <div className="topbar-tools">
+            <button
+              type="button"
+              className="topbar-icon"
+              onClick={() => setTheme(resolved === 'dark' ? 'light' : 'dark')}
+              aria-label={t('settings.toggleTheme')}
+              title={t('settings.toggleTheme')}
+            >
+              {resolved === 'dark' ? (
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="4" />
+                  <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+                </svg>
+              ) : (
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+                </svg>
+              )}
+            </button>
             <div className="lang-switch" role="group" aria-label={t('settings.language')}>
               {langBtn('de', t('settings.deName'))}
               {langBtn('en', t('settings.enName'))}

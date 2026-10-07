@@ -322,4 +322,8 @@ export const en: Dict = {
   'settings.csv': 'Export invoices as CSV',
   'settings.deName': 'German',
   'settings.enName': 'English',
+  'settings.toggleTheme': 'Toggle theme',
+  'settings.themeSystem': 'System',
+  'settings.themeLight': 'Light',
+  'settings.themeDark': 'Dark',
 };

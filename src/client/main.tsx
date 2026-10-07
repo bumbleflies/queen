@@ -7,6 +7,7 @@ import { ToastProvider } from './components/Toast';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Layout } from './components/Layout';
 import { LanguageProvider } from './i18n/LanguageContext';
+import { ThemeProvider } from './theme/ThemeContext';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { InvoicesPage } from './pages/InvoicesPage';
@@ -66,7 +67,9 @@ function App() {
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <LanguageProvider>
-      <App />
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>
     </LanguageProvider>
   </StrictMode>,
 );
