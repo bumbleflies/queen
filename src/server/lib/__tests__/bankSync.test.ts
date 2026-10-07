@@ -26,6 +26,12 @@ describe('computeSyncWindow', () => {
     const now = new Date('2025-03-10T12:00:00Z');
     expect(computeSyncWindow({ lastRunFinishedAt: null, bankStart, now }).from).toEqual(bankStart);
   });
+
+  it('full window starts at QUEEN_BANK_START even after earlier runs', () => {
+    const now = new Date('2026-10-07T12:00:00Z');
+    const lastRunFinishedAt = new Date('2026-10-06T06:30:00Z');
+    expect(computeSyncWindow({ lastRunFinishedAt, bankStart, now, full: true }).from).toEqual(bankStart);
+  });
 });
 
 function makeModel() {
@@ -55,9 +61,9 @@ const tx: FireflyTransaction = {
   amountCents: 107100,
   currency: 'EUR',
   description: 'Rechnung 10001-20250101-01',
-  destinationIban: 'DE02100500000054540402',
-  sourceIban: 'DE02120300000000202051',
-  sourceName: 'Acme GmbH',
+  direction: 'in',
+  counterpartyName: 'Acme GmbH',
+  counterpartyIban: 'DE02120300000000202051',
 };
 
 const now = new Date('2025-03-10T12:00:00Z');
@@ -66,7 +72,7 @@ const window = { from: bankStart, to: now, now };
 describe('syncBankTransactions', () => {
   it('upserts one row per transaction keyed by fireflyJournalId', async () => {
     const { model, store, updateOne } = makeModel();
-    const client = { fetchDeposits: vi.fn(async () => [tx, { ...tx, fireflyJournalId: '43:0' }]) };
+    const client = { fetchTransactions: vi.fn(async () => [tx, { ...tx, fireflyJournalId: '43:0' }]) };
 
     const result = await syncBankTransactions({ client, ...window, model });
 
@@ -80,13 +86,14 @@ describe('syncBankTransactions', () => {
       description: 'Rechnung 10001-20250101-01',
       counterpartyName: 'Acme GmbH',
       counterpartyIban: 'DE02120300000000202051',
+      direction: 'in',
       importedAt: now,
     });
   });
 
   it('is idempotent: re-syncing never duplicates rows', async () => {
     const { model, store } = makeModel();
-    const client = { fetchDeposits: vi.fn(async () => [tx]) };
+    const client = { fetchTransactions: vi.fn(async () => [tx]) };
 
     await syncBankTransactions({ client, ...window, model });
     const second = await syncBankTransactions({ client, ...window, model });
@@ -97,7 +104,7 @@ describe('syncBankTransactions', () => {
 
   it('reports zero when Firefly returns nothing', async () => {
     const { model } = makeModel();
-    const client = { fetchDeposits: vi.fn(async () => []) };
+    const client = { fetchTransactions: vi.fn(async () => []) };
     expect(await syncBankTransactions({ client, ...window, model })).toEqual({
       fetched: 0,
       upserted: 0,

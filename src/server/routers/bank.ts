@@ -16,7 +16,7 @@ export interface BankListFilterInput {
 
 /** Pure query filter for the bank list (exported for unit tests). */
 export function buildBankListFilter(input: BankListFilterInput = {}): Record<string, unknown> {
-  const filter: Record<string, unknown> = {};
+  const filter: Record<string, unknown> = { direction: { $ne: 'out' } };
   if (input.unmatchedOnly) {
     filter.matchedInvoiceId = null;
     filter.ignored = { $ne: true };
@@ -100,28 +100,31 @@ export const bankRouter = router({
    * upsert them. Errors are recorded on the ReconcileRun and returned as
    * `{ ok: false }` — never thrown into the CRUD path. Matching is Task 7.
    */
-  syncNow: adminProcedure.mutation(async () => {
-    const run = await ReconcileRun.create({ startedAt: new Date() });
-    try {
-      const { baseUrl, pat, glsAccountId, bankStart } = readFireflyEnv();
-      const lastRun = await findLastSuccessfulRun();
-      const now = new Date();
-      const { from, to } = computeSyncWindow({
-        lastRunFinishedAt: lastRun?.finishedAt,
-        bankStart,
-        now,
-      });
-      const client = new FireflyClient({ baseUrl, pat, glsAccountId });
-      const { fetched } = await syncBankTransactions({ client, from, to, now });
-      run.fetched = fetched;
-      run.finishedAt = new Date();
-      await run.save();
-      return { ok: true as const, fetched, from, to, run };
-    } catch (err) {
-      run.error = (err as Error).message;
-      run.finishedAt = new Date();
-      await run.save();
-      return { ok: false as const, error: run.error };
-    }
-  }),
+  syncNow: adminProcedure
+    .input(z.object({ full: z.boolean().optional() }).optional())
+    .mutation(async ({ input }) => {
+      const run = await ReconcileRun.create({ startedAt: new Date() });
+      try {
+        const { baseUrl, pat, glsAccountId, bankStart } = readFireflyEnv();
+        const lastRun = await findLastSuccessfulRun();
+        const now = new Date();
+        const { from, to } = computeSyncWindow({
+          lastRunFinishedAt: lastRun?.finishedAt,
+          bankStart,
+          now,
+          full: input?.full,
+        });
+        const client = new FireflyClient({ baseUrl, pat, glsAccountId });
+        const { fetched } = await syncBankTransactions({ client, from, to, now });
+        run.fetched = fetched;
+        run.finishedAt = new Date();
+        await run.save();
+        return { ok: true as const, fetched, from, to, run };
+      } catch (err) {
+        run.error = (err as Error).message;
+        run.finishedAt = new Date();
+        await run.save();
+        return { ok: false as const, error: run.error };
+      }
+    }),
 });

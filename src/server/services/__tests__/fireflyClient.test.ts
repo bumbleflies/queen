@@ -43,12 +43,12 @@ function pageBody(
 
 const opts = { baseUrl: 'http://firefly:8080', pat: 'secret-pat', glsAccountId: '7' };
 
-describe('FireflyClient.fetchDeposits', () => {
+describe('FireflyClient.fetchTransactions', () => {
   it('parses a single page and maps split fields to cents', async () => {
     const fetchImpl = vi.fn(async () => jsonResponse(200, pageBody('42', [depositSplit()], 1, 1)));
     const client = new FireflyClient({ ...opts, fetchImpl: fetchImpl as unknown as typeof fetch });
 
-    const txs = await client.fetchDeposits(
+    const txs = await client.fetchTransactions(
       new Date('2025-01-01T00:00:00Z'),
       new Date('2025-01-31T00:00:00Z'),
     );
@@ -60,9 +60,9 @@ describe('FireflyClient.fetchDeposits', () => {
       amountCents: 107100,
       currency: 'EUR',
       description: 'Rechnung 10001-20250101-01',
-      destinationIban: 'DE02100500000054540402',
-      sourceIban: 'DE02120300000000202051',
-      sourceName: 'Acme GmbH',
+      direction: 'in',
+      counterpartyName: 'Acme GmbH',
+      counterpartyIban: 'DE02120300000000202051',
     });
     expect(txs[0].date.toISOString()).toBe('2025-01-15T00:00:00.000Z');
   });
@@ -71,14 +71,14 @@ describe('FireflyClient.fetchDeposits', () => {
     const fetchImpl = vi.fn(async () => jsonResponse(200, pageBody('42', [depositSplit()], 1, 1)));
     const client = new FireflyClient({ ...opts, fetchImpl: fetchImpl as unknown as typeof fetch });
 
-    await client.fetchDeposits(
+    await client.fetchTransactions(
       new Date('2025-01-01T00:00:00Z'),
       new Date('2025-01-31T00:00:00Z'),
     );
 
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toContain('/api/v1/accounts/7/transactions');
-    expect(url).toContain('type=deposit');
+    expect(url).toContain('type=all');
     expect(url).toContain('start=2025-01-01');
     expect(url).toContain('end=2025-01-31');
     expect(url).toContain('limit=100');
@@ -98,7 +98,7 @@ describe('FireflyClient.fetchDeposits', () => {
     });
     const client = new FireflyClient({ ...opts, fetchImpl: fetchImpl as unknown as typeof fetch });
 
-    const txs = await client.fetchDeposits(
+    const txs = await client.fetchTransactions(
       new Date('2025-01-01T00:00:00Z'),
       new Date('2025-01-31T00:00:00Z'),
     );
@@ -117,7 +117,7 @@ describe('FireflyClient.fetchDeposits', () => {
     );
     const client = new FireflyClient({ ...opts, fetchImpl: fetchImpl as unknown as typeof fetch });
 
-    const txs = await client.fetchDeposits(
+    const txs = await client.fetchTransactions(
       new Date('2025-01-01T00:00:00Z'),
       new Date('2025-01-31T00:00:00Z'),
     );
@@ -129,7 +129,7 @@ describe('FireflyClient.fetchDeposits', () => {
     const client = new FireflyClient({ ...opts, fetchImpl: fetchImpl as unknown as typeof fetch });
 
     await expect(
-      client.fetchDeposits(new Date('2025-01-01T00:00:00Z'), new Date('2025-01-31T00:00:00Z')),
+      client.fetchTransactions(new Date('2025-01-01T00:00:00Z'), new Date('2025-01-31T00:00:00Z')),
     ).rejects.toMatchObject({ code: 'FIREFLY_UNAUTHORIZED' });
   });
 
@@ -138,7 +138,7 @@ describe('FireflyClient.fetchDeposits', () => {
     const client = new FireflyClient({ ...opts, fetchImpl: fetchImpl as unknown as typeof fetch });
 
     await expect(
-      client.fetchDeposits(new Date('2025-01-01T00:00:00Z'), new Date('2025-01-31T00:00:00Z')),
+      client.fetchTransactions(new Date('2025-01-01T00:00:00Z'), new Date('2025-01-31T00:00:00Z')),
     ).rejects.toMatchObject({ code: 'FIREFLY_UNAVAILABLE' });
   });
 
@@ -149,10 +149,66 @@ describe('FireflyClient.fetchDeposits', () => {
     const client = new FireflyClient({ ...opts, fetchImpl: fetchImpl as unknown as typeof fetch });
 
     await expect(
-      client.fetchDeposits(new Date('2025-01-01T00:00:00Z'), new Date('2025-01-31T00:00:00Z')),
+      client.fetchTransactions(new Date('2025-01-01T00:00:00Z'), new Date('2025-01-31T00:00:00Z')),
     ).rejects.toBeInstanceOf(FireflyError);
     await expect(
-      client.fetchDeposits(new Date('2025-01-01T00:00:00Z'), new Date('2025-01-31T00:00:00Z')),
+      client.fetchTransactions(new Date('2025-01-01T00:00:00Z'), new Date('2025-01-31T00:00:00Z')),
     ).rejects.toMatchObject({ code: 'FIREFLY_UNAVAILABLE' });
+  });
+});
+
+function withdrawalSplit(overrides: Record<string, unknown> = {}) {
+  return {
+    type: 'withdrawal',
+    date: '2026-01-30T00:00:00+00:00',
+    amount: '8.24',
+    currency_code: 'EUR',
+    description: 'Abrechnung vom 29.01.2026',
+    source_name: 'GLS',
+    source_iban: 'DE02100500000054540402',
+    destination_name: 'Beispiel Software Ltd',
+    destination_iban: 'IE29AIBK93115212345678',
+    ...overrides,
+  };
+}
+
+describe('FireflyClient.fetchTransactions directions', () => {
+  it('maps withdrawals to direction out with the destination as counterparty and skips transfers', async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse(
+        200,
+        {
+          data: [
+            { type: 'transactions', attributes: { transaction_journal_id: '50', transactions: [withdrawalSplit()] } },
+            { type: 'transactions', attributes: { transaction_journal_id: '51', transactions: [depositSplit()] } },
+            { type: 'transactions', attributes: { transaction_journal_id: '52', transactions: [depositSplit({ type: 'transfer' })] } },
+          ],
+          meta: { pagination: { total_pages: 1, current_page: 1 } },
+        },
+      ),
+    );
+    const client = new FireflyClient({ ...opts, fetchImpl: fetchImpl as unknown as typeof fetch });
+    const txs = await client.fetchTransactions(new Date('2026-01-01T00:00:00Z'), new Date('2026-01-31T00:00:00Z'));
+    expect(String(fetchImpl.mock.calls[0][0])).toContain('type=all');
+    expect(txs).toHaveLength(2);
+    expect(txs[0]).toMatchObject({
+      fireflyJournalId: '50:0',
+      direction: 'out',
+      amountCents: 824,
+      counterpartyName: 'Beispiel Software Ltd',
+      counterpartyIban: 'IE29AIBK93115212345678',
+    });
+    expect(txs[1]).toMatchObject({ fireflyJournalId: '51:0', direction: 'in', counterpartyName: 'Acme GmbH' });
+  });
+});
+
+describe('FireflyClient.fetchBalance', () => {
+  it('reads current_balance for the given date as cents', async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse(200, { data: { attributes: { current_balance: '1234.56' } } }),
+    );
+    const client = new FireflyClient({ ...opts, fetchImpl: fetchImpl as unknown as typeof fetch });
+    expect(await client.fetchBalance(new Date(2026, 11, 31))).toBe(123456);
+    expect(String(fetchImpl.mock.calls[0][0])).toBe('http://firefly:8080/api/v1/accounts/7?date=2026-12-31');
   });
 });

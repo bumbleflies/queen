@@ -9,6 +9,15 @@ const bankTransactionSchema = new Schema(
     description: { type: String, required: true, default: '' },
     counterpartyName: { type: String },
     counterpartyIban: { type: String },
+    direction: { type: String, enum: ['in', 'out'], required: true, default: 'in' },
+    supplierId: { type: Schema.Types.ObjectId, ref: 'Supplier' },
+    receipt: {
+      type: new Schema(
+        { driveFileId: { type: String }, fileName: { type: String }, link: { type: String } },
+        { _id: false },
+      ),
+    },
+    receiptMissingReason: { type: String },
     matchedInvoiceId: { type: Schema.Types.ObjectId, ref: 'Invoice' },
     matchMethod: { type: String, enum: ['reference', 'manual'] },
     ignored: { type: Boolean, required: true, default: false },
