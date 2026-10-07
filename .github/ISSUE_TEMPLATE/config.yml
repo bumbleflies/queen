@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📖 Contributor Guide
+    url: https://github.com/bumbleflies/queen/blob/master/CONTRIBUTING.md
+    about: Build, test, code style, domain invariants and deployment-safety guidelines before you start.

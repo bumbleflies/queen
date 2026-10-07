@@ -2,7 +2,7 @@
 
 Interactive UI mocks for queen, exported from the Claude design canvas "queen UI mock" (2026-10-06). All client names, addresses and amounts are fictional.
 
-The files are Design Component pages (`.dc.html`). They need the canvas runtime (`support.js`) and do not render standalone in a browser. Use them as the reference for layout, copy, states and interactions when building the React client (plan Task 8). `canvas.json` holds the board layout.
+The files are Design Component pages (`.dc.html`). They need the canvas runtime (`support.js`) and do not render standalone in a browser. The React client (plan Task 8) is built from them; they remain the reference for layout, copy, states and interactions. New screens (e.g. Buchhaltung) follow the same tokens and responsive rules. `canvas.json` holds the board layout.
 
 | File | Screen | Covers |
 |------|--------|--------|

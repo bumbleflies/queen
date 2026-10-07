@@ -1,0 +1,99 @@
+name: 🐛 Bug report
+description: Something in queen isn't working as expected
+title: "[Area] Short description"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. The more concrete the repro, the faster it gets fixed: an
+        invoice number, journal entry number or bank transaction date plus exact steps beats a
+        general description. **This repo is public.** Do not paste customer names, addresses,
+        IBANs or real amounts unless they are needed, and redact them where you can.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of queen does this affect?
+      options:
+        - Rechnungen (invoices, credit notes, numbering)
+        - PDF / Drive filing
+        - Kunden (clients)
+        - Bankabgleich (Firefly sync, reconcile)
+        - Buchhaltung (ledger, journal, Saldenliste, backfill)
+        - Berichte (reports, CSV export)
+        - Auth / login
+        - UI (layout, i18n, dark mode, mobile)
+        - Sheet import / migration
+        - infrastructure / deployment (Docker, CI, servyy-container)
+        - other / not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: Where did you see this?
+      options:
+        - Production (queen.bumbleflies.de)
+        - servyy-test
+        - Local / dev
+        - Not applicable
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What's broken? Include the page URL and the invoice, entry or transaction reference.
+      placeholder: |
+        e.g. "Invoice 20261007-02 is shown as paid, but the Saldenliste still shows the open
+        amount on 1200 after the bank payment was assigned."
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps from a clean state.
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs. actual behavior
+      placeholder: |
+        Expected: ...
+        Actual: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence (logs, screenshots)
+      description: >
+        Paste relevant container log output (e.g. `[ledger] … failed` lines), reconcile run
+        results or screenshots. Redact customer data and real amounts that aren't needed.
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and this isn't a duplicate
+          required: true
+        - label: This is reproducible (not a one-off environmental blip)
+          required: false
