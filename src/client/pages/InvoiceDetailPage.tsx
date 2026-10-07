@@ -74,7 +74,7 @@ export function InvoiceDetailPage() {
   const [paidNote, setPaidNote] = useState('');
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
-  const [showLines, setShowLines] = useState(false);
+  const [showLines, setShowLines] = useState(true);
 
   const invoice = detail.data as unknown as DetailInvoice | undefined;
   const invoiceId = id ?? '';
