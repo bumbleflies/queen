@@ -1,12 +1,42 @@
 # AGENTS.md — queen
 
-Finance & ops app for bumbleflies (clients, invoices, credit notes, GLS/Firefly III auto-reconcile). Status: app live; accounting Phase 1 (ledger) added — plans in `docs/plans/` (`2026-10-06-queen.md` is the base plan). README is a one-paragraph pointer.
+Finance & ops app for bumbleflies: clients, invoices, credit notes, Drive filing, GLS/Firefly III auto-reconcile, and a double-entry SKR04 ledger.
 
-## Planned stack (no code yet — Task 1 scaffolds it)
+**Status:** the first version is live on servyy-test (releases `queen-v0.2.0`–`0.9.0`). Production is gated, and accounting phase 1 (the ledger) is merged.
 
-TypeScript: React 19 + Vite client, Express + tRPC 11 server, Mongoose 9 (MongoDB = sole ledger), valkey + Bull, pdfkit, googleapis (Drive only), Firefly III API v1, Docker + Traefik + Ofelia. Clone dependency set from `leagues.finance/package.json` **minus `mysql2`**; vitest + `mongodb-memory-server` (`MONGO_URI` unset → in-memory).
+**Where to read:**
+- [`CONTRIBUTING.md`](CONTRIBUTING.md): how to work (commands, checks, branching, releases).
+- This file: what must stay true.
+- [`docs/plans/`](docs/plans/): intent. These are the [base plan](docs/plans/2026-10-06-queen.md), the [accounting spec](docs/plans/2026-10-07-accounting.md) and the [ledger plan](docs/plans/2026-10-07-accounting-phase1.md).
+- [`history/`](history/README.md): what actually shipped. Add a log for every shipped feature.
 
-Scaffold must include: `package.json`, `tsconfig.json`, `tsconfig.server.json`, `vite.config.ts`, `vitest.config.ts`, `src/server/{index,app,health}.ts`, `src/client/main.tsx`, `.env.example`, `renovate.json`, `.gitignore`. Verify with `npm install && npm run typecheck && npm run typecheck:server && npm test`.
+## Stack & layout
+
+TypeScript throughout:
+
+- **Client:** React 19, Vite, tRPC 11.
+- **Server:** Express and tRPC 11 on Node 24.
+- **Data:** Mongoose 9 (MongoDB is the only store).
+- **Jobs:** valkey and Bull run the filing queue.
+- **Integrations:** pdfkit, googleapis (Drive only), Firefly III API v1.
+- **Deployment:** Docker, with Traefik and Ofelia.
+- **Tests:** vitest with `mongodb-memory-server`. Leave `MONGO_URI` unset to get an in-memory DB.
+
+| Path | Holds |
+|------|-------|
+| `src/server/routers/` | `clients`, `invoices`, `bank`, `reconcile`, `reports`, `accounts`, `ledger`, `admin` (`importSheet`, `linkDriveFiles`, `ledgerBackfill`) |
+| `src/server/lib/` | Pure domain logic: `money`, `numbering`, `invoiceStateMachine`, `reconcile`, `bankSync`, `sheetImport`, `accounting/` (`skr04`, `postingRules`, `ledger`, `balances`, `ledgerHooks`, `backfill`) |
+| `src/server/services/` | `PdfService`, `DriveService`, `FireflyClient`, `AuthService` |
+| `src/server/jobs/`, `src/server/cron/reconcile.ts` | Filing queue, and the daily reconcile entrypoint |
+| `src/client/` | `pages/`, `components/`, `lib/`, `i18n/` (`de.ts` is the source of `DictKey`; `en.ts` must have the same keys), `theme/` |
+
+**Checks:** `npm run lint && npm run typecheck && npm run typecheck:server && npm test`.
+- `npm test` sets `NODE_ENV=development`. Without it, DB tests skip silently, so set it yourself when calling `npx vitest` directly.
+- The build emits `dist/src/server/…` because `tsconfig.server.json` has `rootDir: "."`.
+
+**Base plan progress:**
+- Tasks 1–10 are done: scaffold, auth, money/numbering/state machine, CRUD, PDF+Drive, Firefly sync, reconcile, UI, Docker/CI/servyy-test, Sheet import.
+- Open: Task 11 (leagues.finance → queen `ext.*` API, not built yet) and Task 12 (cutover).
 
 ## Invariants (enforce in code, do not relax)
 
@@ -30,5 +60,14 @@ Scaffold must include: `package.json`, `tsconfig.json`, `tsconfig.server.json`, 
 ## Repo / data hygiene
 
 - Repo `bumbleflies/queen` is **public**: no customer data in git. Fixtures anonymised, secrets in container git-crypt only.
-- Service lives in `container/finance/docker-compose.yml` next to Firefly (same project → `http://firefly:8080` works). Reconcile = Ofelia `job-exec` `0 30 7 * * *` → `node dist/server/cron/reconcile.js` (after 06:00 GLS import).
-- Deploy: test on **servyy-test first** (`ansible ./servyy-test.sh`), verify health + Ofelia run. **Prod needs explicit approval.** Until leagues.finance integration ships (plan Task 11), the Sheet stays source for LeagueSphere invoices — do not cut over early.
+- The service lives in [`dachrisch/servyy-container`](https://github.com/dachrisch/servyy-container) `finance/docker-compose.yml`, next to Firefly (`http://finance.firefly:8080`).
+  - It uses the shared `mongo` (db `queen`) and `redis` (db `1`) from `shared/docker-compose.yml`.
+  - Env comes from the Ansible template `templates/finance/queen.env.j2`.
+  - Reconcile is an Ofelia `job-exec` at `0 30 7 * * *` running `node dist/src/server/cron/reconcile.js`, after the 06:00 GLS import.
+- **Deploy to servyy-test first** (`ansible ./servyy-test.sh`), then verify health and the Ofelia run. **Prod needs explicit approval**; prod is still gated off in `finance_services`.
+- Until the leagues.finance integration ships (plan Task 11), the Sheet stays the source for LeagueSphere invoices. Do not cut over early.
+- **Ledger go-live order on an environment:**
+  1. Check that the container honours TZ (`getTimezoneOffset()` is `-60` or `-120`).
+  2. Enter the opening entry in the UI.
+  3. Run `admin.ledgerBackfill` as a dry run and review `skipped`.
+  4. Run it for real.
