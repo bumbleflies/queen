@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.0](https://github.com/bumbleflies/queen/compare/queen-v0.5.1...queen-v0.6.0) (2026-10-07)
+
+
+### Features
+
+* **admin:** linkDriveFiles to attach filed PDFs to imported invoices ([f546529](https://github.com/bumbleflies/queen/commit/f5465293cf134b6d3f8f5f792a661290b69871bb))
+* **admin:** linkDriveFiles to attach filed PDFs to imported invoices ([95d3f8b](https://github.com/bumbleflies/queen/commit/95d3f8b266743cbd033fbd0aba5b205f8f435a4b))
+
 ## [0.5.1](https://github.com/bumbleflies/queen/compare/queen-v0.5.0...queen-v0.5.1) (2026-10-06)
 
 
