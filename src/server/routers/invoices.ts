@@ -8,6 +8,7 @@ import { invoiceTotals } from '../lib/money';
 import { allocateInvoiceNumber } from '../lib/numbering';
 import { assertTransition } from '../lib/invoiceStateMachine';
 import { enqueueFileInvoice } from '../jobs/queue';
+import { postInvoiceEntry, postPaymentEntry, safeLedger } from '../lib/accounting/ledgerHooks';
 import {
   createDraftSchema,
   setLinesSchema,
@@ -195,6 +196,9 @@ export const invoicesRouter = router({
       invoice.sentAt = new Date();
       invoice.filingUserId = ctx.user?.sub;
       await invoice.save();
+      await safeLedger(`invoice ${invoice.invoiceNumber}`, () =>
+        postInvoiceEntry({ invoice, lines, negate: false, createdBy: ctx.user.sub }),
+      );
       await enqueueFileInvoice(invoice._id.toString());
       return invoice;
     }),
@@ -207,7 +211,7 @@ export const invoicesRouter = router({
         note: z.string().optional(),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const invoice = await getInvoiceOrThrow(input.id);
       assertTransition(invoice.status, 'markPaid');
       invoice.status = 'paid';
@@ -217,12 +221,25 @@ export const invoicesRouter = router({
         invoice.footerNotes = [...(invoice.footerNotes ?? []), input.note];
       }
       await invoice.save();
+      const paidSoFar = invoice.payments.reduce((sum, p) => sum + p.amountCents, 0);
+      const openCents = invoice.totals.grossCents - paidSoFar;
+      if (invoice.kind === 'invoice' && openCents > 0) {
+        await safeLedger(`markPaid ${invoice.invoiceNumber}`, () =>
+          postPaymentEntry({
+            refId: `markPaid:${invoice._id}`,
+            date: invoice.paidAt!,
+            amountCents: openCents,
+            text: `Zahlung ${invoice.invoiceNumber} (manuell)`,
+            createdBy: ctx.user.sub,
+          }),
+        );
+      }
       return invoice;
     }),
 
   cancel: adminProcedure
     .input(z.object({ id: z.string().min(1), reason: z.string().optional() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const original = await getInvoiceOrThrow(input.id);
       assertTransition(original.status, 'cancel');
       const lines = await InvoiceLine.find({ invoiceId: original._id });
@@ -272,6 +289,9 @@ export const invoicesRouter = router({
           })),
         );
       }
+      await safeLedger(`credit note ${creditNote.invoiceNumber}`, () =>
+        postInvoiceEntry({ invoice: creditNote, lines, negate: true, createdBy: ctx.user.sub }),
+      );
       await enqueueFileInvoice(creditNote._id.toString());
       original.status = 'canceled';
       original.canceledAt = new Date();

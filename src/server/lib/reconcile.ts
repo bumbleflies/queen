@@ -1,6 +1,7 @@
 import type { HydratedDocument, Types } from 'mongoose';
 import { BankTransaction, type BankTransactionDoc } from '../models/BankTransaction';
 import { Invoice, type InvoiceDoc } from '../models/Invoice';
+import { postPaymentEntry, reversePaymentEntry, safeLedger } from './accounting/ledgerHooks';
 
 /**
  * Reconcile logic lives here in two layers:
@@ -158,6 +159,16 @@ async function applyPayment(
   bankTx.matchedInvoiceId = invoice._id;
   bankTx.matchMethod = matchMethod;
   await bankTx.save();
+
+  await safeLedger(`payment ${bankTx.fireflyJournalId}`, () =>
+    postPaymentEntry({
+      refId: `bank:${bankTx.fireflyJournalId}`,
+      date: bankTx.date,
+      amountCents: bankTx.amountCents,
+      text: `Zahlung ${invoice.invoiceNumber} · ${bankTx.counterpartyName ?? ''}`.trim(),
+      createdBy: matchMethod === 'manual' ? 'admin' : 'reconcile',
+    }),
+  );
 }
 
 /**
@@ -299,6 +310,10 @@ export async function reversePayment(
     invoice.paidAt = null;
   }
   await invoice.save();
+
+  await safeLedger(`unassign ${bankTxId}`, () =>
+    reversePaymentEntry(`bank:${bankTxId}`, 'Zahlung zurückgenommen', 'admin'),
+  );
 }
 
 /** True only when this module is the process entrypoint, so tests can import safely. */
