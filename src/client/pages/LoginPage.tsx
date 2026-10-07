@@ -1,4 +1,5 @@
 import { Brand } from '../components/Brand';
+import { useLanguage } from '../i18n/LanguageContext';
 
 function GoogleIcon() {
   return (
@@ -9,19 +10,20 @@ function GoogleIcon() {
 }
 
 export function LoginPage() {
+  const { t } = useLanguage();
   return (
     <main className="auth">
       <div className="card auth-card">
         <Brand size={40} className="auth-brand" />
         <div className="auth-intro">
-          <h1>Anmelden</h1>
-          <p className="muted">Rechnungswesen für bumbleflies</p>
+          <h1>{t('auth.title')}</h1>
+          <p className="muted">{t('auth.sub')}</p>
         </div>
         <a className="btn honey auth-google" href="/auth/google">
           <GoogleIcon />
-          Mit Google anmelden
+          {t('auth.google')}
         </a>
-        <p className="auth-foot muted">Zugang nur für autorisierte Konten.</p>
+        <p className="auth-foot muted">{t('auth.restricted')}</p>
       </div>
     </main>
   );

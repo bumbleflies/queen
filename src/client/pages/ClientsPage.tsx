@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { trpc } from '../lib/trpc';
 import { useToast } from '../components/Toast';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface ClientRow {
   _id: unknown;
@@ -12,6 +13,8 @@ interface ClientRow {
   defaultPaymentTermDays: number;
   email?: string;
   archived?: boolean;
+  openCount?: number;
+  overdueCount?: number;
 }
 
 export function ClientsPage() {
@@ -19,6 +22,7 @@ export function ClientsPage() {
   const createClient = trpc.clients.create.useMutation();
   const utils = trpc.useUtils();
   const toast = useToast();
+  const { t } = useLanguage();
 
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
@@ -39,7 +43,7 @@ export function ClientsPage() {
 
   async function submit() {
     if (!name.trim() || !invoiceAddress.trim()) {
-      toast.error('Name und Rechnungsadresse sind erforderlich.');
+      toast.error(t('clients.required'));
       return;
     }
     try {
@@ -53,7 +57,7 @@ export function ClientsPage() {
       await utils.clients.list.invalidate();
       setShowForm(false);
       reset();
-      toast.show('Kunde angelegt.');
+      toast.show(t('clients.created'));
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -62,30 +66,30 @@ export function ClientsPage() {
   return (
     <>
       <header className="page-head">
-        <h1>Kunden</h1>
+        <h1>{t('clients.title')}</h1>
         <button type="button" className="btn" onClick={() => setShowForm((s) => !s)}>
-          + Neuer Kunde
+          + {t('clients.new')}
         </button>
       </header>
 
       {showForm ? (
-        <section className="card" aria-label="Neuer Kunde">
-          <h2 style={{ marginTop: 0, fontSize: 18 }}>Neuer Kunde</h2>
+        <section className="card" aria-label={t('clients.new')}>
+          <h2 style={{ marginTop: 0, fontSize: 18 }}>{t('clients.new')}</h2>
           <div className="grid-form">
             <label className="lab">
-              Name
+              {t('clients.name')}
               <input className="field" value={name} onChange={(e) => setName(e.target.value)} />
             </label>
             <label className="lab">
-              Domain (optional)
+              {t('clients.domainOpt')}
               <input className="field" value={domain} onChange={(e) => setDomain(e.target.value)} />
             </label>
             <label className="lab">
-              E-Mail (optional)
+              {t('clients.emailOpt')}
               <input className="field" value={email} onChange={(e) => setEmail(e.target.value)} />
             </label>
             <label className="lab">
-              Zahlungsziel (Tage)
+              {t('clients.term')}
               <input
                 className="field num"
                 type="number"
@@ -94,7 +98,7 @@ export function ClientsPage() {
               />
             </label>
             <label className="lab" style={{ gridColumn: '1 / -1' }}>
-              Rechnungsadresse
+              {t('clients.address')}
               <textarea
                 className="field"
                 rows={3}
@@ -105,10 +109,10 @@ export function ClientsPage() {
           </div>
           <div className="row" style={{ marginTop: 12 }}>
             <button type="button" className="btn" onClick={submit}>
-              Speichern
+              {t('common.save')}
             </button>
             <button type="button" className="btn ghost" onClick={() => setShowForm(false)}>
-              Abbrechen
+              {t('common.cancel')}
             </button>
           </div>
         </section>
@@ -119,33 +123,51 @@ export function ClientsPage() {
           <table className="resp">
             <thead>
               <tr>
-                <th>Nr.</th>
-                <th>Name</th>
-                <th>Domain</th>
-                <th className="right">Zahlungsziel</th>
-                <th>Status</th>
+                <th>{t('tbl.nr')}</th>
+                <th>{t('clients.name')}</th>
+                <th>{t('clients.domain')}</th>
+                <th className="right">{t('clients.termShort')}</th>
+                <th>{t('clients.status')}</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((c) => (
                 <tr key={String(c._id)}>
-                  <td data-l="Nr." className="num">
+                  <td data-l={t('tbl.nr')} className="num">
                     <Link to={`/clients/${String(c._id)}`}>{c.customerNumber}</Link>
                   </td>
-                  <td data-l="Name" className="w">
+                  <td data-l={t('clients.name')} className="w">
                     <Link to={`/clients/${String(c._id)}`}>{c.name}</Link>
                   </td>
-                  <td data-l="Domain">{c.domain || '—'}</td>
-                  <td data-l="Zahlungsziel" className="num right">{c.defaultPaymentTermDays} Tage</td>
-                  <td data-l="Status">
-                    {c.archived ? <span className="badge b-draft">archiviert</span> : null}
+                  <td data-l={t('clients.domain')}>{c.domain || '—'}</td>
+                  <td data-l={t('clients.termShort')} className="num right">{c.defaultPaymentTermDays} {t('common.days')}</td>
+                  <td data-l={t('clients.status')}>
+                    {c.archived ? (
+                      <span className="badge b-draft">{t('clients.archived')}</span>
+                    ) : (
+                      <span className="badge b-sent">
+                        {t('clients.active')}
+                        {(c.openCount ?? 0) > 0 ? (
+                          <small style={{ color: 'var(--muted)' }}>
+                            {' '}
+                            · {c.openCount} {t('clients.open')}
+                          </small>
+                        ) : null}
+                        {(c.overdueCount ?? 0) > 0 ? (
+                          <small className="over">
+                            {' '}
+                            ({c.overdueCount} {t('clients.overdue')})
+                          </small>
+                        ) : null}
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        {rows.length === 0 ? <p className="empty">Noch keine Kunden.</p> : null}
+        {rows.length === 0 ? <p className="empty">{t('clients.none')}</p> : null}
       </section>
     </>
   );

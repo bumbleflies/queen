@@ -4,6 +4,7 @@ import { trpc } from '../lib/trpc';
 import { useToast } from '../components/Toast';
 import { formatEUR } from '../lib/format';
 import { computeTotals, eurosToCents, vatBreakdown, type EditorLine } from '../lib/lineTotals';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface LoadedInvoice {
   _id: unknown;
@@ -31,12 +32,7 @@ interface ClientRow {
   defaultPaymentTermDays?: number;
 }
 
-const VAT_OPTIONS = [
-  { value: 0.19, label: '19 %' },
-  { value: 0.07, label: '7 %' },
-  { value: 0.16, label: '16 %' },
-  { value: 0, label: '0 % steuerbefreit' },
-];
+const VAT_RATES = [0.19, 0.07, 0.16, 0];
 
 const DEFAULT_VAT_NOTE = 'Diese Leistung ist gemäß § 4 Nr. 21 UStG steuerbefreit.';
 
@@ -53,6 +49,7 @@ export function InvoiceFormPage({ mode }: { mode: 'new' | 'edit' }) {
   const navigate = useNavigate();
   const toast = useToast();
   const utils = trpc.useUtils();
+  const { t } = useLanguage();
 
   const detail = trpc.invoices.get.useQuery({ id: id ?? '' }, { enabled: isEdit && !!id });
   const clients = trpc.clients.list.useQuery();
@@ -77,6 +74,11 @@ export function InvoiceFormPage({ mode }: { mode: 'new' | 'edit' }) {
   const initialized = useRef(false);
 
   const clientRows = (clients.data ?? []) as unknown as ClientRow[];
+
+  const VAT_OPTIONS = VAT_RATES.map((value) => ({
+    value,
+    label: value === 0 ? t('form.vatExempt') : `${Math.round(value * 100)} %`,
+  }));
 
   useEffect(() => {
     if (initialized.current) return;
@@ -143,7 +145,7 @@ export function InvoiceFormPage({ mode }: { mode: 'new' | 'edit' }) {
 
   async function handleCreateClient() {
     if (!newClientName.trim() || !newClientAddress.trim()) {
-      toast.error('Name und Adresse des Kunden sind erforderlich.');
+      toast.error(t('form.clientNeed'));
       return;
     }
     try {
@@ -158,7 +160,7 @@ export function InvoiceFormPage({ mode }: { mode: 'new' | 'edit' }) {
       setShowNewClient(false);
       setNewClientName('');
       setNewClientAddress('');
-      toast.show('Kunde angelegt.');
+      toast.show(t('form.clientCreated'));
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -176,9 +178,9 @@ export function InvoiceFormPage({ mode }: { mode: 'new' | 'edit' }) {
   }
 
   function validate(): string | null {
-    if (!clientId) return 'Bitte einen Kunden wählen.';
-    if (!title.trim()) return 'Bitte einen Titel angeben.';
-    if (lines.some((l) => !l.description.trim())) return 'Jede Position braucht eine Beschreibung.';
+    if (!clientId) return t('form.needClient');
+    if (!title.trim()) return t('form.needTitle');
+    if (lines.some((l) => !l.description.trim())) return t('form.needDesc');
     return null;
   }
 
@@ -212,7 +214,7 @@ export function InvoiceFormPage({ mode }: { mode: 'new' | 'edit' }) {
       await setLinesMutation.mutateAsync({ id: invoiceId!, lines: buildLines() });
       if (send) await markSent.mutateAsync({ id: invoiceId! });
       await utils.invalidate();
-      toast.show(send ? 'Rechnung ausgestellt. PDF wird in Drive abgelegt …' : 'Entwurf gespeichert.');
+      toast.show(send ? t('form.issued') : t('form.draftSaved'));
       navigate(`/invoices/${invoiceId}`);
     } catch (err) {
       toast.error((err as Error).message);
@@ -230,7 +232,7 @@ export function InvoiceFormPage({ mode }: { mode: 'new' | 'edit' }) {
     try {
       await deleteDraft.mutateAsync({ id });
       await utils.invalidate();
-      toast.show('Entwurf gelöscht.');
+      toast.show(t('form.draftDeleted'));
       navigate('/invoices');
     } catch (err) {
       toast.error((err as Error).message);
@@ -239,8 +241,8 @@ export function InvoiceFormPage({ mode }: { mode: 'new' | 'edit' }) {
     }
   }
 
-  if (isEdit && detail.isLoading) return <p>Laden …</p>;
-  if (isEdit && detail.isError) return <p className="empty">Rechnung nicht gefunden.</p>;
+  if (isEdit && detail.isLoading) return <p>{t('common.loadingShort')}</p>;
+  if (isEdit && detail.isError) return <p className="empty">{t('form.notFound')}</p>;
 
   const loadedStatus = (detail.data as unknown as LoadedInvoice | undefined)?.status;
   const readOnly = isEdit && loadedStatus !== 'draft';
@@ -248,18 +250,18 @@ export function InvoiceFormPage({ mode }: { mode: 'new' | 'edit' }) {
   return (
     <>
       <Link to={isEdit && id ? `/invoices/${id}` : '/invoices'} style={{ fontSize: 14 }}>
-        ← Rechnungen
+        {t('form.back')}
       </Link>
       <header className="page-head">
         <div className="row">
           <h1 className="num" style={{ fontWeight: 500 }}>
-            {(detail.data as unknown as LoadedInvoice | undefined)?.status ? 'Entwurf bearbeiten' : 'Neue Rechnung'}
+            {(detail.data as unknown as LoadedInvoice | undefined)?.status ? t('form.editTitle') : t('form.newTitle')}
           </h1>
-          <span className="badge b-draft">Entwurf</span>
+          <span className="badge b-draft">{t('status.draft')}</span>
         </div>
         <div className="row acts">
           <button type="button" className="btn danger" disabled={busy} onClick={handleDelete}>
-            {isEdit ? 'Entwurf löschen' : 'Abbrechen'}
+            {isEdit ? t('form.deleteDraft') : t('form.cancelBtn')}
           </button>
           <button
             type="button"
@@ -267,7 +269,7 @@ export function InvoiceFormPage({ mode }: { mode: 'new' | 'edit' }) {
             disabled={busy || readOnly}
             onClick={() => persist(false)}
           >
-            Speichern
+            {t('common.save')}
           </button>
           <button
             type="button"
@@ -275,34 +277,34 @@ export function InvoiceFormPage({ mode }: { mode: 'new' | 'edit' }) {
             disabled={busy || readOnly}
             onClick={() => persist(true)}
           >
-            Ausstellen &amp; ablegen
+            {t('form.issue')}
           </button>
         </div>
       </header>
 
       {readOnly ? (
-        <p className="empty">Diese Rechnung ist nicht mehr im Entwurfsstatus.</p>
+        <p className="empty">{t('form.notDraft')}</p>
       ) : (
         <>
           <section className="card grid-form">
             <label className="lab">
-              Kunde
+              {t('form.customer')}
               <select className="field" value={clientId} onChange={(e) => selectClient(e.target.value)}>
-                <option value="">Bitte wählen …</option>
+                <option value="">{t('form.choose')}</option>
                 {clientRows.map((c) => (
                   <option key={String(c._id)} value={String(c._id)}>
                     {c.customerNumber} · {c.name}
                   </option>
                 ))}
-                <option value="__new__">+ Neuer Kunde …</option>
+                <option value="__new__">{t('form.newCustomerOpt')}</option>
               </select>
             </label>
             <label className="lab">
-              Titel
+              {t('form.title')}
               <input className="field" value={title} onChange={(e) => setTitle(e.target.value)} />
             </label>
             <label className="lab">
-              Leistungszeitraum
+              {t('form.period')}
               <input
                 className="field num"
                 value={servicePeriod}
@@ -311,7 +313,7 @@ export function InvoiceFormPage({ mode }: { mode: 'new' | 'edit' }) {
               />
             </label>
             <label className="lab">
-              Zahlungsziel (Tage)
+              {t('form.term')}
               <input
                 className="field num"
                 type="number"
@@ -320,7 +322,7 @@ export function InvoiceFormPage({ mode }: { mode: 'new' | 'edit' }) {
               />
             </label>
             <label className="lab" style={{ gridColumn: '1 / -1' }}>
-              Rechnungsadresse <span className="hint">aus Kundenstamm, wird beim Ausstellen eingefroren</span>
+              {t('form.address')} <span className="hint">{t('form.addressHint')}</span>
               <textarea
                 className="field"
                 rows={4}
@@ -331,11 +333,11 @@ export function InvoiceFormPage({ mode }: { mode: 'new' | 'edit' }) {
           </section>
 
           {showNewClient ? (
-            <section className="card" aria-label="Neuer Kunde">
-              <h2 style={{ marginTop: 0, fontSize: 18 }}>Neuer Kunde</h2>
+            <section className="card" aria-label={t('form.newCustomer')}>
+              <h2 style={{ marginTop: 0, fontSize: 18 }}>{t('form.newCustomer')}</h2>
               <div className="grid-form">
                 <label className="lab">
-                  Name
+                  {t('form.name')}
                   <input
                     className="field"
                     value={newClientName}
@@ -343,7 +345,7 @@ export function InvoiceFormPage({ mode }: { mode: 'new' | 'edit' }) {
                   />
                 </label>
                 <label className="lab" style={{ gridColumn: '1 / -1' }}>
-                  Rechnungsadresse
+                  {t('form.address')}
                   <textarea
                     className="field"
                     rows={3}
@@ -354,10 +356,10 @@ export function InvoiceFormPage({ mode }: { mode: 'new' | 'edit' }) {
               </div>
               <div className="row" style={{ marginTop: 12 }}>
                 <button type="button" className="btn" onClick={handleCreateClient}>
-                  Kunde anlegen
+                  {t('form.createCustomer')}
                 </button>
                 <button type="button" className="btn ghost" onClick={() => setShowNewClient(false)}>
-                  Abbrechen
+                  {t('common.cancel')}
                 </button>
               </div>
             </section>
@@ -365,39 +367,39 @@ export function InvoiceFormPage({ mode }: { mode: 'new' | 'edit' }) {
 
           <section className="card flush">
             <div className="card-head">
-              <h2>Positionen</h2>
+              <h2>{t('form.lines')}</h2>
               <span className="muted" style={{ fontSize: 13 }}>
-                Rabatte als negative Position · Unterpositionen als 1.1, 1.2 …
+                {t('form.linesHint')}
               </span>
             </div>
             <div className="table-wrap">
               <table className="resp" style={{ minWidth: 860 }}>
                 <thead>
                   <tr>
-                    <th style={{ width: 72 }}>Pos.</th>
-                    <th>Beschreibung</th>
-                    <th className="right" style={{ width: 90 }}>Menge</th>
-                    <th className="right" style={{ width: 140 }}>Einzel netto €</th>
-                    <th style={{ width: 170 }}>USt.</th>
-                    <th className="right" style={{ width: 130 }}>Netto</th>
+                    <th style={{ width: 72 }}>{t('form.pos')}</th>
+                    <th>{t('form.desc')}</th>
+                    <th className="right" style={{ width: 90 }}>{t('form.qty')}</th>
+                    <th className="right" style={{ width: 140 }}>{t('form.unitNet')}</th>
+                    <th style={{ width: 170 }}>{t('form.vat')}</th>
+                    <th className="right" style={{ width: 130 }}>{t('form.net')}</th>
                     <th style={{ width: 52 }} />
                   </tr>
                 </thead>
                 <tbody>
                   {lines.map((line, index) => (
                     <tr key={index}>
-                      <td data-l="Pos.">
+                      <td data-l={t('form.pos')}>
                         <input
                           className="field num"
-                          aria-label="Position"
+                          aria-label={t('form.pos')}
                           value={line.position}
                           onChange={(e) => patchLine(index, { position: e.target.value })}
                         />
                       </td>
-                      <td data-l="Beschreibung" className="w">
+                      <td data-l={t('form.desc')} className="w">
                         <input
                           className="field"
-                          aria-label="Beschreibung"
+                          aria-label={t('form.desc')}
                           value={line.description}
                           onChange={(e) => patchLine(index, { description: e.target.value })}
                         />
@@ -405,35 +407,35 @@ export function InvoiceFormPage({ mode }: { mode: 'new' | 'edit' }) {
                           <input
                             className="field"
                             style={{ marginTop: 6, fontSize: 13 }}
-                            aria-label="Hinweis Steuerbefreiung"
+                            aria-label={t('form.vatExempt')}
                             value={line.vatNote ?? ''}
                             onChange={(e) => patchLine(index, { vatNote: e.target.value })}
                           />
                         ) : null}
                       </td>
-                      <td data-l="Menge">
+                      <td data-l={t('form.qty')}>
                         <input
                           className="field n"
-                          aria-label="Menge"
+                          aria-label={t('form.qty')}
                           type="number"
                           value={line.quantity}
                           onChange={(e) => patchLine(index, { quantity: Number(e.target.value) })}
                         />
                       </td>
-                      <td data-l="Einzel netto €">
+                      <td data-l={t('form.unitNet')}>
                         <input
                           className="field n"
-                          aria-label="Einzelpreis netto"
+                          aria-label={t('form.unitNet')}
                           type="number"
                           step="0.01"
                           value={line.unitNetEuros}
                           onChange={(e) => patchLine(index, { unitNetEuros: Number(e.target.value) })}
                         />
                       </td>
-                      <td data-l="USt.">
+                      <td data-l={t('form.vat')}>
                         <select
                           className="field"
-                          aria-label="Umsatzsteuer"
+                          aria-label={t('form.vat')}
                           value={line.vatRate}
                           onChange={(e) =>
                             patchLine(index, {
@@ -451,7 +453,7 @@ export function InvoiceFormPage({ mode }: { mode: 'new' | 'edit' }) {
                           ))}
                         </select>
                       </td>
-                      <td data-l="Netto" className="num right">
+                      <td data-l={t('form.net')} className="num right">
                         {formatEUR(
                           Math.round((Number(line.quantity) || 0) * eurosToCents(line.unitNetEuros)),
                         )}
@@ -460,7 +462,7 @@ export function InvoiceFormPage({ mode }: { mode: 'new' | 'edit' }) {
                         <button
                           type="button"
                           className="icon"
-                          aria-label="Position entfernen"
+                          aria-label={t('form.removeLine')}
                           onClick={() => removeLine(index)}
                         >
                           ✕
@@ -476,28 +478,26 @@ export function InvoiceFormPage({ mode }: { mode: 'new' | 'edit' }) {
               style={{ background: 'var(--surface-2)', alignItems: 'flex-start' }}
             >
               <button type="button" className="btn ghost" onClick={addLine}>
-                + Position
+                {t('form.addLine')}
               </button>
               <div className="totals">
-                <span>Netto</span>
+                <span>{t('form.net')}</span>
                 <span className="amount num">{formatEUR(totals.netCents)}</span>
                 {breakdown.map((b) => (
                   <span key={b.rate} style={{ display: 'contents' }}>
                     <span>
-                      USt. {Math.round(b.rate * 100)} % auf {formatEUR(b.netCents)}
+                      {t('form.vat')} {Math.round(b.rate * 100)} % {t('form.vatOn')} {formatEUR(b.netCents)}
                     </span>
                     <span className="amount num">{formatEUR(b.vatCents)}</span>
                   </span>
                 ))}
-                <span className="total">Brutto</span>
+                <span className="total">{t('form.gross')}</span>
                 <span className="total amount num">{formatEUR(totals.grossCents)}</span>
               </div>
             </div>
           </section>
           <p className="muted" style={{ fontSize: 14 }}>
-            „Ausstellen &amp; ablegen“ setzt Rechnungsdatum (heute) und Fälligkeit und sperrt die
-            Positionen. Das PDF mit Verwendungszweck wird im Hintergrund erzeugt und in Drive abgelegt.{' '}
-            <strong>Die Rechnung wird nicht automatisch an den Kunden verschickt.</strong>
+            {t('form.note')}
           </p>
         </>
       )}

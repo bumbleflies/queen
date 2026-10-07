@@ -4,6 +4,8 @@ import { trpc } from '../lib/trpc';
 import { useToast } from '../components/Toast';
 import { formatDate, formatDateTime, formatEUR } from '../lib/format';
 import { parseReference } from '../lib/reference';
+import { useLanguage } from '../i18n/LanguageContext';
+import type { Lang } from '../i18n/LanguageContext';
 
 interface BankTx {
   _id: unknown;
@@ -49,36 +51,70 @@ interface Suggestion {
   clientName: string;
   openCents: number;
   why: string;
+  exact: boolean;
 }
 
 function normalize(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9äöüß]/g, '');
 }
 
-function suggestionsFor(tx: BankTx, openItems: OpenItem[]): { reason: string; suggestions: Suggestion[] } {
+const BANK_TEXT: Record<Lang, {
+  noRef: string;
+  mismatch: (customerNumber: number | null, invoiceNumber: string, actual: number) => string;
+  recognized: string;
+  whyRef: string;
+  whyExact: string;
+  whyPayer: string;
+}> = {
+  de: {
+    noRef: 'Kein Verwendungszweck im Format Kundennr-Rechnungsnr erkannt.',
+    mismatch: (customerNumber, invoiceNumber, actual) =>
+      `Kundennummer ${customerNumber} passt nicht zu Rechnung ${invoiceNumber} (Kunde ${actual}).`,
+    recognized: 'Verwendungszweck erkannt, Betrag/Nummer prüfen.',
+    whyRef: 'Rechnungsnr. passt',
+    whyExact: 'Betrag exakt',
+    whyPayer: 'Auftraggeber ≈ Kunde',
+  },
+  en: {
+    noRef: 'No reference in customerNo-invoiceNo format found.',
+    mismatch: (customerNumber, invoiceNumber, actual) =>
+      `Customer number ${customerNumber} does not match invoice ${invoiceNumber} (customer ${actual}).`,
+    recognized: 'Reference recognized, check amount/number.',
+    whyRef: 'Invoice no. matches',
+    whyExact: 'Exact amount',
+    whyPayer: 'Payer ≈ customer',
+  },
+};
+
+function suggestionsFor(tx: BankTx, openItems: OpenItem[], lang: Lang = 'de'): { reason: string; suggestions: Suggestion[] } {
+  const txt = BANK_TEXT[lang];
   const parsed = parseReference(tx.description);
   const out: Suggestion[] = [];
-  let reason = 'Kein Verwendungszweck im Format Kundennr-Rechnungsnr erkannt.';
+  let reason = txt.noRef;
 
   if (parsed) {
     const candidate = openItems.find((i) => i.invoiceNumber === parsed.invoiceNumber);
     if (candidate && parsed.customerNumber !== null && parsed.customerNumber !== candidate.customerNumber) {
-      reason = `Kundennummer ${parsed.customerNumber} passt nicht zu Rechnung ${parsed.invoiceNumber} (Kunde ${candidate.customerNumber}).`;
+      reason = txt.mismatch(parsed.customerNumber, parsed.invoiceNumber, candidate.customerNumber);
     } else if (candidate) {
-      reason = 'Verwendungszweck erkannt, Betrag/Nummer prüfen.';
+      reason = txt.recognized;
     }
   }
 
   for (const item of openItems) {
     const whys: string[] = [];
-    if (parsed && parsed.invoiceNumber === item.invoiceNumber) whys.push('Rechnungsnr. passt');
-    if (item.openCents === tx.amountCents) whys.push('Betrag exakt');
+    let exact = false;
+    if (parsed && parsed.invoiceNumber === item.invoiceNumber) whys.push(txt.whyRef);
+    if (item.openCents === tx.amountCents) {
+      whys.push(txt.whyExact);
+      exact = true;
+    }
     if (
       tx.counterpartyName &&
       normalize(item.clientName).length > 0 &&
       normalize(tx.counterpartyName).includes(normalize(item.clientName))
     ) {
-      whys.push('Auftraggeber ≈ Kunde');
+      whys.push(txt.whyPayer);
     }
     if (whys.length > 0) {
       out.push({
@@ -87,11 +123,12 @@ function suggestionsFor(tx: BankTx, openItems: OpenItem[]): { reason: string; su
         clientName: item.clientName,
         openCents: item.openCents,
         why: whys.join(' · '),
+        exact,
       });
     }
   }
 
-  out.sort((a, b) => (b.why.includes('Betrag exakt') ? 1 : 0) - (a.why.includes('Betrag exakt') ? 1 : 0));
+  out.sort((a, b) => Number(b.exact) - Number(a.exact));
   return { reason, suggestions: out };
 }
 
@@ -108,6 +145,7 @@ export function BankPage() {
   const unignore = trpc.bank.unignore.useMutation();
   const syncNow = trpc.bank.syncNow.useMutation();
   const runNow = trpc.reconcile.runNow.useMutation();
+  const { lang, t } = useLanguage();
 
   const [tab, setTab] = useState<'open' | 'done' | 'ignored'>('open');
 
@@ -127,14 +165,14 @@ export function BankPage() {
 
   const run = (reconcile.data ?? null) as unknown as ReconcileRunRow | null;
   const runLabel = run?.finishedAt
-    ? `Letzter Abgleich ${formatDateTime(run.finishedAt)}`
-    : 'Noch kein Abgleich gelaufen.';
+    ? `${t('bank.lastRun')} ${formatDateTime(run.finishedAt)}`
+    : t('bank.noRun');
 
   async function doAssign(bankTxId: string, invoiceId: string) {
     try {
       await assign.mutateAsync({ bankTxId, invoiceId });
       await utils.invalidate();
-      toast.show('Zahlung zugeordnet.');
+      toast.show(t('bank.assigned'));
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -144,7 +182,7 @@ export function BankPage() {
     try {
       await ignore.mutateAsync({ bankTxId });
       await utils.invalidate();
-      toast.show('Buchung ignoriert.');
+      toast.show(t('bank.ignored'));
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -154,7 +192,7 @@ export function BankPage() {
     try {
       await unassign.mutateAsync({ bankTxId });
       await utils.invalidate();
-      toast.show('Zuordnung aufgehoben.');
+      toast.show(t('bank.unassigned'));
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -164,7 +202,7 @@ export function BankPage() {
     try {
       await unignore.mutateAsync({ bankTxId });
       await utils.invalidate();
-      toast.show('Ignorieren aufgehoben.');
+      toast.show(t('bank.unignored'));
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -174,8 +212,8 @@ export function BankPage() {
     try {
       const result = await syncNow.mutateAsync();
       await utils.invalidate();
-      if (result.ok) toast.show(`Synchronisiert: ${result.fetched} Buchungen.`);
-      else toast.error(result.error ?? 'Synchronisierung fehlgeschlagen.');
+      if (result.ok) toast.show(`${t('bank.synced')} ${result.fetched} ${t('bank.bookings')}.`);
+      else toast.error(result.error ?? t('bank.syncFail'));
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -185,7 +223,7 @@ export function BankPage() {
     try {
       await runNow.mutateAsync();
       await utils.invalidate();
-      toast.show('Abgleich gestartet.');
+      toast.show(t('bank.runStarted'));
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -195,38 +233,38 @@ export function BankPage() {
     <>
       <header className="page-head">
         <div>
-          <h1>Bankabgleich</h1>
-          <p className="page-sub">GLS Geschäftskonto via Firefly · Import 06:00 · Abgleich 07:30</p>
+          <h1>{t('nav.bank')}</h1>
+          <p className="page-sub">{t('bank.sub')}</p>
         </div>
         <div className="row acts">
           <button type="button" className="btn ghost" onClick={handleSync}>
-            Jetzt synchronisieren
+            {t('bank.syncNow')}
           </button>
           <button type="button" className="btn" onClick={handleRun}>
-            Abgleich starten
+            {t('bank.runNow')}
           </button>
         </div>
       </header>
 
       <section className="card row" style={{ padding: '14px 20px' }}>
-        <span className={`badge ${run?.error ? 'b-cancel' : 'b-paid'}`}>{run?.error ? 'Fehler' : 'OK'}</span>
+        <span className={`badge ${run?.error ? 'b-cancel' : 'b-paid'}`}>{run?.error ? t('bank.error') : t('bank.ok')}</span>
         <span>{runLabel}</span>
         {run ? (
           <span className="muted" style={{ fontSize: 14 }}>
-            {run.fetched ?? 0} Eingänge · {run.matched ?? 0} automatisch zugeordnet ·{' '}
-            {run.partial ?? 0} teilweise · {run.unmatched ?? 0} offen
+            {run.fetched ?? 0} {t('bank.entries')} · {run.matched ?? 0} {t('bank.auto')} ·{' '}
+            {run.partial ?? 0} {t('bank.partial')} · {run.unmatched ?? 0} {t('bank.openWord')}
           </span>
         ) : null}
       </section>
 
-      <div role="tablist" aria-label="Buchungen" className="tabs">
+      <div role="tablist" aria-label={t('bank.bookings')} className="tabs">
         <button
           type="button"
           role="tab"
           className={`tab${tab === 'open' ? ' on' : ''}`}
           onClick={() => setTab('open')}
         >
-          Offen ({openTxs.length})
+          {t('bank.tabOpen')} ({openTxs.length})
         </button>
         <button
           type="button"
@@ -234,7 +272,7 @@ export function BankPage() {
           className={`tab${tab === 'done' ? ' on' : ''}`}
           onClick={() => setTab('done')}
         >
-          Zugeordnet ({doneTxs.length})
+          {t('bank.tabDone')} ({doneTxs.length})
         </button>
         <button
           type="button"
@@ -242,19 +280,19 @@ export function BankPage() {
           className={`tab${tab === 'ignored' ? ' on' : ''}`}
           onClick={() => setTab('ignored')}
         >
-          Ignoriert ({ignoredTxs.length})
+          {t('bank.tabIgnored')} ({ignoredTxs.length})
         </button>
       </div>
 
       {tab === 'open' ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {openTxs.map((tx) => {
-            const { reason, suggestions } = suggestionsFor(tx, openItems);
+            const { reason, suggestions } = suggestionsFor(tx, openItems, lang);
             return (
               <article className="card" key={String(tx._id)} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 600 }}>{tx.counterpartyName || 'Unbekannter Auftraggeber'}</div>
+                    <div style={{ fontWeight: 600 }}>{tx.counterpartyName || t('bank.unknown')}</div>
                     <div className="num muted" style={{ fontSize: 13, marginTop: 2 }}>
                       {tx.counterpartyIban} · {formatDate(tx.date)}
                     </div>
@@ -264,12 +302,12 @@ export function BankPage() {
                   </div>
                 </div>
                 <div className="ref-box">
-                  <span className="muted">Verwendungszweck:</span> <span className="num">{tx.description}</span>
+                  <span className="muted">{t('bank.purpose')}:</span> <span className="num">{tx.description}</span>
                   <div className="reason">{reason}</div>
                 </div>
                 {suggestions.length > 0 ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <div className="lbl">Vorschläge</div>
+                    <div className="lbl">{t('bank.suggestions')}</div>
                     {suggestions.map((s) => (
                       <div className="sug" key={s.id}>
                         <div style={{ minWidth: 0 }}>
@@ -283,7 +321,7 @@ export function BankPage() {
                             className="btn"
                             onClick={() => doAssign(String(tx._id), s.id)}
                           >
-                            Zuordnen
+                            {t('bank.assign')}
                           </button>
                         </div>
                       </div>
@@ -292,17 +330,17 @@ export function BankPage() {
                 ) : null}
                 <div className="row acts">
                   <Link className="btn ghost" to="/invoices">
-                    Andere Rechnung wählen …
+                    {t('bank.otherInvoice')}
                   </Link>
                   <button type="button" className="btn ghost" onClick={() => doIgnore(String(tx._id))}>
-                    Keine Rechnungszahlung
+                    {t('bank.noInvoice')}
                   </button>
                 </div>
               </article>
             );
           })}
           {openTxs.length === 0 ? (
-            <section className="card empty">Alles zugeordnet. Nächster Abgleich täglich 07:30.</section>
+            <section className="card empty">{t('bank.allDone')}</section>
           ) : null}
         </div>
       ) : null}
@@ -313,12 +351,12 @@ export function BankPage() {
             <table className="resp">
               <thead>
                 <tr>
-                  <th>Datum</th>
-                  <th>Auftraggeber</th>
-                  <th>Rechnung</th>
-                  <th>Methode</th>
-                  <th className="right">Betrag</th>
-                  <th>Ergebnis</th>
+                  <th>{t('tbl.date')}</th>
+                  <th>{t('bank.cp')}</th>
+                  <th>{t('bank.invoice')}</th>
+                  <th>{t('bank.method')}</th>
+                  <th className="right">{t('bank.amount')}</th>
+                  <th>{t('bank.result')}</th>
                   <th />
                 </tr>
               </thead>
@@ -327,16 +365,16 @@ export function BankPage() {
                   const inv = invoiceById.get(String(tx.matchedInvoiceId));
                   return (
                     <tr key={String(tx._id)}>
-                      <td data-l="Datum" className="num">{formatDate(tx.date)}</td>
-                      <td data-l="Auftraggeber">{tx.counterpartyName}</td>
-                      <td data-l="Rechnung" className="num">
+                      <td data-l={t('tbl.date')} className="num">{formatDate(tx.date)}</td>
+                      <td data-l={t('bank.cp')}>{tx.counterpartyName}</td>
+                      <td data-l={t('bank.invoice')} className="num">
                         {inv ? <Link to={`/invoices/${String(inv._id)}`}>{inv.invoiceNumber}</Link> : '—'}
                       </td>
-                      <td data-l="Methode">{tx.matchMethod === 'reference' ? 'Referenz' : 'manuell'}</td>
-                      <td data-l="Betrag" className="num right">{formatEUR(tx.amountCents)}</td>
-                      <td data-l="Ergebnis">
+                      <td data-l={t('bank.method')}>{tx.matchMethod === 'reference' ? t('bank.ref') : t('bank.manual')}</td>
+                      <td data-l={t('bank.amount')} className="num right">{formatEUR(tx.amountCents)}</td>
+                      <td data-l={t('bank.result')}>
                         <span className={`badge ${inv?.status === 'paid' ? 'b-paid' : 'b-sent'}`}>
-                          {inv?.status === 'paid' ? 'bezahlt' : 'teilbezahlt'}
+                          {inv?.status === 'paid' ? t('status.paid') : t('status.partial')}
                         </span>
                       </td>
                       <td>
@@ -345,7 +383,7 @@ export function BankPage() {
                           className="btn ghost sm"
                           onClick={() => doUnassign(String(tx._id))}
                         >
-                          Aufheben
+                          {t('bank.unassign')}
                         </button>
                       </td>
                     </tr>
@@ -354,7 +392,7 @@ export function BankPage() {
               </tbody>
             </table>
           </div>
-          {doneTxs.length === 0 ? <p className="empty">Noch keine zugeordneten Buchungen.</p> : null}
+          {doneTxs.length === 0 ? <p className="empty">{t('bank.noDone')}</p> : null}
         </section>
       ) : null}
 
@@ -364,27 +402,27 @@ export function BankPage() {
             <table className="resp">
               <thead>
                 <tr>
-                  <th>Datum</th>
-                  <th>Auftraggeber</th>
-                  <th>Verwendungszweck</th>
-                  <th className="right">Betrag</th>
+                  <th>{t('tbl.date')}</th>
+                  <th>{t('bank.cp')}</th>
+                  <th>{t('bank.purpose')}</th>
+                  <th className="right">{t('bank.amount')}</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
                 {ignoredTxs.map((tx) => (
                   <tr key={String(tx._id)}>
-                    <td data-l="Datum" className="num">{formatDate(tx.date)}</td>
-                    <td data-l="Auftraggeber">{tx.counterpartyName}</td>
-                    <td data-l="Verwendungszweck" className="num w">{tx.description}</td>
-                    <td data-l="Betrag" className="num right">{formatEUR(tx.amountCents)}</td>
+                    <td data-l={t('tbl.date')} className="num">{formatDate(tx.date)}</td>
+                    <td data-l={t('bank.cp')}>{tx.counterpartyName}</td>
+                    <td data-l={t('bank.purpose')} className="num w">{tx.description}</td>
+                    <td data-l={t('bank.amount')} className="num right">{formatEUR(tx.amountCents)}</td>
                     <td>
                       <button
                         type="button"
                         className="btn ghost sm"
                         onClick={() => doUnignore(String(tx._id))}
                       >
-                        Wiederherstellen
+                        {t('bank.restore')}
                       </button>
                     </td>
                   </tr>
@@ -392,7 +430,7 @@ export function BankPage() {
               </tbody>
             </table>
           </div>
-          {ignoredTxs.length === 0 ? <p className="empty">Keine ignorierten Buchungen.</p> : null}
+          {ignoredTxs.length === 0 ? <p className="empty">{t('bank.noIgnored')}</p> : null}
         </section>
       ) : null}
     </>

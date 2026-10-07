@@ -14,6 +14,7 @@ import {
 } from '../lib/format';
 import { vatBreakdown, type EditorLine } from '../lib/lineTotals';
 import { filingState, type FilingStateInvoice } from '../lib/filingState';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface DetailLine {
   position: string;
@@ -62,6 +63,7 @@ export function InvoiceDetailPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const utils = trpc.useUtils();
+  const { t } = useLanguage();
 
   const detail = trpc.invoices.get.useQuery(
     { id: id ?? '' },
@@ -117,24 +119,24 @@ export function InvoiceDetailPage() {
   const history = useMemo(() => {
     if (!invoice) return [];
     const events: { at: string | Date; text: string }[] = [];
-    if (invoice.createdAt) events.push({ at: invoice.createdAt, text: 'Entwurf erstellt' });
+    if (invoice.createdAt) events.push({ at: invoice.createdAt, text: t('detail.evDraft') });
     if (invoice.sentAt) {
       const drive = invoice.driveMetadata?.fileName;
       events.push({
         at: invoice.sentAt,
-        text: drive ? `ausgestellt, PDF in Drive abgelegt · ${drive}` : 'ausgestellt',
+        text: drive ? `${t('detail.evSentPdf')} ${drive}` : t('detail.evSent'),
       });
     }
-    if (invoice.paidAt) events.push({ at: invoice.paidAt, text: 'als bezahlt markiert' });
-    if (invoice.canceledAt) events.push({ at: invoice.canceledAt, text: 'storniert' });
+    if (invoice.paidAt) events.push({ at: invoice.paidAt, text: t('detail.evPaid') });
+    if (invoice.canceledAt) events.push({ at: invoice.canceledAt, text: t('detail.evCanceled') });
     return events.reverse();
-  }, [invoice]);
+  }, [invoice, t]);
 
   async function handleDelete() {
     try {
       await deleteDraft.mutateAsync({ id: invoiceId });
       await utils.invalidate();
-      toast.show('Entwurf gelöscht.');
+      toast.show(t('form.draftDeleted'));
       navigate('/invoices');
     } catch (err) {
       toast.error((err as Error).message);
@@ -145,7 +147,7 @@ export function InvoiceDetailPage() {
     try {
       await markSent.mutateAsync({ id: invoiceId });
       await utils.invalidate();
-      toast.show('Rechnung ausgestellt. PDF wird in Drive abgelegt …');
+      toast.show(t('form.issued'));
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -160,7 +162,7 @@ export function InvoiceDetailPage() {
       });
       await utils.invalidate();
       setPaidOpen(false);
-      toast.show('Rechnung als bezahlt markiert.');
+      toast.show(t('detail.paidMsg'));
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -171,7 +173,7 @@ export function InvoiceDetailPage() {
       await cancel.mutateAsync({ id: invoiceId, ...(cancelReason ? { reason: cancelReason } : {}) });
       await utils.invalidate();
       setCancelOpen(false);
-      toast.show('Stornorechnung erstellt.');
+      toast.show(t('detail.creditMsg'));
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -182,14 +184,14 @@ export function InvoiceDetailPage() {
     const ref = `${invoice.customerNumber}-${invoice.invoiceNumber}`;
     try {
       await navigator.clipboard.writeText(ref);
-      toast.show('Verwendungszweck kopiert.');
+      toast.show(t('detail.refCopied'));
     } catch {
-      toast.error('Kopieren nicht möglich.');
+      toast.error(t('detail.copyFail'));
     }
   }
 
-  if (detail.isLoading) return <p>Laden …</p>;
-  if (detail.isError || !invoice) return <p className="empty">Rechnung nicht gefunden.</p>;
+  if (detail.isLoading) return <p>{t('common.loadingShort')}</p>;
+  if (detail.isError || !invoice) return <p className="empty">{t('detail.notFound')}</p>;
 
   const reference = `${invoice.customerNumber}-${invoice.invoiceNumber}`;
   const paidCents = (invoice.payments ?? []).reduce((sum, p) => sum + p.amountCents, 0);
@@ -198,11 +200,12 @@ export function InvoiceDetailPage() {
   const filing = filingState(invoice);
 
   const statusExtra = (() => {
-    if (invoice.status === 'sent' && overdue > 0) return ` · ${overdue} Tage überfällig`;
+    if (invoice.status === 'sent' && overdue > 0)
+      return ` · ${overdue} ${t('detail.daysOverdue')}`;
     const due = toDate(invoice.dueDate);
     if (invoice.status === 'sent' && due) {
       const days = daysBetween(new Date(), due);
-      if (days >= 0) return ` · fällig in ${days} Tagen`;
+      if (days >= 0) return ` · ${t('detail.dueIn')} ${days} ${t('detail.daysPl')}`;
     }
     return '';
   })();
@@ -210,7 +213,7 @@ export function InvoiceDetailPage() {
   return (
     <>
       <Link to="/invoices" style={{ fontSize: 14 }}>
-        ← Rechnungen
+        {t('detail.back')}
       </Link>
       <header className="page-head" style={{ alignItems: 'flex-start' }}>
         <div>
@@ -219,7 +222,7 @@ export function InvoiceDetailPage() {
               {invoice.invoiceNumber}
             </h1>
             {invoice.kind === 'credit_note' ? (
-              <span className="badge b-credit">Stornorechnung</span>
+              <span className="badge b-credit">{t('status.credit_note')}</span>
             ) : (
               <StatusBadge invoice={invoice} />
             )}
@@ -231,13 +234,13 @@ export function InvoiceDetailPage() {
         </div>
         {invoice.driveMetadata?.link ? (
           <a className="btn ghost" href={invoice.driveMetadata.link} target="_blank" rel="noreferrer">
-            PDF öffnen
+            {t('detail.openPdf')}
           </a>
         ) : filing === 'pending' ? (
-          <span className="muted">PDF wird abgelegt …</span>
+          <span className="muted">{t('detail.pdfPending')}</span>
         ) : filing === 'failed' ? (
           <span className="badge b-over" title={invoice.driveMetadata?.failureReason ?? undefined}>
-            Ablage fehlgeschlagen
+            {t('detail.filingFailed')}
           </span>
         ) : null}
         <InvoiceActions
@@ -256,13 +259,13 @@ export function InvoiceDetailPage() {
 
       {filing === 'failed' ? (
         <p role="alert" style={{ color: 'var(--danger)' }}>
-          Drive-Ablage fehlgeschlagen: {invoice.driveMetadata?.failureReason}
+          {t('detail.driveFailed')} {invoice.driveMetadata?.failureReason}
         </p>
       ) : null}
 
       {linked ? (
         <p>
-          {invoice.kind === 'credit_note' ? 'Storno zu ' : 'Stornorechnung: '}
+          {invoice.kind === 'credit_note' ? t('detail.creditFor') : t('detail.creditIs')}
           <Link to={`/invoices/${String(linked._id)}`} className="num">
             {linked.invoiceNumber}
           </Link>
@@ -270,11 +273,11 @@ export function InvoiceDetailPage() {
       ) : null}
 
       {paidOpen ? (
-        <section className="card" role="dialog" aria-label="Als bezahlt markieren">
-          <h2 style={{ marginTop: 0, fontSize: 18 }}>Als bezahlt markieren</h2>
+        <section className="card" role="dialog" aria-label={t('detail.markPaid')}>
+          <h2 style={{ marginTop: 0, fontSize: 18 }}>{t('detail.markPaid')}</h2>
           <div className="grid-form">
             <label className="lab">
-              Zahlungsdatum
+              {t('detail.payDate')}
               <input
                 className="field"
                 type="date"
@@ -283,7 +286,7 @@ export function InvoiceDetailPage() {
               />
             </label>
             <label className="lab">
-              Notiz (optional)
+              {t('detail.noteOpt')}
               <input
                 className="field"
                 value={paidNote}
@@ -293,38 +296,36 @@ export function InvoiceDetailPage() {
           </div>
           <div className="row" style={{ marginTop: 12 }}>
             <button type="button" className="btn" onClick={submitPaid}>
-              Als bezahlt markieren
+              {t('detail.markPaid')}
             </button>
             <button type="button" className="btn ghost" onClick={() => setPaidOpen(false)}>
-              Abbrechen
+              {t('common.cancel')}
             </button>
           </div>
         </section>
       ) : null}
 
       {cancelOpen ? (
-        <section className="card dialog danger" role="dialog" aria-label="Rechnung stornieren">
-          <h2>Rechnung stornieren</h2>
+        <section className="card dialog danger" role="dialog" aria-label={t('detail.cancelTitle')}>
+          <h2>{t('detail.cancelTitle')}</h2>
           <p style={{ margin: 0, color: '#3a3a40', maxWidth: '70ch' }}>
-            Ausgestellte Rechnungen werden nicht gelöscht. queen erzeugt eine Stornorechnung mit allen
-            Positionen negiert, legt sie als PDF in Drive ab und setzt diese Rechnung auf
-            „storniert“.
+            {t('detail.cancelExpl')}
           </p>
           <label className="lab">
-            Grund (erscheint auf der Stornorechnung)
+            {t('detail.cancelReason')}
             <input
               className="field"
               value={cancelReason}
-              placeholder="z. B. falscher Leistungszeitraum"
+              placeholder={t('detail.cancelPh')}
               onChange={(e) => setCancelReason(e.target.value)}
             />
           </label>
           <div className="row">
             <button type="button" className="btn dangerfill" onClick={submitCancel}>
-              Stornorechnung erstellen
+              {t('detail.createCredit')}
             </button>
             <button type="button" className="btn ghost" onClick={() => setCancelOpen(false)}>
-              Abbrechen
+              {t('common.cancel')}
             </button>
           </div>
         </section>
@@ -332,10 +333,10 @@ export function InvoiceDetailPage() {
 
       <div className="grid-2">
         <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div className="lbl">Rechnungsadresse</div>
+          <div className="lbl">{t('detail.address')}</div>
           <div style={{ whiteSpace: 'pre-line' }}>{invoice.invoiceAddress}</div>
           <div className="muted" style={{ fontSize: 14 }}>
-            Kundennr. <span className="num">{invoice.customerNumber}</span>
+            {t('detail.customerNo')} <span className="num">{invoice.customerNumber}</span>
           </div>
         </section>
         <section
@@ -343,27 +344,27 @@ export function InvoiceDetailPage() {
           style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '14px 20px' }}
         >
           <div>
-            <div className="lbl">Rechnungsdatum</div>
+            <div className="lbl">{t('detail.invoiceDate')}</div>
             <div className="num" style={{ marginTop: 4 }}>{formatDate(invoice.invoiceDate)}</div>
           </div>
           <div>
-            <div className="lbl">Leistungszeitraum</div>
+            <div className="lbl">{t('form.period')}</div>
             <div className="num" style={{ marginTop: 4 }}>{invoice.servicePeriod}</div>
           </div>
           <div>
-            <div className="lbl">Zahlungsziel</div>
-            <div style={{ marginTop: 4 }}>{invoice.paymentTermDays} Tage</div>
+            <div className="lbl">{t('detail.term')}</div>
+            <div style={{ marginTop: 4 }}>{invoice.paymentTermDays} {t('common.days')}</div>
           </div>
           <div>
-            <div className="lbl">Fällig am</div>
+            <div className="lbl">{t('detail.dueOn')}</div>
             <div className="num" style={{ marginTop: 4 }}>{formatDate(invoice.dueDate)}</div>
           </div>
           <div style={{ gridColumn: 'span 2' }}>
-            <div className="lbl">Verwendungszweck</div>
+            <div className="lbl">{t('detail.reference')}</div>
             <div className="row" style={{ marginTop: 4, justifyContent: 'space-between' }}>
               <span className="num" style={{ fontSize: 17 }}>{reference}</span>
               <button type="button" className="btn ghost sm" onClick={copyReference}>
-                Kopieren
+                {t('common.copy')}
               </button>
             </div>
           </div>
@@ -372,40 +373,40 @@ export function InvoiceDetailPage() {
 
       <section className="card flush">
         <div className="card-head">
-          <h2>Positionen</h2>
+          <h2>{t('form.lines')}</h2>
           <button
             type="button"
             className="btn ghost sm"
             aria-expanded={showLines}
             onClick={() => setShowLines((s) => !s)}
           >
-            {showLines ? 'Ausblenden' : `${invoice.lines?.length ?? 0} Positionen`}
+            {showLines ? t('detail.hide') : `${invoice.lines?.length ?? 0} ${t('detail.posCount')}`}
           </button>
         </div>
         <div className="table-wrap" hidden={!showLines}>
           <table className="resp">
             <thead>
               <tr>
-                <th>Pos.</th>
-                <th>Beschreibung</th>
-                <th className="right">Menge</th>
-                <th className="right">Einzel netto</th>
-                <th className="right">USt.</th>
-                <th className="right">Netto</th>
+                <th>{t('form.pos')}</th>
+                <th>{t('form.desc')}</th>
+                <th className="right">{t('form.qty')}</th>
+                <th className="right">{t('form.unitNet')}</th>
+                <th className="right">{t('form.vat')}</th>
+                <th className="right">{t('form.net')}</th>
               </tr>
             </thead>
             <tbody>
               {(invoice.lines ?? []).map((l, i) => (
                 <tr key={i}>
-                  <td data-l="Pos." className="num">{l.position}</td>
-                  <td data-l="Beschreibung" className="w">
+                  <td data-l={t('form.pos')} className="num">{l.position}</td>
+                  <td data-l={t('form.desc')} className="w">
                     {l.description}
                     {l.vatNote ? <div className="muted" style={{ fontSize: 13 }}>{l.vatNote}</div> : null}
                   </td>
-                  <td data-l="Menge" className="num right">{l.quantity}</td>
-                  <td data-l="Einzel netto" className="num right">{formatEUR(l.unitNetCents)}</td>
-                  <td data-l="USt." className="num right">{Math.round(l.vatRate * 100)} %</td>
-                  <td data-l="Netto" className="num right">
+                  <td data-l={t('form.qty')} className="num right">{l.quantity}</td>
+                  <td data-l={t('form.unitNet')} className="num right">{formatEUR(l.unitNetCents)}</td>
+                  <td data-l={t('form.vat')} className="num right">{Math.round(l.vatRate * 100)} %</td>
+                  <td data-l={t('form.net')} className="num right">
                     {formatEUR(Math.round(l.quantity * l.unitNetCents))}
                   </td>
                 </tr>
@@ -415,17 +416,17 @@ export function InvoiceDetailPage() {
         </div>
         <div className="card-head" style={{ background: 'var(--surface-2)', justifyContent: 'flex-end' }}>
           <div className="totals">
-            <span>Netto</span>
+            <span>{t('form.net')}</span>
             <span className="amount num">{formatEUR(invoice.totals?.netCents ?? 0)}</span>
             {breakdown.map((b) => (
               <span key={b.rate} style={{ display: 'contents' }}>
                 <span>
-                  USt. {Math.round(b.rate * 100)} % auf {formatEUR(b.netCents)}
+                  {t('form.vat')} {Math.round(b.rate * 100)} % {t('form.vatOn')} {formatEUR(b.netCents)}
                 </span>
                 <span className="amount num">{formatEUR(b.vatCents)}</span>
               </span>
             ))}
-            <span className="total">Brutto</span>
+            <span className="total">{t('form.gross')}</span>
             <span className="total amount num">{formatEUR(invoice.totals?.grossCents ?? 0)}</span>
           </div>
         </div>
@@ -433,10 +434,10 @@ export function InvoiceDetailPage() {
 
       <div className="grid-2">
         <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <h2 style={{ margin: 0, fontSize: 18 }}>Zahlungen</h2>
+          <h2 style={{ margin: 0, fontSize: 18 }}>{t('detail.payments')}</h2>
           {(invoice.payments ?? []).length === 0 ? (
             <p style={{ margin: 0 }} className="muted">
-              Noch kein Zahlungseingang. Nächster Bankabgleich täglich 07:30.
+              {t('detail.noPayments')}
             </p>
           ) : (
             <ul style={{ margin: 0, paddingLeft: 18 }}>
@@ -453,12 +454,12 @@ export function InvoiceDetailPage() {
             className="row"
             style={{ justifyContent: 'space-between', borderTop: '1px solid var(--line-soft)', paddingTop: 10 }}
           >
-            <span>Offen</span>
+            <span>{t('detail.open')}</span>
             <span className="num" style={{ fontWeight: 500 }}>{formatEUR(openCents)}</span>
           </div>
         </section>
         <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <h2 style={{ margin: 0, fontSize: 18 }}>Verlauf</h2>
+          <h2 style={{ margin: 0, fontSize: 18 }}>{t('detail.history')}</h2>
           <ol style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6, fontSize: 14 }}>
             {history.map((e, i) => (
               <li key={i}>

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.1](https://github.com/bumbleflies/queen/compare/queen-v0.8.0...queen-v0.8.1) (2026-10-07)
+
+
+### Bug Fixes
+
+* **ui:** stop implying invoices are sent to the customer ([089f9d5](https://github.com/bumbleflies/queen/commit/089f9d5f2764a8769d20613bd4f42442811b5054))
+* **ui:** stop implying invoices are sent to the customer ([e3e0862](https://github.com/bumbleflies/queen/commit/e3e08626317b3c0e1a08d0f11f7b4aff525cbdaf))
+
 ## [0.8.0](https://github.com/bumbleflies/queen/compare/queen-v0.7.0...queen-v0.8.0) (2026-10-07)
 
 

@@ -4,6 +4,7 @@ import { trpc } from '../lib/trpc';
 import { useToast } from '../components/Toast';
 import { formatDate, formatEUR } from '../lib/format';
 import { StatusBadge } from '../components/StatusBadge';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface ClientDetail {
   _id: unknown;
@@ -33,6 +34,7 @@ export function ClientDetailPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const utils = trpc.useUtils();
+  const { t } = useLanguage();
 
   const client = trpc.clients.get.useQuery({ id: id ?? '' }, { enabled: !!id });
   const invoices = trpc.invoices.list.useQuery({ clientId: id ?? '' }, { enabled: !!id });
@@ -70,7 +72,7 @@ export function ClientDetailPage() {
         ...(email.trim() ? { email: email.trim() } : {}),
       });
       await utils.invalidate();
-      toast.show('Kunde gespeichert.');
+      toast.show(t('clients.saved'));
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -81,7 +83,7 @@ export function ClientDetailPage() {
     try {
       await archive.mutateAsync({ id });
       await utils.invalidate();
-      toast.show('Kunde archiviert.');
+      toast.show(t('clients.archivedMsg'));
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -92,22 +94,22 @@ export function ClientDetailPage() {
     try {
       await remove.mutateAsync({ id });
       await utils.invalidate();
-      toast.show('Kunde gelöscht.');
+      toast.show(t('clients.deletedMsg'));
       navigate('/clients');
     } catch (err) {
       toast.error((err as Error).message);
     }
   }
 
-  if (client.isLoading) return <p>Laden …</p>;
-  if (client.isError || !data) return <p className="empty">Kunde nicht gefunden.</p>;
+  if (client.isLoading) return <p>{t('common.loadingShort')}</p>;
+  if (client.isError || !data) return <p className="empty">{t('clients.notFound')}</p>;
 
   const invoiceRows = (invoices.data ?? []) as unknown as InvoiceRow[];
 
   return (
     <>
       <Link to="/clients" style={{ fontSize: 14 }}>
-        ← Kunden
+        {t('clients.back')}
       </Link>
       <header className="page-head">
         <div>
@@ -115,37 +117,37 @@ export function ClientDetailPage() {
             {data.name} <span className="num muted">{data.customerNumber}</span>
           </h1>
           <p className="page-sub">
-            {data.archived ? 'archiviert' : 'aktiv'} · {formatEUR(
+            {data.archived ? t('clients.archived') : t('clients.active')} · {formatEUR(
               invoiceRows.reduce((s, r) => s + (r.totals?.grossCents ?? 0), 0),
             )}{' '}
-            brutto gesamt
+            {t('clients.totalGross')}
           </p>
         </div>
         <div className="row">
           <Link className="btn ghost" to={`/invoices/new`}>
-            + Neue Rechnung
+            {t('clients.newInvoice')}
           </Link>
           <button type="button" className="btn danger" onClick={handleDelete}>
-            Löschen
+            {t('common.delete')}
           </button>
         </div>
       </header>
 
       <section className="card grid-form">
         <label className="lab">
-          Name
+          {t('clients.name')}
           <input className="field" value={name} onChange={(e) => setName(e.target.value)} />
         </label>
         <label className="lab">
-          Domain
+          {t('clients.domain')}
           <input className="field" value={domain} onChange={(e) => setDomain(e.target.value)} />
         </label>
         <label className="lab">
-          E-Mail
+          {t('clients.email')}
           <input className="field" value={email} onChange={(e) => setEmail(e.target.value)} />
         </label>
         <label className="lab">
-          Zahlungsziel (Tage)
+          {t('clients.term')}
           <input
             className="field num"
             type="number"
@@ -154,7 +156,7 @@ export function ClientDetailPage() {
           />
         </label>
         <label className="lab" style={{ gridColumn: '1 / -1' }}>
-          Rechnungsadresse
+          {t('clients.address')}
           <textarea
             className="field"
             rows={4}
@@ -165,40 +167,40 @@ export function ClientDetailPage() {
       </section>
       <div className="row">
         <button type="button" className="btn" onClick={save}>
-          Speichern
+          {t('common.save')}
         </button>
         {!data.archived ? (
           <button type="button" className="btn ghost" onClick={handleArchive}>
-            Archivieren
+            {t('clients.archive')}
           </button>
         ) : null}
       </div>
 
       <section className="card flush">
         <div className="card-head">
-          <h2>Rechnungen</h2>
+          <h2>{t('invoices.title')}</h2>
         </div>
         <div className="table-wrap">
           <table className="resp">
             <thead>
               <tr>
-                <th>Nr.</th>
-                <th>Titel</th>
-                <th>Datum</th>
-                <th className="right">Brutto</th>
-                <th>Status</th>
+                <th>{t('tbl.nr')}</th>
+                <th>{t('tbl.title')}</th>
+                <th>{t('tbl.date')}</th>
+                <th className="right">{t('tbl.gross')}</th>
+                <th>{t('tbl.status')}</th>
               </tr>
             </thead>
             <tbody>
               {invoiceRows.map((r) => (
                 <tr key={String(r._id)}>
-                  <td data-l="Nr." className="num">
+                  <td data-l={t('tbl.nr')} className="num">
                     <Link to={`/invoices/${String(r._id)}`}>{r.invoiceNumber}</Link>
                   </td>
-                  <td data-l="Titel" className="w">{r.title}</td>
-                  <td data-l="Datum" className="num">{formatDate(r.invoiceDate)}</td>
-                  <td data-l="Brutto" className="num right">{formatEUR(r.totals?.grossCents ?? 0)}</td>
-                  <td data-l="Status">
+                  <td data-l={t('tbl.title')} className="w">{r.title}</td>
+                  <td data-l={t('tbl.date')} className="num">{formatDate(r.invoiceDate)}</td>
+                  <td data-l={t('tbl.gross')} className="num right">{formatEUR(r.totals?.grossCents ?? 0)}</td>
+                  <td data-l={t('tbl.status')}>
                     <StatusBadge invoice={r} />
                   </td>
                 </tr>
@@ -206,7 +208,7 @@ export function ClientDetailPage() {
             </tbody>
           </table>
         </div>
-        {invoiceRows.length === 0 ? <p className="empty">Noch keine Rechnungen.</p> : null}
+        {invoiceRows.length === 0 ? <p className="empty">{t('clients.noInvoices')}</p> : null}
       </section>
     </>
   );
