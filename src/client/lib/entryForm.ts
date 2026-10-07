@@ -12,15 +12,21 @@ export interface EntryLine {
   creditCents: number;
 }
 
-/** Form rows → ledger lines + running totals; errors name the 1-based row. */
+export interface EntryFormError {
+  row: number;
+  code: 'noAccount' | 'bothSides' | 'noAmount' | 'badAmount' | 'notPositive';
+  raw?: string;
+}
+
+/** Form rows → ledger lines + running totals; errors carry the 1-based row and a code. */
 export function toEntryLines(rows: EntryFormRow[]): {
   lines: EntryLine[];
   debitCents: number;
   creditCents: number;
-  errors: string[];
+  errors: EntryFormError[];
 } {
   const lines: EntryLine[] = [];
-  const errors: string[] = [];
+  const errors: EntryFormError[] = [];
   let debitCents = 0;
   let creditCents = 0;
 
@@ -30,17 +36,17 @@ export function toEntryLines(rows: EntryFormRow[]): {
     const debit = row.debit.trim();
     const credit = row.credit.trim();
     if (!account && !debit && !credit) return;
-    if (!account) return void errors.push(`Zeile ${n}: Konto fehlt`);
-    if (debit && credit) return void errors.push(`Zeile ${n}: entweder Soll oder Haben`);
-    if (!debit && !credit) return void errors.push(`Zeile ${n}: Betrag fehlt`);
+    if (!account) return void errors.push({ row: n, code: 'noAccount' });
+    if (debit && credit) return void errors.push({ row: n, code: 'bothSides' });
+    if (!debit && !credit) return void errors.push({ row: n, code: 'noAmount' });
     const raw = debit || credit;
     let cents: number;
     try {
       cents = parseGermanAmount(raw);
     } catch {
-      return void errors.push(`Zeile ${n}: Betrag „${raw}“ ungültig`);
+      return void errors.push({ row: n, code: 'badAmount', raw });
     }
-    if (cents <= 0) return void errors.push(`Zeile ${n}: Betrag muss positiv sein`);
+    if (cents <= 0) return void errors.push({ row: n, code: 'notPositive' });
     if (debit) {
       lines.push({ account, debitCents: cents, creditCents: 0 });
       debitCents += cents;

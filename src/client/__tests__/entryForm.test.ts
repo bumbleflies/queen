@@ -29,15 +29,15 @@ describe('toEntryLines', () => {
       { account: '', debit: '5', credit: '' },
     ]);
     expect(r.errors).toEqual([
-      'Zeile 1: entweder Soll oder Haben',
-      'Zeile 2: Betrag fehlt',
-      'Zeile 3: Betrag „abc“ ungültig',
-      'Zeile 4: Konto fehlt',
+      { row: 1, code: 'bothSides' },
+      { row: 2, code: 'noAmount' },
+      { row: 3, code: 'badAmount', raw: 'abc' },
+      { row: 4, code: 'noAccount' },
     ]);
   });
 
   it('rejects a zero amount', () => {
     const r = toEntryLines([{ account: '1800', debit: '0', credit: '' }]);
-    expect(r.errors).toEqual(['Zeile 1: Betrag muss positiv sein']);
+    expect(r.errors).toEqual([{ row: 1, code: 'notPositive' }]);
   });
 });

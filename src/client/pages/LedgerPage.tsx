@@ -2,17 +2,26 @@ import { useMemo, useState } from 'react';
 import { trpc } from '../lib/trpc';
 import { formatDate, formatEUR } from '../lib/format';
 import { useToast } from '../components/Toast';
-import { toEntryLines, type EntryFormRow } from '../lib/entryForm';
+import { toEntryLines, type EntryFormError, type EntryFormRow } from '../lib/entryForm';
+import { useLanguage } from '../i18n/LanguageContext';
+import type { DictKey } from '../i18n/de';
 
 type Tab = 'journal' | 'balances' | 'account';
 
-const KIND_LABEL: Record<string, string> = {
-  opening: 'Eröffnung',
-  invoice: 'Rechnung',
-  credit_note: 'Storno-RE',
-  payment: 'Zahlung',
-  manual: 'Manuell',
-  reversal: 'Storno',
+const KIND_KEYS: Record<string, DictKey> = {
+  opening: 'ledger.kind.opening',
+  invoice: 'ledger.kind.invoice',
+  credit_note: 'ledger.kind.credit_note',
+  payment: 'ledger.kind.payment',
+  manual: 'ledger.kind.manual',
+  reversal: 'ledger.kind.reversal',
+};
+
+const ERROR_KEYS: Record<Exclude<EntryFormError['code'], 'badAmount'>, DictKey> = {
+  noAccount: 'ledger.err.noAccount',
+  bothSides: 'ledger.err.bothSides',
+  noAmount: 'ledger.err.noAmount',
+  notPositive: 'ledger.err.notPositive',
 };
 
 const emptyRows = (): EntryFormRow[] => [
@@ -31,6 +40,11 @@ interface EntryRow {
 }
 
 function EntryForm({ year, onDone }: { year: number; onDone: () => void }) {
+  const { t } = useLanguage();
+  const errorText = (e: EntryFormError) =>
+    `${t('ledger.err.row')} ${e.row}: ${
+      e.code === 'badAmount' ? `${t('ledger.err.amount')} „${e.raw}“ ${t('ledger.err.invalid')}` : t(ERROR_KEYS[e.code])
+    }`;
   const toast = useToast();
   const utils = trpc.useUtils();
   const accounts = trpc.accounts.list.useQuery();
@@ -58,7 +72,7 @@ function EntryForm({ year, onDone }: { year: number; onDone: () => void }) {
         lines: parsed.lines,
       });
       await utils.ledger.invalidate();
-      toast.show('Buchung erfasst.');
+      toast.show(t('ledger.posted'));
       onDone();
     } catch (err) {
       toast.error((err as Error).message);
@@ -68,22 +82,22 @@ function EntryForm({ year, onDone }: { year: number; onDone: () => void }) {
   return (
     <section className="card">
       <div className="card-head">
-        <h2>Buchung erfassen</h2>
+        <h2>{t('ledger.new')}</h2>
       </div>
       <div className="grid-form" style={{ padding: 16 }}>
         <label className="lab">
-          Art
+          {t('ledger.kindLabel')}
           <select className="field" value={kind} onChange={(e) => setKind(e.target.value as 'manual' | 'opening')}>
-            <option value="manual">Manuelle Buchung</option>
-            <option value="opening">Eröffnungsbilanz (01.01.)</option>
+            <option value="manual">{t('ledger.kindManual')}</option>
+            <option value="opening">{t('ledger.kindOpening')}</option>
           </select>
         </label>
         <label className="lab">
-          Datum
+          {t('tbl.date')}
           <input className="field" type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={kind === 'opening'} />
         </label>
         <label className="lab" style={{ gridColumn: '1 / -1' }}>
-          Buchungstext
+          {t('ledger.text')}
           <input className="field" value={text} onChange={(e) => setText(e.target.value)} />
         </label>
       </div>
@@ -96,9 +110,9 @@ function EntryForm({ year, onDone }: { year: number; onDone: () => void }) {
       <table className="resp">
         <thead>
           <tr>
-            <th>Konto</th>
-            <th className="right">Soll</th>
-            <th className="right">Haben</th>
+            <th>{t('ledger.account')}</th>
+            <th className="right">{t('ledger.debit')}</th>
+            <th className="right">{t('ledger.credit')}</th>
           </tr>
         </thead>
         <tbody>
@@ -107,10 +121,10 @@ function EntryForm({ year, onDone }: { year: number; onDone: () => void }) {
               <td data-l="Konto">
                 <input className="field num" list="ledger-accounts" value={row.account} onChange={(e) => update(i, { account: e.target.value })} />
               </td>
-              <td data-l="Soll" className="right">
+              <td data-l={t('ledger.debit')} className="right">
                 <input className="field n" inputMode="decimal" value={row.debit} onChange={(e) => update(i, { debit: e.target.value })} />
               </td>
-              <td data-l="Haben" className="right">
+              <td data-l={t('ledger.credit')} className="right">
                 <input className="field n" inputMode="decimal" value={row.credit} onChange={(e) => update(i, { credit: e.target.value })} />
               </td>
             </tr>
@@ -120,30 +134,30 @@ function EntryForm({ year, onDone }: { year: number; onDone: () => void }) {
           <tr>
             <td>
               <button type="button" className="btn ghost" onClick={() => setRows((rs) => [...rs, { account: '', debit: '', credit: '' }])}>
-                + Zeile
+                {t('ledger.addRow')}
               </button>
             </td>
-            <td data-l="Soll" className="num right">{formatEUR(parsed.debitCents)}</td>
-            <td data-l="Haben" className="num right">{formatEUR(parsed.creditCents)}</td>
+            <td data-l={t('ledger.debit')} className="num right">{formatEUR(parsed.debitCents)}</td>
+            <td data-l={t('ledger.credit')} className="num right">{formatEUR(parsed.creditCents)}</td>
           </tr>
         </tfoot>
       </table>
       </div>
       {parsed.errors.map((e) => (
-        <p key={e} style={{ color: 'var(--danger)', margin: '8px 16px' }}>{e}</p>
+        <p key={`${e.row}-${e.code}`} style={{ color: 'var(--danger)', margin: '8px 16px' }}>{errorText(e)}</p>
       ))}
       {!balanced && parsed.errors.length === 0 && parsed.lines.length > 0 ? (
-        <p style={{ color: 'var(--danger)', margin: '8px 16px' }}>Soll und Haben sind nicht ausgeglichen.</p>
+        <p style={{ color: 'var(--danger)', margin: '8px 16px' }}>{t('ledger.unbalanced')}</p>
       ) : null}
       <div className="row acts" style={{ padding: 16 }}>
-        <button type="button" className="btn ghost" onClick={onDone}>Abbrechen</button>
+        <button type="button" className="btn ghost" onClick={onDone}>{t('common.cancel')}</button>
         <button
           type="button"
           className="btn"
           disabled={!balanced || parsed.errors.length > 0 || !text.trim() || postManual.isPending}
           onClick={submit}
         >
-          Buchen
+          {t('ledger.post')}
         </button>
       </div>
     </section>
@@ -151,6 +165,7 @@ function EntryForm({ year, onDone }: { year: number; onDone: () => void }) {
 }
 
 export function LedgerPage() {
+  const { t } = useLanguage();
   const toast = useToast();
   const utils = trpc.useUtils();
   const [year, setYear] = useState(new Date().getFullYear());
@@ -169,12 +184,12 @@ export function LedgerPage() {
   }, [fiscalYears.data]);
 
   async function doReverse(id: string) {
-    const reason = window.prompt('Grund für die Stornobuchung?');
+    const reason = window.prompt(t('ledger.reversePrompt'));
     if (!reason) return;
     try {
       await reverse.mutateAsync({ id, reason });
       await utils.ledger.invalidate();
-      toast.show('Storniert.');
+      toast.show(t('ledger.reversed'));
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -186,25 +201,25 @@ export function LedgerPage() {
     <>
       <header className="page-head">
         <div>
-          <h1>Buchhaltung</h1>
-          <p className="page-sub">Journal, Summen- und Saldenliste, Kontoblatt (SKR04)</p>
+          <h1>{t('nav.ledger')}</h1>
+          <p className="page-sub">{t('ledger.sub')}</p>
         </div>
         <div className="row acts">
-          <select className="field" style={{ width: 'auto' }} value={year} onChange={(e) => setYear(Number(e.target.value))} aria-label="Geschäftsjahr">
+          <select className="field" style={{ width: 'auto' }} value={year} onChange={(e) => setYear(Number(e.target.value))} aria-label={t('ledger.fiscalYear')}>
             {years.map((y) => (
               <option key={y} value={y}>{y}</option>
             ))}
           </select>
-          <button type="button" className="btn" onClick={() => setShowForm(true)}>Buchung erfassen</button>
+          <button type="button" className="btn" onClick={() => setShowForm(true)}>{t('ledger.new')}</button>
         </div>
       </header>
 
       {showForm ? <EntryForm key={year} year={year} onDone={() => setShowForm(false)} /> : null}
 
-      <nav className="row" style={{ margin: '0 0 16px' }} aria-label="Ansicht">
-        {(['journal', 'balances', 'account'] as Tab[]).map((t) => (
-          <button key={t} type="button" className={tab === t ? 'chip on' : 'chip'} onClick={() => setTab(t)}>
-            {t === 'journal' ? 'Journal' : t === 'balances' ? 'Saldenliste' : 'Konto'}
+      <nav className="row" style={{ margin: '0 0 16px' }} aria-label={t('ledger.view')}>
+        {(['journal', 'balances', 'account'] as Tab[]).map((id) => (
+          <button key={id} type="button" className={tab === id ? 'chip on' : 'chip'} onClick={() => setTab(id)}>
+            {t(`ledger.tab.${id}`)}
           </button>
         ))}
       </nav>
@@ -215,22 +230,22 @@ export function LedgerPage() {
             <table className="resp">
               <thead>
                 <tr>
-                  <th>Nr.</th>
-                  <th>Datum</th>
-                  <th>Text</th>
-                  <th>Art</th>
-                  <th>Buchungen</th>
+                  <th>{t('tbl.nr')}</th>
+                  <th>{t('tbl.date')}</th>
+                  <th>{t('ledger.textShort')}</th>
+                  <th>{t('ledger.kindLabel')}</th>
+                  <th>{t('ledger.entries')}</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
                 {entries.map((e) => (
                   <tr key={e._id} className={e.active ? '' : 'muted'}>
-                    <td data-l="Nr." className="num">{e.entryNumber}</td>
-                    <td data-l="Datum" className="num">{formatDate(e.date)}</td>
-                    <td data-l="Text" className="w">{e.text}</td>
-                    <td data-l="Art">{KIND_LABEL[e.source.kind] ?? e.source.kind}</td>
-                    <td data-l="Buchungen" className="num">
+                    <td data-l={t('tbl.nr')} className="num">{e.entryNumber}</td>
+                    <td data-l={t('tbl.date')} className="num">{formatDate(e.date)}</td>
+                    <td data-l={t('ledger.textShort')} className="w">{e.text}</td>
+                    <td data-l={t('ledger.kindLabel')}>{KIND_KEYS[e.source.kind] ? t(KIND_KEYS[e.source.kind]) : e.source.kind}</td>
+                    <td data-l={t('ledger.entries')} className="num">
                       {e.lines.map((l, i) => (
                         <div key={`${i}-${l.account}-${l.debitCents}-${l.creditCents}`}>
                           {l.debitCents > 0 ? `S ${l.account} ${formatEUR(l.debitCents)}` : `H ${l.account} ${formatEUR(l.creditCents)}`}
@@ -239,7 +254,7 @@ export function LedgerPage() {
                     </td>
                     <td>
                       {e.active && (e.source.kind === 'manual' || e.source.kind === 'opening') ? (
-                        <button type="button" className="btn ghost" onClick={() => doReverse(e._id)}>Stornieren</button>
+                        <button type="button" className="btn ghost" onClick={() => doReverse(e._id)}>{t('ledger.reverse')}</button>
                       ) : null}
                     </td>
                   </tr>
@@ -247,7 +262,7 @@ export function LedgerPage() {
               </tbody>
             </table>
           </div>
-          {entries.length === 0 ? <p className="empty">Keine Buchungen in {year}.</p> : null}
+          {entries.length === 0 ? <p className="empty">{t('ledger.emptyIn')} {year}.</p> : null}
         </section>
       ) : null}
 
@@ -257,23 +272,23 @@ export function LedgerPage() {
             <table className="resp">
               <thead>
                 <tr>
-                  <th>Konto</th>
-                  <th>Bezeichnung</th>
-                  <th className="right">Soll</th>
-                  <th className="right">Haben</th>
-                  <th className="right">Saldo</th>
+                  <th>{t('ledger.account')}</th>
+                  <th>{t('ledger.accountName')}</th>
+                  <th className="right">{t('ledger.debit')}</th>
+                  <th className="right">{t('ledger.credit')}</th>
+                  <th className="right">{t('ledger.balance')}</th>
                 </tr>
               </thead>
               <tbody>
                 {(balances.data?.rows ?? []).map((r) => (
                   <tr key={r.account}>
-                    <td data-l="Konto" className="num">
+                    <td data-l={t('ledger.account')} className="num">
                       <button type="button" className="btn ghost sm" onClick={() => { setAccount(r.account); setTab('account'); }}>{r.account}</button>
                     </td>
-                    <td data-l="Bezeichnung" className="w">{r.name}</td>
-                    <td data-l="Soll" className="num right">{formatEUR(r.debitCents)}</td>
-                    <td data-l="Haben" className="num right">{formatEUR(r.creditCents)}</td>
-                    <td data-l="Saldo" className="num right">
+                    <td data-l={t('ledger.accountName')} className="w">{r.name}</td>
+                    <td data-l={t('ledger.debit')} className="num right">{formatEUR(r.debitCents)}</td>
+                    <td data-l={t('ledger.credit')} className="num right">{formatEUR(r.creditCents)}</td>
+                    <td data-l={t('ledger.balance')} className="num right">
                       {formatEUR(Math.abs(r.balanceCents))} {r.balanceCents >= 0 ? 'S' : 'H'}
                     </td>
                   </tr>
@@ -281,9 +296,9 @@ export function LedgerPage() {
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={2}>Summe</td>
-                  <td data-l="Soll" className="num right">{formatEUR(balances.data?.debitCents ?? 0)}</td>
-                  <td data-l="Haben" className="num right">{formatEUR(balances.data?.creditCents ?? 0)}</td>
+                  <td colSpan={2}>{t('ledger.sum')}</td>
+                  <td data-l={t('ledger.debit')} className="num right">{formatEUR(balances.data?.debitCents ?? 0)}</td>
+                  <td data-l={t('ledger.credit')} className="num right">{formatEUR(balances.data?.creditCents ?? 0)}</td>
                   <td />
                 </tr>
               </tfoot>
@@ -295,19 +310,19 @@ export function LedgerPage() {
       {tab === 'account' ? (
         <section className="card flush">
           <div className="card-head">
-            <h2>Kontoblatt {account}</h2>
-            <input className="field num" value={account} onChange={(e) => setAccount(e.target.value)} aria-label="Konto" style={{ width: '6rem' }} />
+            <h2>{t('ledger.accountLedger')} {account}</h2>
+            <input className="field num" value={account} onChange={(e) => setAccount(e.target.value)} aria-label={t('ledger.account')} style={{ width: '6rem' }} />
           </div>
           <div className="table-wrap">
             <table className="resp">
               <thead>
                 <tr>
-                  <th>Datum</th>
-                  <th>Nr.</th>
-                  <th>Text</th>
-                  <th className="right">Soll</th>
-                  <th className="right">Haben</th>
-                  <th className="right">Saldo</th>
+                  <th>{t('tbl.date')}</th>
+                  <th>{t('tbl.nr')}</th>
+                  <th>{t('ledger.textShort')}</th>
+                  <th className="right">{t('ledger.debit')}</th>
+                  <th className="right">{t('ledger.credit')}</th>
+                  <th className="right">{t('ledger.balance')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -316,15 +331,15 @@ export function LedgerPage() {
                     <td data-l="Datum" className="num">{formatDate(r.date)}</td>
                     <td data-l="Nr." className="num">{r.entryNumber}</td>
                     <td data-l="Text" className="w">{r.text}</td>
-                    <td data-l="Soll" className="num right">{r.debitCents ? formatEUR(r.debitCents) : ''}</td>
-                    <td data-l="Haben" className="num right">{r.creditCents ? formatEUR(r.creditCents) : ''}</td>
-                    <td data-l="Saldo" className="num right">{formatEUR(r.runningCents)}</td>
+                    <td data-l={t('ledger.debit')} className="num right">{r.debitCents ? formatEUR(r.debitCents) : ''}</td>
+                    <td data-l={t('ledger.credit')} className="num right">{r.creditCents ? formatEUR(r.creditCents) : ''}</td>
+                    <td data-l={t('ledger.balance')} className="num right">{formatEUR(r.runningCents)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          {(ledger.data ?? []).length === 0 ? <p className="empty">Keine Buchungen auf {account}.</p> : null}
+          {(ledger.data ?? []).length === 0 ? <p className="empty">{t('ledger.emptyOn')} {account}.</p> : null}
         </section>
       ) : null}
     </>
