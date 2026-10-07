@@ -31,6 +31,11 @@ The Bankabgleich page lists incoming payments only (`direction != 'out'`), so th
 - Production: same procedure; healthy on the `0.16.0` build, `/health` 200, served bundle contains the Buchen UI.
 - 2026 ledger coverage after rollout: all 9 invoice entries posted via backfill (2026-00001…00009); payments 0 (3 imported-paid without date correctly skipped, no incoming bank payments matched); outgoing await booking decisions in `/bookings`.
 
+## Follow-up fixes
+
+- **Firefly journal-id parsing (`v0.16.1`, PR #55):** every fetched row upserted as `unknown:N` and overwrote the last, so 26 fetched rows left 1 in the DB. Rows are now keyed by the split-level journal id. Production needed a full resync plus removal of the orphaned `unknown:0` row.
+- **Recognition (`v0.17.0`, PR #57):** labeled `RNR`/`KD` references are parsed server- and client-side (labels first, so EREF digit blocks can't shadow them); Bankabgleich also suggests paid invoices without payments. Both verified on servyy-test and production (`/health` 200).
+
 ## Verification commands
 
 ```bash
