@@ -13,6 +13,7 @@ import {
   toDate,
 } from '../lib/format';
 import { vatBreakdown, type EditorLine } from '../lib/lineTotals';
+import { filingState, type FilingStateInvoice } from '../lib/filingState';
 
 interface DetailLine {
   position: string;
@@ -62,7 +63,17 @@ export function InvoiceDetailPage() {
   const toast = useToast();
   const utils = trpc.useUtils();
 
-  const detail = trpc.invoices.get.useQuery({ id: id ?? '' }, { enabled: !!id });
+  const detail = trpc.invoices.get.useQuery(
+    { id: id ?? '' },
+    {
+      enabled: !!id,
+      // The Drive upload runs as a background job — poll until it lands or fails.
+      refetchInterval: (query) => {
+        const data = query.state.data as unknown as FilingStateInvoice | undefined;
+        return data && filingState(data) === 'pending' ? 3000 : false;
+      },
+    },
+  );
   const list = trpc.invoices.list.useQuery();
   const markPaid = trpc.invoices.markPaid.useMutation();
   const cancel = trpc.invoices.cancel.useMutation();
@@ -111,7 +122,7 @@ export function InvoiceDetailPage() {
       const drive = invoice.driveMetadata?.fileName;
       events.push({
         at: invoice.sentAt,
-        text: drive ? `gesendet, PDF in Drive abgelegt · ${drive}` : 'gesendet',
+        text: drive ? `ausgestellt, PDF in Drive abgelegt · ${drive}` : 'ausgestellt',
       });
     }
     if (invoice.paidAt) events.push({ at: invoice.paidAt, text: 'als bezahlt markiert' });
@@ -134,7 +145,7 @@ export function InvoiceDetailPage() {
     try {
       await markSent.mutateAsync({ id: invoiceId });
       await utils.invalidate();
-      toast.show('Rechnung gesendet und in Drive abgelegt.');
+      toast.show('Rechnung ausgestellt. PDF wird in Drive abgelegt …');
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -184,6 +195,7 @@ export function InvoiceDetailPage() {
   const paidCents = (invoice.payments ?? []).reduce((sum, p) => sum + p.amountCents, 0);
   const openCents = (invoice.totals?.grossCents ?? 0) - paidCents;
   const overdue = overdueDays(invoice);
+  const filing = filingState(invoice);
 
   const statusExtra = (() => {
     if (invoice.status === 'sent' && overdue > 0) return ` · ${overdue} Tage überfällig`;
@@ -221,6 +233,12 @@ export function InvoiceDetailPage() {
           <a className="btn ghost" href={invoice.driveMetadata.link} target="_blank" rel="noreferrer">
             PDF öffnen
           </a>
+        ) : filing === 'pending' ? (
+          <span className="muted">PDF wird abgelegt …</span>
+        ) : filing === 'failed' ? (
+          <span className="badge b-over" title={invoice.driveMetadata?.failureReason ?? undefined}>
+            Ablage fehlgeschlagen
+          </span>
         ) : null}
         <InvoiceActions
           status={invoice.status}
@@ -235,6 +253,12 @@ export function InvoiceDetailPage() {
           }}
         />
       </header>
+
+      {filing === 'failed' ? (
+        <p role="alert" style={{ color: 'var(--danger)' }}>
+          Drive-Ablage fehlgeschlagen: {invoice.driveMetadata?.failureReason}
+        </p>
+      ) : null}
 
       {linked ? (
         <p>
@@ -282,7 +306,7 @@ export function InvoiceDetailPage() {
         <section className="card dialog danger" role="dialog" aria-label="Rechnung stornieren">
           <h2>Rechnung stornieren</h2>
           <p style={{ margin: 0, color: '#3a3a40', maxWidth: '70ch' }}>
-            Gesendete Rechnungen werden nicht gelöscht. queen erzeugt eine Stornorechnung mit allen
+            Ausgestellte Rechnungen werden nicht gelöscht. queen erzeugt eine Stornorechnung mit allen
             Positionen negiert, legt sie als PDF in Drive ab und setzt diese Rechnung auf
             „storniert“.
           </p>

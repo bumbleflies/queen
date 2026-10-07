@@ -22,11 +22,11 @@ describe('invoiceActionKeys (visibility table)', () => {
 });
 
 describe('InvoiceActions rendering', () => {
-  it('draft shows Bearbeiten / Löschen / Senden & ablegen', () => {
+  it('draft shows Bearbeiten / Löschen / Ausstellen & ablegen', () => {
     render(<InvoiceActions status="draft" />);
     expect(screen.getByText('Bearbeiten')).toBeInTheDocument();
     expect(screen.getByText('Entwurf löschen')).toBeInTheDocument();
-    expect(screen.getByText('Senden & ablegen')).toBeInTheDocument();
+    expect(screen.getByText('Ausstellen & ablegen')).toBeInTheDocument();
     expect(screen.queryByText('Stornieren')).not.toBeInTheDocument();
   });
 

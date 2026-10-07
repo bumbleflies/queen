@@ -149,7 +149,7 @@ export function DashboardPage() {
     tasks.push({
       key: 'drafts',
       tone: 'neutral',
-      title: `${plural(drafts.length, 'Entwurf', 'Entwürfe')} nicht gesendet`,
+      title: `${plural(drafts.length, 'Entwurf', 'Entwürfe')} nicht ausgestellt`,
       sub: [
         oldest ? `ältester vom ${formatDate(oldest)}` : null,
         `${formatEUR(drafts.reduce((s, d) => s + (d.totals?.grossCents ?? 0), 0))} brutto`,
@@ -401,7 +401,7 @@ function groupLabel(g: DueGroup): string {
 }
 
 function statusText(i: OpenItem): string {
-  return i.paidCents > 0 ? 'teilbezahlt' : 'gesendet';
+  return i.paidCents > 0 ? 'teilbezahlt' : 'ausgestellt';
 }
 
 function TableGroup({ group }: { group: DueGroup }) {

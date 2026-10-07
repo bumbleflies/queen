@@ -44,6 +44,6 @@ describe('StatusBadge', () => {
   it('derivedStatus returns the sent label when not due and unpaid', () => {
     const status = derivedStatus({ status: 'sent', dueDate: new Date(2030, 0, 1) });
     expect(status.key).toBe('sent');
-    expect(status.label).toBe('gesendet');
+    expect(status.label).toBe('ausgestellt');
   });
 });

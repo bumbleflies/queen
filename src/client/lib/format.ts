@@ -102,12 +102,12 @@ export function derivedStatus(inv: InvoiceLike, today: Date = startOfToday()): D
   if ((inv.payments?.length ?? 0) > 0) {
     return { key: 'partial', label: 'teilbezahlt', cls: 'b-part' };
   }
-  return { key: 'sent', label: 'gesendet', cls: 'b-sent' };
+  return { key: 'sent', label: 'ausgestellt', cls: 'b-sent' };
 }
 
 export type InvoiceChip = 'all' | 'draft' | 'sent' | 'over' | 'paid' | 'cancel';
 
-/** Chip matching mirrors the mock: `Gesendet` also includes overdue invoices,
+/** Chip matching mirrors the mock: `Ausgestellt` also includes overdue invoices,
  *  `Storniert` matches canceled invoices and credit notes. */
 export function matchesChip(inv: InvoiceLike, chip: InvoiceChip, today: Date = startOfToday()): boolean {
   const status = derivedStatus(inv, today);

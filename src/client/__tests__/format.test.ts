@@ -80,7 +80,7 @@ describe('matchesChip', () => {
   const credit: InvoiceLike = { status: 'sent', kind: 'credit_note' };
   const canceled: InvoiceLike = { status: 'canceled' };
 
-  it('Gesendet includes overdue invoices', () => {
+  it('Ausgestellt includes overdue invoices', () => {
     expect(matchesChip(overdue, 'sent', TODAY)).toBe(true);
     expect(matchesChip(sent, 'sent', TODAY)).toBe(true);
   });

@@ -212,7 +212,7 @@ export function InvoiceFormPage({ mode }: { mode: 'new' | 'edit' }) {
       await setLinesMutation.mutateAsync({ id: invoiceId!, lines: buildLines() });
       if (send) await markSent.mutateAsync({ id: invoiceId! });
       await utils.invalidate();
-      toast.show(send ? 'Rechnung gesendet und in Drive abgelegt.' : 'Entwurf gespeichert.');
+      toast.show(send ? 'Rechnung ausgestellt. PDF wird in Drive abgelegt …' : 'Entwurf gespeichert.');
       navigate(`/invoices/${invoiceId}`);
     } catch (err) {
       toast.error((err as Error).message);
@@ -275,7 +275,7 @@ export function InvoiceFormPage({ mode }: { mode: 'new' | 'edit' }) {
             disabled={busy || readOnly}
             onClick={() => persist(true)}
           >
-            Senden &amp; ablegen
+            Ausstellen &amp; ablegen
           </button>
         </div>
       </header>
@@ -320,7 +320,7 @@ export function InvoiceFormPage({ mode }: { mode: 'new' | 'edit' }) {
               />
             </label>
             <label className="lab" style={{ gridColumn: '1 / -1' }}>
-              Rechnungsadresse <span className="hint">aus Kundenstamm, wird beim Senden eingefroren</span>
+              Rechnungsadresse <span className="hint">aus Kundenstamm, wird beim Ausstellen eingefroren</span>
               <textarea
                 className="field"
                 rows={4}
@@ -495,8 +495,9 @@ export function InvoiceFormPage({ mode }: { mode: 'new' | 'edit' }) {
             </div>
           </section>
           <p className="muted" style={{ fontSize: 14 }}>
-            „Senden &amp; ablegen“ setzt Rechnungsdatum (heute) und Fälligkeit, erzeugt das PDF mit
-            Verwendungszweck und legt es in Drive ab. Danach sind Positionen gesperrt.
+            „Ausstellen &amp; ablegen“ setzt Rechnungsdatum (heute) und Fälligkeit und sperrt die
+            Positionen. Das PDF mit Verwendungszweck wird im Hintergrund erzeugt und in Drive abgelegt.{' '}
+            <strong>Die Rechnung wird nicht automatisch an den Kunden verschickt.</strong>
           </p>
         </>
       )}

@@ -11,7 +11,7 @@ export function invoiceActionKeys(status: string, kind?: string | null): Invoice
 const LABELS: Record<InvoiceActionKey, string> = {
   edit: 'Bearbeiten',
   delete: 'Entwurf löschen',
-  send: 'Senden & ablegen',
+  send: 'Ausstellen & ablegen',
   markPaid: 'Als bezahlt markieren',
   cancel: 'Stornieren',
   assignPayment: 'Zahlung zuordnen',
