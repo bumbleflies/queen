@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.16.1](https://github.com/bumbleflies/queen/compare/queen-v0.16.0...queen-v0.16.1) (2026-10-07)
+
+
+### Bug Fixes
+
+* **bank:** read Firefly journal id from the split, not the journal attributes ([32f6ab2](https://github.com/bumbleflies/queen/commit/32f6ab296c5b8d1e529b01e52e57b2486671ea0d))
+* **bank:** read Firefly journal id from the split, not the journal attributes ([d70912b](https://github.com/bumbleflies/queen/commit/d70912b9470c58de815bf1c390e4f4df28b145de))
+
 ## [0.16.0](https://github.com/bumbleflies/queen/compare/queen-v0.15.2...queen-v0.16.0) (2026-10-07)
 
 
