@@ -35,4 +35,9 @@ describe('toEntryLines', () => {
       'Zeile 4: Konto fehlt',
     ]);
   });
+
+  it('rejects a zero amount', () => {
+    const r = toEntryLines([{ account: '1800', debit: '0', credit: '' }]);
+    expect(r.errors).toEqual(['Zeile 1: Betrag muss positiv sein']);
+  });
 });

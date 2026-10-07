@@ -117,8 +117,8 @@ function EntryForm({ year, onDone }: { year: number; onDone: () => void }) {
                 + Zeile
               </button>
             </td>
-            <td className="num right">{formatEUR(parsed.debitCents)}</td>
-            <td className="num right">{formatEUR(parsed.creditCents)}</td>
+            <td data-l="Soll" className="num right">{formatEUR(parsed.debitCents)}</td>
+            <td data-l="Haben" className="num right">{formatEUR(parsed.creditCents)}</td>
           </tr>
         </tfoot>
       </table>
@@ -193,7 +193,7 @@ export function LedgerPage() {
         </div>
       </header>
 
-      {showForm ? <EntryForm year={year} onDone={() => setShowForm(false)} /> : null}
+      {showForm ? <EntryForm key={year} year={year} onDone={() => setShowForm(false)} /> : null}
 
       <nav className="row" style={{ margin: '0 0 16px' }} aria-label="Ansicht">
         {(['journal', 'balances', 'account'] as Tab[]).map((t) => (
@@ -276,8 +276,8 @@ export function LedgerPage() {
               <tfoot>
                 <tr>
                   <td colSpan={2}>Summe</td>
-                  <td className="num right">{formatEUR(balances.data?.debitCents ?? 0)}</td>
-                  <td className="num right">{formatEUR(balances.data?.creditCents ?? 0)}</td>
+                  <td data-l="Soll" className="num right">{formatEUR(balances.data?.debitCents ?? 0)}</td>
+                  <td data-l="Haben" className="num right">{formatEUR(balances.data?.creditCents ?? 0)}</td>
                   <td />
                 </tr>
               </tfoot>
