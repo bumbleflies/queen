@@ -2,6 +2,8 @@ import { Link, NavLink } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { Brand } from './Brand';
 import { trpc } from '../lib/trpc';
+import { useLanguage } from '../i18n/LanguageContext';
+import type { DictKey } from '../i18n/de';
 
 type IconName = 'home' | 'invoices' | 'clients' | 'bank' | 'reports' | 'settings' | 'logout';
 
@@ -45,18 +47,18 @@ export function NavIcon({ name, size = 20 }: { name: IconName; size?: number }) 
 
 interface NavItem {
   to: string;
-  label: string;
-  short: string;
+  labelKey: DictKey;
+  shortKey: DictKey;
   icon: IconName;
   badge?: 'bank';
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { to: '/dashboard', label: 'Dashboard', short: 'Start', icon: 'home' },
-  { to: '/invoices', label: 'Rechnungen', short: 'Rechnungen', icon: 'invoices' },
-  { to: '/clients', label: 'Kunden', short: 'Kunden', icon: 'clients' },
-  { to: '/bank', label: 'Bankabgleich', short: 'Bank', icon: 'bank', badge: 'bank' },
-  { to: '/reports', label: 'Berichte', short: 'Berichte', icon: 'reports' },
+  { to: '/dashboard', labelKey: 'nav.dashboard', shortKey: 'nav.dashboard', icon: 'home' },
+  { to: '/invoices', labelKey: 'nav.invoices', shortKey: 'nav.invoices', icon: 'invoices' },
+  { to: '/clients', labelKey: 'nav.clients', shortKey: 'nav.clients', icon: 'clients' },
+  { to: '/bank', labelKey: 'nav.bank', shortKey: 'nav.bank', icon: 'bank', badge: 'bank' },
+  { to: '/reports', labelKey: 'nav.reports', shortKey: 'nav.reports', icon: 'reports' },
 ];
 
 const navClass = ({ isActive }: { isActive: boolean }) => (isActive ? 'on' : '');
@@ -69,35 +71,53 @@ const navClass = ({ isActive }: { isActive: boolean }) => (isActive ? 'on' : '')
 export function Navigation({ onLogout }: { onLogout?: () => void }) {
   const unmatched = trpc.bank.list.useQuery({ unmatchedOnly: true });
   const bankCount = unmatched.data?.length ?? 0;
+  const { lang, setLang, t } = useLanguage();
 
   const badge = (item: NavItem) =>
     item.badge === 'bank' && bankCount > 0 ? (
-      <span className="nav-badge num" aria-label={`${bankCount} offen`}>
+      <span className="nav-badge num" aria-label={`${bankCount} ${t('nav.open')}`}>
         {bankCount}
       </span>
     ) : null;
+
+  const langBtn = (code: 'de' | 'en', label: string) => (
+    <button
+      key={code}
+      type="button"
+      className={`lang-btn${lang === code ? ' on' : ''}`}
+      aria-pressed={lang === code}
+      title={label}
+      onClick={() => setLang(code)}
+    >
+      {code.toUpperCase()}
+    </button>
+  );
 
   return (
     <>
       <header className="topbar">
         <div className="topbar-in">
-          <Link to="/dashboard" className="topbar-brand" aria-label="queen – Dashboard">
+          <Link to="/dashboard" className="topbar-brand" aria-label={t('nav.home')}>
             <Brand size={24} className="brand" />
           </Link>
-          <nav className="topnav" aria-label="Hauptnavigation">
+          <nav className="topnav" aria-label={t('nav.main')}>
             {NAV_ITEMS.map((item) => (
               <NavLink key={item.to} to={item.to} className={navClass}>
-                {item.label}
+                {t(item.labelKey)}
                 {badge(item)}
               </NavLink>
             ))}
           </nav>
           <div className="topbar-tools">
+            <div className="lang-switch" role="group" aria-label={t('settings.language')}>
+              {langBtn('de', t('settings.deName'))}
+              {langBtn('en', t('settings.enName'))}
+            </div>
             <NavLink
               to="/settings"
               className={({ isActive }) => `topbar-icon${isActive ? ' on' : ''}`}
-              aria-label="Einstellungen"
-              title="Einstellungen"
+              aria-label={t('nav.settings')}
+              title={t('nav.settings')}
             >
               <NavIcon name="settings" size={18} />
             </NavLink>
@@ -106,8 +126,8 @@ export function Navigation({ onLogout }: { onLogout?: () => void }) {
                 type="button"
                 className="topbar-icon"
                 onClick={onLogout}
-                aria-label="Abmelden"
-                title="Abmelden"
+                aria-label={t('nav.logout')}
+                title={t('nav.logout')}
               >
                 <NavIcon name="logout" size={18} />
               </button>
@@ -115,14 +135,14 @@ export function Navigation({ onLogout }: { onLogout?: () => void }) {
           </div>
         </div>
       </header>
-      <nav className="tabbar" aria-label="Hauptnavigation mobil">
+      <nav className="tabbar" aria-label={t('nav.mainMobile')}>
         {NAV_ITEMS.map((item) => (
           <NavLink key={item.to} to={item.to} className={navClass}>
             <span className="tabbar-ico">
               <NavIcon name={item.icon} size={22} />
               {badge(item)}
             </span>
-            {item.short}
+            {t(item.shortKey)}
           </NavLink>
         ))}
       </nav>

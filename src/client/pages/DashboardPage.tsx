@@ -9,13 +9,14 @@ import {
   expectedByMonth,
   groupByDue,
   overdueByClient,
-  relativeDays,
   type DueGroup,
   type OpenItem,
 } from '../lib/dashboard';
+import { useLanguage } from '../i18n/LanguageContext';
+import type { Lang } from '../i18n/LanguageContext';
 
-function formatToday(): string {
-  return new Date().toLocaleDateString('de-DE', {
+function formatToday(lang: Lang): string {
+  return new Date().toLocaleDateString(lang === 'de' ? 'de-DE' : 'en-GB', {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
@@ -63,6 +64,59 @@ export function DashboardPage() {
   const reconcile = trpc.reconcile.status.useQuery();
   const openBank = trpc.bank.list.useQuery({ unmatchedOnly: true });
   const [filter, setFilter] = useState<Filter>('all');
+  const { lang, t } = useLanguage();
+
+  function rel(n: number): string {
+    if (n === 0) return t('dash.relToday');
+    if (n === 1) return t('dash.relTomorrow');
+    if (n === -1) return t('dash.relYesterday');
+    if (lang === 'de') return `${t(n > 0 ? 'dash.relIn' : 'dash.relAgo')} ${Math.abs(n)} ${t('dash.relDays')}`;
+    return n > 0 ? `${t('dash.relIn')} ${n} ${t('dash.relDays')}` : `${-n} ${t('dash.relDays')} ${t('dash.relAgo')}`;
+  }
+
+  function monthLabel(key: string): string {
+    const [y, m] = key.split('-').map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString(lang === 'de' ? 'de-DE' : 'en-GB', {
+      month: 'long',
+      year: 'numeric',
+    });
+  }
+
+  function ageLabel(key: string): string {
+    switch (key) {
+      case 'due':
+        return t('dash.ageDue');
+      case '30':
+        return `1–30 ${t('dash.dayShort')}`;
+      case '90':
+        return `31–90 ${t('dash.dayShort')}`;
+      case '365':
+        return `91–365 ${t('dash.dayShort')}`;
+      default:
+        return t('dash.ageOld');
+    }
+  }
+
+  function groupLabel(g: DueGroup): string {
+    if (g.tone === 'over') return t('dash.groupOver');
+    if (!g.dueDate) return t('dash.noDueDate');
+    const n = daysUntil(g.dueDate);
+    return `${t('dash.dueOn')} ${formatDate(g.dueDate)}${n !== null ? ` (${rel(n)})` : ''}`;
+  }
+
+  function statusText(i: OpenItem): string {
+    return i.paidCents > 0 ? t('status.partial') : t('status.sent');
+  }
+
+  function agoText(days: number): string {
+    if (lang === 'de') return `${t('dash.before')} ${days} ${t('dash.daysPl')}`;
+    return `${days} ${t('dash.daysPl')} ${t('dash.before')}`;
+  }
+
+  function sinceText(days: number): string {
+    if (lang === 'de') return `${t('dash.since')} ${days} ${t('dash.dayShort')}`;
+    return `${days}${t('dash.dayShort')} ${t('dash.legendOver')}`;
+  }
 
   const list = (invoices.data ?? []) as unknown as DashboardInvoice[];
   const openItems = reports.data;
@@ -97,17 +151,17 @@ export function DashboardPage() {
     ? formatDateTime(run.finishedAt)
     : run?.startedAt
       ? formatDateTime(run.startedAt)
-      : 'kein Lauf';
+      : t('dash.noRun');
 
   const tasks: Task[] = [];
   if (run?.error) {
     tasks.push({
       key: 'import',
       tone: 'over',
-      title: 'GLS-Import fehlgeschlagen',
+      title: t('dash.importFail'),
       sub: run.error,
       to: '/bank',
-      cta: 'Ansehen',
+      cta: t('dash.view'),
     });
   }
   for (const g of overdueClients) {
@@ -115,30 +169,30 @@ export function DashboardPage() {
     tasks.push({
       key: `over-${g.clientId}`,
       tone: 'over',
-      title: `${plural(g.items.length, 'überfällige Rechnung', 'überfällige Rechnungen')} an ${g.clientName}`,
-      sub: `${formatEUR(g.cents)} · ${g.items.map((i) => `${i.invoiceNumber} seit ${i.daysOverdue} T`).join(', ')}`,
+      title: `${plural(g.items.length, t('dash.overOne'), t('dash.overMany'))} ${t('dash.at')} ${g.clientName}`,
+      sub: `${formatEUR(g.cents)} · ${g.items.map((i) => `${i.invoiceNumber} ${t('dash.since')} ${i.daysOverdue} ${t('dash.dayShort')}`).join(', ')}`,
       to: single ? `/invoices/${g.items[0].id}` : `/clients/${g.clientId}`,
-      cta: single ? 'Rechnung öffnen' : 'Kunde öffnen',
+      cta: single ? t('dash.openInvoice') : t('dash.openClient'),
     });
   }
   if (openBankCount > 0) {
     tasks.push({
       key: 'bank',
       tone: 'warn',
-      title: `${plural(openBankCount, 'Bankbuchung', 'Bankbuchungen')} ohne Zuordnung`,
-      sub: `GLS-Import ${importLabel} · Vorschlag prüfen`,
+      title: `${plural(openBankCount, t('dash.txOne'), t('dash.txMany'))} ${t('dash.unassigned')}`,
+      sub: `${t('dash.importWord')} ${importLabel} · ${t('dash.checkProposal')}`,
       to: '/bank',
-      cta: 'Zuordnen',
+      cta: t('bank.assign'),
     });
   }
   if (overpaid.length > 0) {
     tasks.push({
       key: 'overpaid',
       tone: 'warn',
-      title: `${plural(overpaid.length, 'Rechnung', 'Rechnungen')} überzahlt`,
-      sub: `${formatEUR(overpaid.reduce((s, i) => s + (i.totals?.grossCents ?? 0), 0))} brutto · Rückzahlung oder Verrechnung klären`,
+      title: `${plural(overpaid.length, t('dash.invoiceOne'), t('dash.invoiceMany'))} ${t('dash.overpaidWord')}`,
+      sub: `${formatEUR(overpaid.reduce((s, i) => s + (i.totals?.grossCents ?? 0), 0))} ${t('dash.grossWord')} · ${t('dash.clarify')}`,
       to: overpaid.length === 1 ? `/invoices/${String(overpaid[0]._id)}` : '/invoices?status=paid',
-      cta: 'Prüfen',
+      cta: t('dash.check'),
     });
   }
   if (drafts.length > 0) {
@@ -149,45 +203,45 @@ export function DashboardPage() {
     tasks.push({
       key: 'drafts',
       tone: 'neutral',
-      title: `${plural(drafts.length, 'Entwurf', 'Entwürfe')} nicht ausgestellt`,
+      title: `${plural(drafts.length, t('dash.draftOne'), t('dash.draftMany'))} ${t('dash.notIssued')}`,
       sub: [
-        oldest ? `ältester vom ${formatDate(oldest)}` : null,
-        `${formatEUR(drafts.reduce((s, d) => s + (d.totals?.grossCents ?? 0), 0))} brutto`,
+        oldest ? `${t('dash.oldestFrom')} ${formatDate(oldest)}` : null,
+        `${formatEUR(drafts.reduce((s, d) => s + (d.totals?.grossCents ?? 0), 0))} ${t('dash.grossWord')}`,
       ]
         .filter(Boolean)
         .join(' · '),
       to: '/invoices?status=draft',
-      cta: drafts.length === 1 ? 'Entwurf öffnen' : 'Entwürfe öffnen',
+      cta: drafts.length === 1 ? t('dash.openDraft') : t('dash.openDrafts'),
     });
   }
 
   const shown = filter === 'over' ? overdueItems : filter === 'due' ? notDueItems : items;
   const groups = groupByDue(shown);
-  const aging = agingBuckets(items);
+  const aging = agingBuckets(items).map((b) => ({ ...b, label: ageLabel(b.key) }));
   const agingMax = Math.max(1, ...aging.map((b) => b.cents));
-  const expected = expectedByMonth(items);
+  const expected = expectedByMonth(items).map((m) => ({ ...m, label: monthLabel(m.key) }));
 
   const filters: { key: Filter; label: string; count: number }[] = [
-    { key: 'all', label: 'Alle', count: items.length },
-    { key: 'over', label: 'Überfällig', count: overdueItems.length },
-    { key: 'due', label: 'Noch nicht fällig', count: notDueItems.length },
+    { key: 'all', label: t('dash.filterAll'), count: items.length },
+    { key: 'over', label: t('dash.filterOver'), count: overdueItems.length },
+    { key: 'due', label: t('dash.filterDue'), count: notDueItems.length },
   ];
 
   return (
     <div className="dash">
       <header className="dash-head">
         <div>
-          <p className="dash-date">{formatToday()}</p>
-          <h1>Dashboard</h1>
+          <p className="dash-date">{formatToday(lang)}</p>
+          <h1>{t('nav.dashboard')}</h1>
         </div>
         <Link className="btn dash-new" to="/invoices/new">
-          + Neue Rechnung
+          {t('dash.new')}
         </Link>
       </header>
 
-      <section aria-label="Kennzahlen" className="kpi-strip">
+      <section aria-label={t('dash.kpis')} className="kpi-strip">
         <Link to="/invoices?status=sent" className="kpi">
-          <div className="kpi-label">Offene Posten</div>
+          <div className="kpi-label">{t('dash.open')}</div>
           <div className="kpi-value num">{formatEUR(totalOpen)}</div>
           <div className="split" aria-hidden="true">
             <div className="split-over" style={{ width: `${overdueShare}%` }} />
@@ -195,42 +249,42 @@ export function DashboardPage() {
           </div>
           <div className="kpi-legend">
             <span>
-              <i className="sw sw-over" /> überfällig <span className="num">{formatEUR(totalOverdue)}</span>
+              <i className="sw sw-over" /> {t('dash.legendOver')} <span className="num">{formatEUR(totalOverdue)}</span>
             </span>
             <span>
-              <i className="sw sw-due" /> nicht fällig{' '}
+              <i className="sw sw-due" /> {t('dash.legendDue')}{' '}
               <span className="num">{formatEUR(totalOpen - totalOverdue)}</span>
             </span>
           </div>
         </Link>
         <Link to="/invoices?status=over" className={`kpi${totalOverdue > 0 ? ' kpi-over' : ''}`}>
-          <div className="kpi-label">Überfällig</div>
+          <div className="kpi-label">{t('dash.overdue')}</div>
           <div className="kpi-value num">{formatEUR(totalOverdue)}</div>
           <div className="kpi-sub">
             {overdueItems.length > 0
-              ? `${plural(overdueItems.length, 'Rechnung', 'Rechnungen')} · ${plural(overdueClients.length, 'Kunde', 'Kunden')} · älteste seit ${oldestOverdue} Tagen`
-              : 'nichts überfällig'}
+              ? `${plural(overdueItems.length, t('dash.invoiceOne'), t('dash.invoiceMany'))} · ${plural(overdueClients.length, t('dash.clientOne'), t('dash.clientMany'))} · ${t('dash.oldestSince')} ${oldestOverdue} ${t('dash.daysPl')}`
+              : t('dash.nothingOver')}
           </div>
         </Link>
         <Link to="/invoices?status=sent" className="kpi">
-          <div className="kpi-label">Fällig in 30 Tagen</div>
+          <div className="kpi-label">{t('dash.due30')}</div>
           <div className="kpi-value num">{formatEUR(soonCents)}</div>
           <div className="kpi-sub">
             {soon.length > 0 && nextDue !== null
-              ? `${plural(soon.length, 'Rechnung', 'Rechnungen')} · nächste ${formatDate(soon[0].dueDate)} (${relativeDays(nextDue)})`
-              : 'keine Fälligkeiten'}
+              ? `${plural(soon.length, t('dash.invoiceOne'), t('dash.invoiceMany'))} · ${t('dash.next')} ${formatDate(soon[0].dueDate)} (${rel(nextDue)})`
+              : t('dash.noDue')}
           </div>
         </Link>
         <Link to="/reports" className="kpi">
-          <div className="kpi-label">Zahlungseingang {currentYear}</div>
+          <div className="kpi-label">{t('dash.paidIn')} {currentYear}</div>
           <div className={`kpi-value num${paidYtdCents === 0 ? ' kpi-zero' : ''}`}>
             {formatEUR(paidYtdCents)}
           </div>
           <div className="kpi-sub">
-            brutto ·{' '}
+            {t('dash.grossWord')} ·{' '}
             {overpaid.length > 0
-              ? plural(overpaid.length, 'Überzahlung', 'Überzahlungen')
-              : 'keine Überzahlungen'}
+              ? plural(overpaid.length, t('dash.overpayOne'), t('dash.overpayMany'))
+              : t('dash.noOverpay')}
           </div>
         </Link>
       </section>
@@ -240,22 +294,22 @@ export function DashboardPage() {
           <section className="card flush" aria-labelledby="todo-h">
             <div className="card-head">
               <h2 id="todo-h">
-                Zu erledigen <span className="num count">{tasks.length}</span>
+                {t('dash.todo')} <span className="num count">{tasks.length}</span>
               </h2>
             </div>
             {tasks.length === 0 ? (
-              <p className="empty">Nichts zu tun – alles abgeglichen.</p>
+              <p className="empty">{t('dash.todoEmpty')}</p>
             ) : (
               <ul className="tasks">
-                {tasks.map((t) => (
-                  <li key={t.key}>
-                    <Link to={t.to} className="task">
-                      <span className={`dot dot-${t.tone}`} aria-hidden="true" />
+                {tasks.map((task) => (
+                  <li key={task.key}>
+                    <Link to={task.to} className="task">
+                      <span className={`dot dot-${task.tone}`} aria-hidden="true" />
                       <span className="task-text">
-                        <span className="task-title">{t.title}</span>
-                        <span className="task-sub">{t.sub}</span>
+                        <span className="task-title">{task.title}</span>
+                        <span className="task-sub">{task.sub}</span>
                       </span>
-                      <span className="task-cta">{t.cta}</span>
+                      <span className="task-cta">{task.cta}</span>
                       <svg className="task-chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                         <path d="m9 6 6 6-6 6" />
                       </svg>
@@ -268,11 +322,11 @@ export function DashboardPage() {
 
           <section className="card flush" aria-labelledby="open-h">
             <div className="card-head">
-              <h2 id="open-h">Offene Rechnungen</h2>
+              <h2 id="open-h">{t('dash.openInvoices')}</h2>
               <Link to="/invoices" className="card-link">
-                Alle Rechnungen →
+                {t('dash.allInvoices')}
               </Link>
-              <div className="filters" role="group" aria-label="Filter">
+              <div className="filters" role="group" aria-label={t('dash.filter')}>
                 {filters.map((f) => (
                   <button
                     key={f.key}
@@ -287,7 +341,7 @@ export function DashboardPage() {
               </div>
             </div>
 
-            {openItems && shown.length === 0 ? <p className="empty">Keine offenen Rechnungen.</p> : null}
+            {openItems && shown.length === 0 ? <p className="empty">{t('dash.noOpen')}</p> : null}
 
             {shown.length > 0 ? (
               <>
@@ -295,24 +349,24 @@ export function DashboardPage() {
                   <table>
                     <thead>
                       <tr>
-                        <th>Nr.</th>
-                        <th>Kunde</th>
-                        <th>Leistung</th>
-                        <th>Fällig</th>
-                        <th className="right">Offen</th>
-                        <th className="right">Status</th>
+                        <th>{t('tbl.nr')}</th>
+                        <th>{t('tbl.customer')}</th>
+                        <th>{t('tbl.service')}</th>
+                        <th>{t('tbl.due')}</th>
+                        <th className="right">{t('tbl.open')}</th>
+                        <th className="right">{t('tbl.status')}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {groups.map((g) => (
-                        <TableGroup key={g.key} group={g} />
+                        <TableGroup key={g.key} group={g} groupLabel={groupLabel(g)} statusText={statusText} agoText={agoText} />
                       ))}
                     </tbody>
                   </table>
                 </div>
                 <div className="mlist">
                   {groups.map((g) => (
-                    <MobileGroup key={g.key} group={g} />
+                    <MobileGroup key={g.key} group={g} groupLabel={groupLabel(g)} statusText={statusText} rel={rel} sinceText={sinceText} />
                   ))}
                 </div>
               </>
@@ -320,33 +374,33 @@ export function DashboardPage() {
           </section>
         </div>
 
-        <aside className="dash-rail" aria-label="Übersicht">
+        <aside className="dash-rail" aria-label={t('dash.overview')}>
           <section className="card rail-card">
             <div className="rail-head">
-              <h2>Bankabgleich</h2>
+              <h2>{t('nav.bank')}</h2>
               <span className={`badge ${importOk ? 'b-paid' : 'b-cancel'}`}>
-                {importOk ? 'Sync OK' : 'Fehler'}
+                {importOk ? t('dash.syncOk') : t('dash.syncErr')}
               </span>
             </div>
-            <p className="rail-note">GLS via Firefly · zuletzt {importLabel}</p>
+            <p className="rail-note">{t('dash.syncNote')} {importLabel}</p>
             <div className="stat3">
               <div>
-                <span className="num">{run?.fetched ?? 0}</span>Buchungen
+                <span className="num">{run?.fetched ?? 0}</span>{t('dash.bookings')}
               </div>
               <div>
-                <span className="num">{run?.matched ?? 0}</span>zugeordnet
+                <span className="num">{run?.matched ?? 0}</span>{t('dash.assigned')}
               </div>
               <div className={openBankCount > 0 ? 'hot' : ''}>
-                <span className="num">{openBankCount}</span>zu prüfen
+                <span className="num">{openBankCount}</span>{t('dash.toCheck')}
               </div>
             </div>
             <Link to="/bank" className="card-link">
-              Zum Bankabgleich →
+              {t('dash.toBank')}
             </Link>
           </section>
 
           <section className="card rail-card">
-            <h2>Altersstruktur Forderungen</h2>
+            <h2>{t('dash.aging')}</h2>
             <div className="aging">
               {aging.map((b) => (
                 <div key={b.key} className={`aging-row${b.cents === 0 ? ' zero' : ''}`}>
@@ -365,13 +419,13 @@ export function DashboardPage() {
             </div>
             {aging[4].cents > 0 ? (
               <p className="rail-note rail-foot">
-                Forderungen über 1 Jahr: Verjährung und Wertberichtigung prüfen.
+                {t('dash.agingNote')}
               </p>
             ) : null}
           </section>
 
           <section className="card rail-card">
-            <h2>Erwartete Eingänge</h2>
+            <h2>{t('dash.expected')}</h2>
             <ul className="months">
               {expected.map((m) => (
                 <li key={m.key} className={m.cents === 0 ? 'zero' : ''}>
@@ -384,7 +438,7 @@ export function DashboardPage() {
         </aside>
       </div>
 
-      <Link className="fab btn honey" to="/invoices/new" aria-label="Neue Rechnung">
+      <Link className="fab btn honey" to="/invoices/new" aria-label={t('invoices.new')}>
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
           <path d="M12 5v14M5 12h14" />
         </svg>
@@ -393,23 +447,17 @@ export function DashboardPage() {
   );
 }
 
-function groupLabel(g: DueGroup): string {
-  if (g.tone === 'over') return 'Überfällig';
-  if (!g.dueDate) return 'Ohne Fälligkeit';
-  const n = daysUntil(g.dueDate);
-  return `Fällig am ${formatDate(g.dueDate)}${n !== null ? ` (${relativeDays(n)})` : ''}`;
-}
-
-function statusText(i: OpenItem): string {
-  return i.paidCents > 0 ? 'teilbezahlt' : 'ausgestellt';
-}
-
-function TableGroup({ group }: { group: DueGroup }) {
+function TableGroup({ group, groupLabel, statusText, agoText }: {
+  group: DueGroup;
+  groupLabel: string;
+  statusText: (i: OpenItem) => string;
+  agoText: (days: number) => string;
+}) {
   return (
     <>
       <tr className={`grp grp-${group.tone}`}>
         <td colSpan={6}>
-          {groupLabel(group)} · <span className="num">{formatEUR(group.cents)}</span>
+          {groupLabel} · <span className="num">{formatEUR(group.cents)}</span>
         </td>
       </tr>
       {group.items.map((i) => (
@@ -424,7 +472,7 @@ function TableGroup({ group }: { group: DueGroup }) {
           <td className="muted-ink">{i.title}</td>
           <td className="nowrap">
             <div className="num">{formatDate(i.dueDate)}</div>
-            {i.overdue ? <div className="over small strong">vor {i.daysOverdue} Tagen</div> : null}
+            {i.overdue ? <div className="over small strong">{agoText(i.daysOverdue)}</div> : null}
           </td>
           <td className="num right nowrap">{formatEUR(i.openCents)}</td>
           <td className="right muted small">{statusText(i)}</td>
@@ -434,11 +482,17 @@ function TableGroup({ group }: { group: DueGroup }) {
   );
 }
 
-function MobileGroup({ group }: { group: DueGroup }) {
+function MobileGroup({ group, groupLabel, statusText, rel, sinceText }: {
+  group: DueGroup;
+  groupLabel: string;
+  statusText: (i: OpenItem) => string;
+  rel: (n: number) => string;
+  sinceText: (days: number) => string;
+}) {
   return (
     <section>
       <h3 className={`mgroup grp-${group.tone}`}>
-        <span>{groupLabel(group)}</span>
+        <span>{groupLabel}</span>
         <span className="num">{formatEUR(group.cents)}</span>
       </h3>
       {group.items.map((i) => {
@@ -455,9 +509,9 @@ function MobileGroup({ group }: { group: DueGroup }) {
               <span className="num mrow-amt">{formatEUR(i.openCents)}</span>
               <span className={`mrow-due${i.overdue ? ' over' : ''}`}>
                 {i.overdue
-                  ? `seit ${i.daysOverdue} T`
+                  ? sinceText(i.daysOverdue)
                   : n !== null
-                    ? relativeDays(n)
+                    ? rel(n)
                     : statusText(i)}
               </span>
             </span>
