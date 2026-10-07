@@ -1385,3 +1385,189 @@ th.right {
     border-radius: 16px;
   }
 }
+
+/* Dark mode: token flips + hardcoded-colour fixes (src/client/theme/ThemeContext) */
+[data-theme='dark'] {
+  --ground: #141417;
+  --surface: #1e1e22;
+  --surface-2: #26262b;
+  --ink: #f0ede6;
+  --muted: #a8a5a0;
+  --link: #8fb3e8;
+  --link-dark: #b3cdf5;
+  --line: #35353b;
+  --line-soft: #2a2a2f;
+  --danger: #f08a80;
+  --danger-border: #6b3a33;
+
+  --overdue: #e0703f;
+  --overdue-bg: #2f221c;
+  --due: #8fb3e8;
+  --due-bar: #4a6a9e;
+  --due-bg: #1d2632;
+  --warn: #d9a04a;
+}
+
+[data-theme='dark'] body {
+  color-scheme: dark;
+}
+
+[data-theme='dark'] .topbar {
+  background: #1e1e22;
+  color: #fff;
+}
+
+[data-theme='dark'] .b-draft,
+[data-theme='dark'] .b-neutral {
+  background: #2e2e33;
+  color: #c8c6cf;
+}
+[data-theme='dark'] .b-sent {
+  background: #21324a;
+  color: #a9c6ef;
+}
+[data-theme='dark'] .b-over {
+  background: #4a3210;
+  color: #f0c685;
+}
+[data-theme='dark'] .b-paid {
+  background: #1e3a27;
+  color: #8fd0a3;
+}
+[data-theme='dark'] .b-part {
+  background: #37244d;
+  color: #c9a6e8;
+}
+[data-theme='dark'] .b-cancel {
+  background: #4a2723;
+  color: #f0a79e;
+}
+[data-theme='dark'] .b-credit {
+  background: var(--surface);
+  color: #f0a79e;
+  border-color: var(--danger-border);
+}
+
+[data-theme='dark'] .btn {
+  background: #f0ede6;
+  border-color: #f0ede6;
+  color: #141417;
+}
+[data-theme='dark'] .btn:hover {
+  background: #fff;
+  color: #141417;
+}
+[data-theme='dark'] .btn.ghost {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--line);
+}
+[data-theme='dark'] .btn.ghost:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+[data-theme='dark'] .btn.honey,
+[data-theme='dark'] .btn.honey:hover {
+  color: #141417;
+}
+[data-theme='dark'] .btn.danger {
+  background: var(--surface);
+  color: var(--danger);
+  border-color: var(--danger-border);
+}
+[data-theme='dark'] .btn.danger:hover {
+  background: var(--danger-border);
+  color: #ffe9e6;
+}
+[data-theme='dark'] .btn.dangerfill {
+  background: #a3281d;
+  border-color: #a3281d;
+  color: #ffe9e6;
+}
+
+[data-theme='dark'] .chip {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+[data-theme='dark'] .pill {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+[data-theme='dark'] .pill.on {
+  color: #141417;
+}
+
+[data-theme='dark'] .field {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+[data-theme='dark'] .lab {
+  color: var(--ink);
+}
+
+[data-theme='dark'] .tabbar {
+  background: rgba(30, 30, 34, 0.96);
+}
+[data-theme='dark'] .tabbar-ico .nav-badge {
+  border-color: #1e1e22;
+}
+
+[data-theme='dark'] .icon:hover {
+  background: #3a2320;
+}
+[data-theme='dark'] .card.warn {
+  border-color: #8a6a24;
+}
+[data-theme='dark'] .card.warn .kpi-label {
+  color: #f0c685;
+}
+[data-theme='dark'] .kpi .kpi-label {
+  color: var(--ink);
+}
+[data-theme='dark'] .table-foot {
+  color: var(--ink);
+}
+[data-theme='dark'] .aging-row {
+  color: var(--ink);
+}
+[data-theme='dark'] .totals .total {
+  border-top-color: var(--line);
+}
+[data-theme='dark'] .task-cta {
+  border-color: var(--line);
+}
+[data-theme='dark'] .muted-ink {
+  color: #cfcbc0;
+}
+
+[data-theme='dark'] .dialog.danger {
+  border-color: var(--danger-border);
+  background: #241b1d;
+}
+[data-theme='dark'] .reason {
+  color: #f0c685;
+}
+
+[data-theme='dark'] .split,
+[data-theme='dark'] .bar {
+  background: #33333a;
+}
+[data-theme='dark'] .stat3 > div {
+  background: var(--surface-2);
+}
+[data-theme='dark'] .stat3 .hot {
+  background: #3d2f14;
+  color: #f0c685;
+}
+[data-theme='dark'] .stat3 .hot .num {
+  color: #f0c685;
+}
+
+[data-theme='dark'] .task:active,
+[data-theme='dark'] .mrow:active,
+[data-theme='dark'] .kpi:active {
+  background: #26262b;
+}

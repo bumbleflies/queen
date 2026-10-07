@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
+import { useLanguage } from '../i18n/LanguageContext';
 
 type SessionStatus = 'loading' | 'authed' | 'unauthed';
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const location = useLocation();
   const [status, setStatus] = useState<SessionStatus>('loading');
+  const { t } = useLanguage();
 
   useEffect(() => {
     let cancelled = false;
@@ -27,7 +29,7 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   }, []);
 
   if (status === 'loading') {
-    return <p>Laden …</p>;
+    return <p>{t('common.loadingShort')}</p>;
   }
   if (status === 'unauthed') {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;

@@ -3,6 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { trpc } from '../lib/trpc';
 import { formatDate, formatEUR, matchesChip, type InvoiceChip } from '../lib/format';
 import { StatusBadge } from '../components/StatusBadge';
+import { useLanguage } from '../i18n/LanguageContext';
+import type { DictKey } from '../i18n/de';
 
 interface InvoiceRow {
   _id: unknown;
@@ -24,13 +26,13 @@ interface ClientRow {
   name: string;
 }
 
-const CHIPS: { key: InvoiceChip; label: string }[] = [
-  { key: 'all', label: 'Alle' },
-  { key: 'draft', label: 'Entwurf' },
-  { key: 'sent', label: 'Ausgestellt' },
-  { key: 'over', label: 'Überfällig' },
-  { key: 'paid', label: 'Bezahlt' },
-  { key: 'cancel', label: 'Storniert' },
+const CHIPS: { key: InvoiceChip; labelKey: DictKey }[] = [
+  { key: 'all', labelKey: 'invoices.chipAll' },
+  { key: 'draft', labelKey: 'invoices.chipDraft' },
+  { key: 'sent', labelKey: 'invoices.chipSent' },
+  { key: 'over', labelKey: 'invoices.chipOver' },
+  { key: 'paid', labelKey: 'invoices.chipPaid' },
+  { key: 'cancel', labelKey: 'invoices.chipCancel' },
 ];
 
 export function InvoicesPage() {
@@ -42,6 +44,7 @@ export function InvoicesPage() {
   const [search, setSearch] = useState('');
   const [clientId, setClientId] = useState('');
   const [year, setYear] = useState('');
+  const { t } = useLanguage();
 
   const rows = (invoices.data ?? []) as unknown as InvoiceRow[];
   const clientRows = (clients.data ?? []) as unknown as ClientRow[];
@@ -87,13 +90,13 @@ export function InvoicesPage() {
   return (
     <>
       <header className="page-head">
-        <h1>Rechnungen</h1>
+        <h1>{t('invoices.title')}</h1>
         <div className="row">
           <a className="btn ghost" href="/api/export/invoices.csv">
-            CSV-Export
+            {t('invoices.csv')}
           </a>
           <Link className="btn" to="/invoices/new">
-            + Neue Rechnung
+            + {t('invoices.new')}
           </Link>
         </div>
       </header>
@@ -106,26 +109,26 @@ export function InvoicesPage() {
             className={`chip${chip === c.key ? ' on' : ''}`}
             onClick={() => setChip(c.key)}
           >
-            {c.label} <span className="num" style={{ opacity: 0.7 }}>{counts[c.key]}</span>
+            {t(c.labelKey)} <span className="num" style={{ opacity: 0.7 }}>{counts[c.key]}</span>
           </button>
         ))}
       </div>
 
       <div className="row" style={{ alignItems: 'flex-end' }}>
         <label className="lab" style={{ flex: '1 1 280px' }}>
-          Suche
+          {t('common.search')}
           <input
             className="field"
             type="search"
-            placeholder="Nr., Kunde, Titel …"
+            placeholder={t('common.searchPh')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </label>
         <label className="lab" style={{ flex: '0 1 220px' }}>
-          Kunde
+          {t('invoices.customer')}
           <select className="field" value={clientId} onChange={(e) => setClientId(e.target.value)}>
-            <option value="">Alle Kunden</option>
+            <option value="">{t('invoices.allCustomers')}</option>
             {clientRows
               .slice()
               .sort((a, b) => a.customerNumber - b.customerNumber)
@@ -137,9 +140,9 @@ export function InvoicesPage() {
           </select>
         </label>
         <label className="lab" style={{ flex: '0 1 140px' }}>
-          Jahr
+          {t('invoices.year')}
           <select className="field" value={year} onChange={(e) => setYear(e.target.value)}>
-            <option value="">Alle</option>
+            <option value="">{t('invoices.all')}</option>
             {years.map((y) => (
               <option key={y} value={y}>
                 {y}
@@ -154,39 +157,39 @@ export function InvoicesPage() {
           <table className="resp">
             <thead>
               <tr>
-                <th>Nr.</th>
-                <th>Kunde</th>
-                <th>Titel</th>
-                <th>Datum</th>
-                <th>Fällig</th>
-                <th className="right">Netto</th>
-                <th className="right">Brutto</th>
-                <th>Status</th>
+                <th>{t('tbl.nr')}</th>
+                <th>{t('tbl.customer')}</th>
+                <th>{t('tbl.title')}</th>
+                <th>{t('tbl.date')}</th>
+                <th>{t('tbl.due')}</th>
+                <th className="right">{t('tbl.net')}</th>
+                <th className="right">{t('tbl.gross')}</th>
+                <th>{t('tbl.status')}</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((r) => (
                 <tr key={String(r._id)}>
-                  <td data-l="Nr." className="num">
+                  <td data-l={t('tbl.nr')} className="num">
                     <Link to={`/invoices/${String(r._id)}`}>{r.invoiceNumber}</Link>
                   </td>
-                  <td data-l="Kunde" className="w">
+                  <td data-l={t('tbl.customer')} className="w">
                     {clientName(r.clientId)} <span className="num muted">{r.customerNumber}</span>
                   </td>
-                  <td data-l="Titel">{r.title}</td>
-                  <td data-l="Datum" className="num">
+                  <td data-l={t('tbl.title')}>{r.title}</td>
+                  <td data-l={t('tbl.date')} className="num">
                     {formatDate(r.invoiceDate)}
                   </td>
-                  <td data-l="Fällig" className="num">
+                  <td data-l={t('tbl.due')} className="num">
                     {formatDate(r.dueDate)}
                   </td>
-                  <td data-l="Netto" className="num right">
+                  <td data-l={t('tbl.net')} className="num right">
                     {formatEUR(r.totals?.netCents ?? 0)}
                   </td>
-                  <td data-l="Brutto" className="num right">
+                  <td data-l={t('tbl.gross')} className="num right">
                     {formatEUR(r.totals?.grossCents ?? 0)}
                   </td>
-                  <td data-l="Status">
+                  <td data-l={t('tbl.status')}>
                     <StatusBadge invoice={r} />
                   </td>
                 </tr>
@@ -195,14 +198,14 @@ export function InvoicesPage() {
           </table>
         </div>
         {filtered.length === 0 ? (
-          <p className="empty">Keine Rechnungen für diesen Filter.</p>
+          <p className="empty">{t('invoices.empty')}</p>
         ) : null}
         <div className="table-foot">
           <span>
-            {filtered.length} {filtered.length === 1 ? 'Rechnung' : 'Rechnungen'}
+            {filtered.length} {filtered.length === 1 ? t('invoices.countOne') : t('invoices.countMany')}
           </span>
           <span>
-            Summe brutto <span className="num" style={{ color: 'var(--ink)' }}>{formatEUR(sumGross)}</span>
+            {t('invoices.sumGross')} <span className="num" style={{ color: 'var(--ink)' }}>{formatEUR(sumGross)}</span>
           </span>
         </div>
       </section>

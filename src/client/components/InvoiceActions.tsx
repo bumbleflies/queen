@@ -1,3 +1,6 @@
+import { useLanguage } from '../i18n/LanguageContext';
+import type { DictKey } from '../i18n/de';
+
 export type InvoiceActionKey = 'edit' | 'delete' | 'send' | 'markPaid' | 'cancel' | 'assignPayment';
 
 /** Action visibility by status (plan Task 8 / UI mocks). */
@@ -8,13 +11,13 @@ export function invoiceActionKeys(status: string, kind?: string | null): Invoice
   return [];
 }
 
-const LABELS: Record<InvoiceActionKey, string> = {
-  edit: 'Bearbeiten',
-  delete: 'Entwurf löschen',
-  send: 'Ausstellen & ablegen',
-  markPaid: 'Als bezahlt markieren',
-  cancel: 'Stornieren',
-  assignPayment: 'Zahlung zuordnen',
+const LABEL_KEYS: Record<InvoiceActionKey, DictKey> = {
+  edit: 'actions.edit',
+  delete: 'actions.delete',
+  send: 'actions.send',
+  markPaid: 'actions.markPaid',
+  cancel: 'actions.cancel',
+  assignPayment: 'actions.assignPayment',
 };
 
 const CLASSES: Record<InvoiceActionKey, string> = {
@@ -35,9 +38,10 @@ export interface InvoiceActionsProps {
 
 /** Presentational action bar — no router/tRPC so it is trivially testable. */
 export function InvoiceActions({ status, kind, disabled, handlers }: InvoiceActionsProps) {
+  const { t } = useLanguage();
   const keys = invoiceActionKeys(status, kind);
   if (keys.length === 0) {
-    return <span className="muted">Abgeschlossen — keine Aktionen.</span>;
+    return <span className="muted">{t('actions.done')}</span>;
   }
   return (
     <div className="acts row">
@@ -49,7 +53,7 @@ export function InvoiceActions({ status, kind, disabled, handlers }: InvoiceActi
           disabled={disabled}
           onClick={handlers?.[key]}
         >
-          {LABELS[key]}
+          {t(LABEL_KEYS[key])}
         </button>
       ))}
     </div>

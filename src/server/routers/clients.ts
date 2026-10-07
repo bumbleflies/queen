@@ -15,9 +15,24 @@ function isDuplicateKey(err: unknown): boolean {
   );
 }
 
+function startOfToday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+async function withStatusCounts(c: typeof Client.prototype) {
+  const [openCount, overdueCount] = await Promise.all([
+    Invoice.countDocuments({ clientId: c._id, status: 'sent' }),
+    Invoice.countDocuments({ clientId: c._id, status: 'sent', dueDate: { $lt: startOfToday() } }),
+  ]);
+  return { ...c.toObject(), openCount, overdueCount };
+}
+
 export const clientsRouter = router({
   /** List all clients by default; `archivedOnly` returns only archived ones,
-   *  `archived` filters explicitly, `includeArchived` is an alias for no filter. */
+   *  `archived` filters explicitly, `includeArchived` is an alias for no filter.
+   *  Each row carries `openCount`/`overdueCount` for the status summary. */
   list: adminProcedure
     .input(
       z
@@ -29,11 +44,14 @@ export const clientsRouter = router({
         .optional(),
     )
     .query(async ({ input }) => {
-      if (input?.archivedOnly) return Client.find({ archived: true }).sort({ customerNumber: 1 });
-      if (input?.archived !== undefined)
-        return Client.find({ archived: input.archived }).sort({ customerNumber: 1 });
-      if (input?.includeArchived) return Client.find({}).sort({ customerNumber: 1 });
-      return Client.find({}).sort({ customerNumber: 1 });
+      async function find(filter: Record<string, unknown>) {
+        const rows = await Client.find(filter).sort({ customerNumber: 1 });
+        return Promise.all(rows.map(withStatusCounts));
+      }
+      if (input?.archivedOnly) return find({ archived: true });
+      if (input?.archived !== undefined) return find({ archived: input.archived });
+      if (input?.includeArchived) return find({});
+      return find({});
     }),
 
   get: adminProcedure.input(z.object({ id: z.string().min(1) })).query(async ({ input }) => {
