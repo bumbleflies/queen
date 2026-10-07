@@ -7,6 +7,21 @@ import { applySheetImport, type DriveFileRef } from '../lib/applySheetImport';
 import { getGoogleAccessTokenForUser } from '../services/AuthService';
 import { createOAuth2Client } from '../services/DriveService';
 import { createInvoicePdfFinder, type DriveListLike } from '../services/driveLookup';
+import { Invoice } from '../models/Invoice';
+
+const linkDriveFilesSchema = z.object({
+  links: z
+    .array(
+      z.object({
+        invoiceNumber: z.string().min(1),
+        fileId: z.string().min(1),
+        link: z.string().url().optional(),
+        fileName: z.string().min(1).optional(),
+      }),
+    )
+    .min(1),
+  dryRun: z.boolean().default(true),
+});
 
 const importSheetSchema = z.object({
   clientsCsv: z.string().min(1),
@@ -62,5 +77,35 @@ export const adminRouter = router({
       resolveDriveFile,
     });
     return { ...report, warnings, errors: plan.errors, mismatches: plan.mismatches };
+  }),
+
+  /**
+   * Attach already-filed Drive PDFs to invoices (Sheet-import backfill; queen's
+   * drive.file scope cannot see them). Never overwrites an existing fileId.
+   */
+  linkDriveFiles: adminProcedure.input(linkDriveFilesSchema).mutation(async ({ input }) => {
+    const updated: string[] = [];
+    const skipped: { invoiceNumber: string; reason: string }[] = [];
+    for (const l of input.links) {
+      const invoice = await Invoice.findOne({ invoiceNumber: l.invoiceNumber });
+      if (!invoice) {
+        skipped.push({ invoiceNumber: l.invoiceNumber, reason: 'not found' });
+        continue;
+      }
+      if (invoice.driveMetadata?.fileId) {
+        skipped.push({ invoiceNumber: l.invoiceNumber, reason: 'already linked' });
+        continue;
+      }
+      updated.push(l.invoiceNumber);
+      if (input.dryRun) continue;
+      invoice.driveMetadata = {
+        ...invoice.driveMetadata,
+        fileId: l.fileId,
+        link: l.link ?? `https://drive.google.com/file/d/${l.fileId}/view`,
+        fileName: l.fileName ?? invoice.driveMetadata?.fileName,
+      };
+      await invoice.save();
+    }
+    return { dryRun: input.dryRun, updated, skipped };
   }),
 });
