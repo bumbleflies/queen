@@ -1,6 +1,6 @@
 # AGENTS.md — queen
 
-Finance & ops app for bumbleflies (clients, invoices, credit notes, GLS/Firefly III auto-reconcile). Status: **planning** — source of truth is `docs/plans/2026-10-06-queen.md`. README is a one-paragraph pointer; trust the plan doc.
+Finance & ops app for bumbleflies (clients, invoices, credit notes, GLS/Firefly III auto-reconcile). Status: app live; accounting Phase 1 (ledger) added — plans in `docs/plans/` (`2026-10-06-queen.md` is the base plan). README is a one-paragraph pointer.
 
 ## Planned stack (no code yet — Task 1 scaffolds it)
 
@@ -16,6 +16,10 @@ Scaffold must include: `package.json`, `tsconfig.json`, `tsconfig.server.json`, 
 - **State machine** (`draft → sent → paid`, `sent → canceled` via credit note only; `overdue` is computed, not stored): single `invoiceStateMachine.ts`, unit-tested; only `draft` is editable; `markSent` requires ≥1 line, gross ≠ 0.
 - **Payment reference on PDFs:** `Verwendungszweck: <customerNumber>-<invoiceNumber>`. Reconcile regex must tolerate bank-inserted spaces/line breaks; customer number must match or → unmatched.
 - **Standalone:** no dependency on LeagueSphere MySQL. League origins attach as optional `source` metadata, never required FKs.
+- **Ledger (SKR04, double-entry):** `lib/accounting/ledger.ts` (`post`/`postOnce`/`reverse`) is the only write path for `JournalEntry`. Entries are never updated or deleted (query/document operations on the model are guarded; never use collection/`bulkWrite`/`insertMany` APIs on `JournalEntry`); corrections are reversals. `source.refId` conventions: `bank:<fireflyJournalId>`, `markPaid:<invoiceId>`, `opening:<year>`; a reversal entry references the original entry's `_id`. Σ Soll = Σ Haben per entry, gapless `YYYY-NNNNN` numbers per fiscal year, no postings into a `closed` FiscalYear.
+- **Automatic postings** (invoice/credit note on `markSent`/`cancel`, payment on assign/`markPaid`, reversal on unassign) go through `ledgerHooks.ts` wrapped in `safeLedger` — they never fail invoice/bank CRUD; `admin.ledgerBackfill` repairs gaps. Credit notes post from the ORIGINAL invoice's lines with `negate`.
+- **No company figures in git** — opening balances and real amounts are entered in the UI only.
+- **Server timezone:** the container runs with TZ=Europe/Berlin (Dockerfile); fiscal years, invoice numbers and entry dates are local German dates.
 
 ## CI / Docker publish (mirrors `bumbleflies/edu`, not leagues.finance)
 

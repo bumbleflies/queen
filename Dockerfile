@@ -12,6 +12,8 @@ RUN npm run build
 
 # Runtime stage
 FROM node:24-alpine
+# Business dates (fiscal year, invoice numbers) are local German dates
+ENV TZ=Europe/Berlin
 WORKDIR /app
 COPY --from=builder --chown=node:node /app/dist ./dist
 COPY --from=builder --chown=node:node /app/node_modules ./node_modules

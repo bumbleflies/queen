@@ -41,7 +41,7 @@ export const bankRouter = router({
 
   assign: adminProcedure
     .input(z.object({ bankTxId: z.string().min(1), invoiceId: z.string().min(1) }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const tx = await BankTransaction.findById(input.bankTxId);
       if (!tx) throw new TRPCError({ code: 'NOT_FOUND', message: 'Bank transaction not found' });
       const invoice = await Invoice.findById(input.invoiceId);
@@ -52,16 +52,16 @@ export const bankRouter = router({
           message: 'Cannot assign a payment to a credit note or a canceled invoice',
         });
       }
-      return assignBankTransactionToInvoice(tx, invoice._id);
+      return assignBankTransactionToInvoice(tx, invoice._id, ctx.user.sub);
     }),
 
   unassign: adminProcedure
     .input(z.object({ bankTxId: z.string().min(1) }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const tx = await BankTransaction.findById(input.bankTxId);
       if (!tx) throw new TRPCError({ code: 'NOT_FOUND', message: 'Bank transaction not found' });
       if (tx.matchedInvoiceId) {
-        await reversePayment(tx.matchedInvoiceId, tx.fireflyJournalId);
+        await reversePayment(tx.matchedInvoiceId, tx.fireflyJournalId, ctx.user.sub);
       }
       const updated = await BankTransaction.findByIdAndUpdate(
         input.bankTxId,

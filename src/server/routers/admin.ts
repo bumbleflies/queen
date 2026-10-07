@@ -8,6 +8,7 @@ import { getGoogleAccessTokenForUser } from '../services/AuthService';
 import { createOAuth2Client } from '../services/DriveService';
 import { createInvoicePdfFinder, type DriveListLike } from '../services/driveLookup';
 import { Invoice } from '../models/Invoice';
+import { backfillLedger } from '../lib/accounting/backfill';
 
 const linkDriveFilesSchema = z.object({
   links: z
@@ -43,6 +44,13 @@ async function driveResolver(
 }
 
 export const adminRouter = router({
+  /** Post invoice/payment entries the hooks missed. Dry run by default. */
+  ledgerBackfill: adminProcedure
+    .input(z.object({ year: z.number().int().min(2000).max(2100), dryRun: z.boolean().default(true) }))
+    .mutation(async ({ input, ctx }) =>
+      backfillLedger(input.year, { dryRun: input.dryRun, createdBy: ctx.user.sub }),
+    ),
+
   /** One-off migration from the ledger Sheet (CSV export per tab). Dry run by default. */
   importSheet: adminProcedure.input(importSheetSchema).mutation(async ({ input, ctx }) => {
     let plan;

@@ -8,6 +8,7 @@ import {
   reconcilePendingTransactions,
   reversePayment,
 } from '../../lib/reconcile';
+import { initLedgerModels, resetLedgerDb } from './helpers/ledgerFixtures';
 
 function dbAvailable(): boolean {
   return mongoose.connection.readyState === 1;
@@ -28,12 +29,14 @@ beforeAll(async () => {
   if (!dbAvailable()) return;
   await Invoice.init();
   await BankTransaction.init();
+  await initLedgerModels();
 });
 
 beforeEach(async () => {
   if (!dbAvailable()) return;
   await Invoice.deleteMany({});
   await BankTransaction.deleteMany({});
+  await resetLedgerDb(); // seeds accounts for the ledger hooks
 });
 
 const clientId = new mongoose.Types.ObjectId();

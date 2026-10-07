@@ -7,6 +7,7 @@ import { ReconcileRun } from '../../models/ReconcileRun';
 import { Client } from '../../models/Client';
 import { Invoice } from '../../models/Invoice';
 import { InvoiceLine } from '../../models/InvoiceLine';
+import { initLedgerModels, resetLedgerDb } from './helpers/ledgerFixtures';
 
 function dbAvailable(): boolean {
   return mongoose.connection.readyState === 1;
@@ -27,6 +28,7 @@ beforeAll(async () => {
   if (!dbAvailable()) return;
   await BankTransaction.init();
   await ReconcileRun.init();
+  await initLedgerModels();
 });
 
 beforeEach(async () => {
@@ -36,6 +38,7 @@ beforeEach(async () => {
   await Client.deleteMany({});
   await Invoice.deleteMany({});
   await InvoiceLine.deleteMany({});
+  await resetLedgerDb(); // seeds accounts for the ledger hooks
 });
 
 const assignLine = {
