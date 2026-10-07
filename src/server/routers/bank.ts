@@ -8,6 +8,7 @@ import { FireflyClient } from '../services/FireflyClient';
 import { computeSyncWindow, syncBankTransactions } from '../lib/bankSync';
 import { findLastSuccessfulRun, readFireflyEnv } from '../lib/fireflyEnv';
 import { assignBankTransactionToInvoice, reversePayment } from '../lib/reconcile';
+import { findActiveBySource } from '../lib/accounting/ledger';
 
 export interface BankListFilterInput {
   unmatchedOnly?: boolean;
@@ -50,6 +51,15 @@ export const bankRouter = router({
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message: 'Cannot assign a payment to a credit note or a canceled invoice',
+        });
+      }
+      if (tx.direction === 'out') {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Ausgaben können keiner Rechnung zugeordnet werden' });
+      }
+      if (await findActiveBySource('bank', tx.fireflyJournalId)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Transaktion ist bereits gebucht — erst die Buchung stornieren',
         });
       }
       return assignBankTransactionToInvoice(tx, invoice._id, ctx.user.sub);

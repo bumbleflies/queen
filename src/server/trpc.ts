@@ -8,6 +8,7 @@ import { adminRouter } from './routers/admin';
 import { accountsRouter } from './routers/accounts';
 import { ledgerRouter } from './routers/ledger';
 import { suppliersRouter } from './routers/suppliers';
+import { bookingsRouter } from './routers/bookings';
 
 export * from './trpcInit';
 
@@ -26,6 +27,7 @@ export const appRouter = router({
   admin: adminRouter,
   ledger: ledgerRouter,
   suppliers: suppliersRouter,
+  bookings: bookingsRouter,
 });
 
 export type AppRouter = typeof appRouter;
