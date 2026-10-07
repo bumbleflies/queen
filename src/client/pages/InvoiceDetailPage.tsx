@@ -252,7 +252,7 @@ export function InvoiceDetailPage() {
             send: handleSend,
             markPaid: () => setPaidOpen(true),
             cancel: () => setCancelOpen(true),
-            assignPayment: () => navigate('/bank'),
+            assignPayment: () => navigate('/finance'),
           }}
         />
       </header>

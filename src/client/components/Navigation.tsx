@@ -7,7 +7,7 @@ import { useLanguage } from '../i18n/LanguageContext';
 import { useTheme } from '../theme/ThemeContext';
 import type { DictKey } from '../i18n/de';
 
-type IconName = 'home' | 'invoices' | 'clients' | 'bank' | 'bookings' | 'reports' | 'ledger' | 'settings' | 'logout';
+type IconName = 'home' | 'invoices' | 'clients' | 'bank' | 'reports' | 'settings' | 'logout';
 
 const ICON_PATHS: Record<IconName, ReactNode> = {
   home: <path d="M3 12h7V3H3zM14 21h7v-9h-7zM14 3h7v5h-7zM3 21h7v-5H3z" />,
@@ -19,8 +19,6 @@ const ICON_PATHS: Record<IconName, ReactNode> = {
     </>
   ),
   bank: <path d="M3 10h18L12 4zM5 10v8M10 10v8M14 10v8M19 10v8M3 20h18" />,
-  bookings: <path d="M4 4h16v16H4zM8 4v16M8 9h8M8 14h8" />,
-  ledger: <path d="M4 4h16v16H4zM4 9h16M4 14h16M10 4v16" />,
   reports: <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />,
   settings: (
     <>
@@ -54,16 +52,14 @@ interface NavItem {
   labelKey: DictKey;
   shortKey: DictKey;
   icon: IconName;
-  badge?: 'bank' | 'bookings';
+  badge?: 'finance';
 }
 
 const NAV_ITEMS: NavItem[] = [
   { to: '/dashboard', labelKey: 'nav.dashboard', shortKey: 'nav.dashboard', icon: 'home' },
   { to: '/invoices', labelKey: 'nav.invoices', shortKey: 'nav.invoices', icon: 'invoices' },
   { to: '/clients', labelKey: 'nav.clients', shortKey: 'nav.clients', icon: 'clients' },
-  { to: '/bank', labelKey: 'nav.bank', shortKey: 'nav.bank', icon: 'bank', badge: 'bank' },
-  { to: '/bookings', labelKey: 'nav.bookings', shortKey: 'nav.bookings', icon: 'bookings', badge: 'bookings' },
-  { to: '/ledger', labelKey: 'nav.ledger', shortKey: 'nav.ledgerShort', icon: 'ledger' },
+  { to: '/finance', labelKey: 'nav.finance', shortKey: 'nav.financeShort', icon: 'bank', badge: 'finance' },
   { to: '/reports', labelKey: 'nav.reports', shortKey: 'nav.reports', icon: 'reports' },
 ];
 
@@ -75,15 +71,13 @@ const navClass = ({ isActive }: { isActive: boolean }) => (isActive ? 'on' : '')
  * bar in thumb reach.
  */
 export function Navigation({ onLogout }: { onLogout?: () => void }) {
-  const unmatched = trpc.bank.list.useQuery({ unmatchedOnly: true });
-  const bankCount = unmatched.data?.length ?? 0;
   const bookingStats = trpc.bookings.stats.useQuery({ year: new Date().getFullYear() });
-  const bookingsCount = bookingStats.data?.open ?? 0;
+  const financeCount = bookingStats.data?.open ?? 0;
   const { t } = useLanguage();
   const { setTheme, resolved } = useTheme();
 
   const badge = (item: NavItem) => {
-    const count = item.badge === 'bank' ? bankCount : item.badge === 'bookings' ? bookingsCount : 0;
+    const count = item.badge === 'finance' ? financeCount : 0;
     return item.badge && count > 0 ? (
       <span className="nav-badge num" aria-label={`${count} ${t('nav.open')}`}>
         {count}

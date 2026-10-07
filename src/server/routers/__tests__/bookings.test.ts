@@ -142,6 +142,46 @@ describe('bookings', () => {
     expect(await caller.bookings.stats({ year: 2026 })).toEqual({ open: 1, booked: 1, missingReceipts: 1 });
   });
 
+  it('stream returns every tx of the year with its state and joined details', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    await caller.suppliers.create({ name: 'Bank', purposePatterns: ['Abrechnung vom'], defaultAccount: '6855', defaultVatRate: 0 });
+    const expense = await tx({ description: 'Abrechnung vom 29.01.2026', amountCents: 824 });
+    const ignored = await tx({ direction: 'in', ignored: true, description: 'Steuererstattung' });
+    const invoice = await sentInvoice(caller);
+    const payment = await tx({ direction: 'in', amountCents: invoice.totals.grossCents, description: 'Lizenz' });
+    await caller.bank.assign({ bankTxId: String(payment._id), invoiceId: String(invoice._id) });
+    await caller.bookings.book({ bankTxId: String(expense._id), account: '6837', vatRate: 0, mode: 'normal' });
+
+    const rows = (await caller.bookings.stream({ year: 2026 })) as unknown as {
+      id: string;
+      state: string;
+      ignored: boolean;
+      direction: string;
+      suggestion: unknown;
+      entry?: { entryNumber: string; lines: { account: string; debitCents: number; creditCents: number }[] };
+      invoice?: { invoiceNumber: string; status: string };
+    }[];
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    expect(rows).toHaveLength(3);
+
+    const expenseRow = byId.get(String(expense._id))!;
+    expect(expenseRow.state).toBe('booked');
+    expect(expenseRow.entry?.entryNumber).toMatch(/^2026-\d{5}$/);
+    expect(expenseRow.entry?.lines).toEqual([{ account: '1800', debitCents: 0, creditCents: 824 }, { account: '6837', debitCents: 824, creditCents: 0 }]);
+
+    const paymentRow = byId.get(String(payment._id))!;
+    expect(paymentRow.state).toBe('invoice');
+    expect(paymentRow.invoice).toMatchObject({ invoiceNumber: invoice.invoiceNumber, status: 'paid' });
+
+    const ignoredRow = byId.get(String(ignored._id))!;
+    expect(ignoredRow).toMatchObject({ state: 'open', ignored: true });
+
+    // 2025 tx must not leak into the 2026 stream
+    await tx({ date: new Date(2025, 5, 1) });
+    expect((await caller.bookings.stream({ year: 2026 })).length).toBe(3);
+  });
+
   it('balanceCheck reports the ledger 1800 balance and an error when Firefly is not configured', async (ctx) => {
     skipIfNoDb(ctx);
     vi.stubEnv('FIREFLY_URL', '');

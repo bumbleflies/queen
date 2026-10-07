@@ -69,7 +69,7 @@ export function SettingsPage() {
 
       <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <h2 style={{ margin: 0, fontSize: 18 }}>{t('settings.links')}</h2>
-        <Link to="/bank">{t('nav.bank')}</Link>
+        <Link to="/finance">{t('nav.finance')}</Link>
         <Link to="/reports">{t('nav.reports')}</Link>
         <a href="/api/export/invoices.csv">{t('settings.csv')}</a>
       </section>
