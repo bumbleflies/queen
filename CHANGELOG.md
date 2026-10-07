@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.17.0](https://github.com/bumbleflies/queen/compare/queen-v0.16.1...queen-v0.17.0) (2026-10-07)
+
+
+### Features
+
+* **bank:** labeled RNR/KD recognition and paid-awaiting suggestions ([8c4a736](https://github.com/bumbleflies/queen/commit/8c4a73633a79d1cab9f90b5a926d6a58cfb938e2))
+* **bank:** labeled RNR/KD recognition and paid-awaiting suggestions ([8646ca5](https://github.com/bumbleflies/queen/commit/8646ca50521974f1213097a0e3617e691d332496))
+
 ## [0.16.1](https://github.com/bumbleflies/queen/compare/queen-v0.16.0...queen-v0.16.1) (2026-10-07)
 
 
