@@ -4,6 +4,7 @@ import type { HydratedDocument } from 'mongoose';
 import { router, authedProcedure } from '../trpcInit';
 import { BankTransaction, type BankTransactionDoc } from '../models/BankTransaction';
 import { JournalEntry } from '../models/JournalEntry';
+import { Invoice } from '../models/Invoice';
 import { Supplier } from '../models/Supplier';
 import { BookingError, bookBankTransaction, unbookBankTransaction } from '../lib/accounting/bankBooking';
 import { BANK_VAT_RATES, PostingError } from '../lib/accounting/postingRules';
@@ -83,6 +84,45 @@ const bookFields = {
 };
 
 export const bookingsRouter = router({
+  /** Every bank tx of a year once, with its merged Finance view state. */
+  stream: authedProcedure.input(yearInput).query(async ({ input }) => {
+    const [{ txs, coverage }, suppliers] = await Promise.all([loadYear(input.year), Supplier.find({ archived: false })]);
+    const matchedIds = txs.flatMap((t) => (t.matchedInvoiceId ? [t.matchedInvoiceId] : []));
+    const invoiceMap = new Map(
+      (await Invoice.find({ _id: { $in: matchedIds } }).select('invoiceNumber status').lean() as unknown as { _id: unknown; invoiceNumber: string; status: string }[]).map(
+        (i) => [String(i._id), { invoiceNumber: i.invoiceNumber, status: i.status }],
+      ),
+    );
+    const supplierIds = txs.flatMap((t) => (t.supplierId ? [t.supplierId] : []));
+    const names = new Map((await Supplier.find({ _id: { $in: supplierIds } }).lean() as unknown as { _id: unknown; name: string }[]).map((s) => [String(s._id), s.name]));
+
+    return txs
+      .map((t) => {
+        const covered = coverage.get(t.fireflyJournalId);
+        if (t.matchedInvoiceId) {
+          return {
+            ...row(t),
+            state: 'invoice' as const,
+            invoice: t.matchedInvoiceId ? invoiceMap.get(String(t.matchedInvoiceId)) ?? null : null,
+          };
+        }
+        if (covered?.source?.kind === 'bank') {
+          return {
+            ...row(t),
+            state: 'booked' as const,
+            entry: {
+              entryId: String(covered._id),
+              entryNumber: covered.entryNumber,
+              lines: covered.lines.map((l) => ({ account: l.account, debitCents: l.debitCents, creditCents: l.creditCents })),
+            },
+            supplierName: t.supplierId ? (names.get(String(t.supplierId)) ?? null) : null,
+          };
+        }
+        return { ...row(t), state: 'open' as const, suggestion: suggest(t, suppliers) };
+      })
+      .reverse();
+  }),
+
   inbox: authedProcedure.input(yearInput).query(async ({ input }) => {
     const [{ txs, coverage }, suppliers] = await Promise.all([loadYear(input.year), Supplier.find({ archived: false })]);
     return txs

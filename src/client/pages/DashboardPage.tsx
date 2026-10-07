@@ -62,7 +62,7 @@ export function DashboardPage() {
   const invoices = trpc.invoices.list.useQuery();
   const reports = trpc.reports.openItems.useQuery();
   const reconcile = trpc.reconcile.status.useQuery();
-  const openBank = trpc.bank.list.useQuery({ unmatchedOnly: true });
+  const openBank = trpc.bookings.stats.useQuery({ year: new Date().getFullYear() });
   const [filter, setFilter] = useState<Filter>('all');
   const { lang, t } = useLanguage();
 
@@ -121,7 +121,7 @@ export function DashboardPage() {
   const list = (invoices.data ?? []) as unknown as DashboardInvoice[];
   const openItems = reports.data;
   const run = (reconcile.data ?? null) as unknown as ReconcileRunRow | null;
-  const openBankCount = openBank.data?.length ?? 0;
+  const openBankCount = openBank.data?.open ?? 0;
 
   const items = ((openItems?.items ?? []) as unknown as OpenItem[]).filter(
     (i) => i.kind !== 'credit_note',
@@ -160,7 +160,7 @@ export function DashboardPage() {
       tone: 'over',
       title: t('dash.importFail'),
       sub: run.error,
-      to: '/bank',
+      to: '/finance',
       cta: t('dash.view'),
     });
   }
@@ -181,7 +181,7 @@ export function DashboardPage() {
       tone: 'warn',
       title: `${plural(openBankCount, t('dash.txOne'), t('dash.txMany'))} ${t('dash.unassigned')}`,
       sub: `${t('dash.importWord')} ${importLabel} · ${t('dash.checkProposal')}`,
-      to: '/bank',
+      to: '/finance',
       cta: t('bank.assign'),
     });
   }
@@ -394,7 +394,7 @@ export function DashboardPage() {
                 <span className="num">{openBankCount}</span>{t('dash.toCheck')}
               </div>
             </div>
-            <Link to="/bank" className="card-link">
+            <Link to="/finance" className="card-link">
               {t('dash.toBank')}
             </Link>
           </section>
