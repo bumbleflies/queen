@@ -9,6 +9,6 @@ jobs:
   call-pr-tests:
     uses: ./.github/workflows/pr-tests.yml
 
-  docker-build-test:
+  build-publish:
     needs: call-pr-tests
-    uses: ./.github/workflows/docker-build-test.yml
+    uses: ./.github/workflows/build-publish.yml

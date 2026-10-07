@@ -21,4 +21,5 @@ jobs:
     uses: ./.github/workflows/build-publish.yml
     with:
       version: ${{ github.ref_name }}
+      publish: true
     secrets: inherit
