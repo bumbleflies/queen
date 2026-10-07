@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.0](https://github.com/bumbleflies/queen/compare/queen-v0.10.0...queen-v0.11.0) (2026-10-07)
+
+
+### Features
+
+* language switch as single toggle with flags, default from browser language ([413e60a](https://github.com/bumbleflies/queen/commit/413e60a20c0c3ce79311cc6b77ef9f0fa83d2c19))
+* language switch as single toggle with flags, default from browser language ([95a5ae2](https://github.com/bumbleflies/queen/commit/95a5ae291f3dd1602347bb43e8ee843323af8ee1))
+
 ## [0.10.0](https://github.com/bumbleflies/queen/compare/queen-v0.9.0...queen-v0.10.0) (2026-10-07)
 
 
