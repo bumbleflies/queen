@@ -6,6 +6,7 @@ import { LanguageProvider } from '../i18n/LanguageContext';
 vi.mock('../lib/trpc', () => ({
   trpc: {
     bank: { list: { useQuery: () => ({ data: [] }) } },
+    bookings: { stats: { useQuery: () => ({ data: { open: 0, booked: 0, missingReceipts: 0 } }) } },
     me: { useQuery: () => ({ data: { user: { email: 'a@example.com', role: 'admin' } } }) },
   },
 }));

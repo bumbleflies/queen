@@ -291,7 +291,7 @@ describe('admin.ledgerBackfill', () => {
       const report = await backfill(caller);
       expect(report).toMatchObject({ invoices: 1, payments: 0 });
       expect(report.skipped).toEqual([
-        { ref: 'LEG-1', reason: expect.stringContaining('imported as paid') },
+        { ref: 'LEG-1', reason: expect.stringContaining('als bezahlt importiert') },
       ]);
       await expectBalanced(11900);
 
