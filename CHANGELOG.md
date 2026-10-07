@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.0](https://github.com/bumbleflies/queen/compare/queen-v0.12.1...queen-v0.13.0) (2026-10-07)
+
+
+### Features
+
+* allow all authenticated users CRUD; config stays admin-only ([0576af8](https://github.com/bumbleflies/queen/commit/0576af8533c6cb7f2feecd663855b4a86edde843))
+
 ## [0.12.1](https://github.com/bumbleflies/queen/compare/queen-v0.12.0...queen-v0.12.1) (2026-10-07)
 
 
