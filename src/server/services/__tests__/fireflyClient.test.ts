@@ -34,7 +34,13 @@ function pageBody(
     data: [
       {
         type: 'transactions',
-        attributes: { transaction_journal_id: journalId, transactions: splits },
+        id: journalId,
+        attributes: {
+          transactions: (splits as Record<string, unknown>[]).map((s) => ({
+            transaction_journal_id: journalId,
+            ...s,
+          })),
+        },
       },
     ],
     meta: { pagination: { total_pages: totalPages, current_page: currentPage } },
@@ -179,9 +185,9 @@ describe('FireflyClient.fetchTransactions directions', () => {
         200,
         {
           data: [
-            { type: 'transactions', attributes: { transaction_journal_id: '50', transactions: [withdrawalSplit()] } },
-            { type: 'transactions', attributes: { transaction_journal_id: '51', transactions: [depositSplit()] } },
-            { type: 'transactions', attributes: { transaction_journal_id: '52', transactions: [depositSplit({ type: 'transfer' })] } },
+            { type: 'transactions', id: '312', attributes: { transactions: [withdrawalSplit({ transaction_journal_id: '50' })] } },
+            { type: 'transactions', id: '313', attributes: { transactions: [depositSplit({ transaction_journal_id: '51' })] } },
+            { type: 'transactions', id: '314', attributes: { transactions: [depositSplit({ transaction_journal_id: '52', type: 'transfer' })] } },
           ],
           meta: { pagination: { total_pages: 1, current_page: 1 } },
         },
@@ -199,6 +205,41 @@ describe('FireflyClient.fetchTransactions directions', () => {
       counterpartyIban: 'IE29AIBK93115212345678',
     });
     expect(txs[1]).toMatchObject({ fireflyJournalId: '51:0', direction: 'in', counterpartyName: 'Acme GmbH' });
+  });
+
+  it('keys rows by the split-level journal id so journals never collapse onto unknown:N', async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse(
+        200,
+        {
+          data: [
+            { type: 'transactions', id: '312', attributes: { transactions: [withdrawalSplit({ transaction_journal_id: '501' })] } },
+            { type: 'transactions', id: '313', attributes: { transactions: [withdrawalSplit({ transaction_journal_id: '502' })] } },
+          ],
+          meta: { pagination: { total_pages: 1, current_page: 1 } },
+        },
+      ),
+    );
+    const client = new FireflyClient({ ...opts, fetchImpl: fetchImpl as unknown as typeof fetch });
+    const txs = await client.fetchTransactions(new Date('2026-01-01T00:00:00Z'), new Date('2026-01-31T00:00:00Z'));
+    expect(txs.map((t) => t.fireflyJournalId)).toEqual(['501:0', '502:0']);
+  });
+
+  it('falls back to the journal id when a split carries no journal id', async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse(
+        200,
+        {
+          data: [
+            { type: 'transactions', id: '312', attributes: { transactions: [withdrawalSplit()] } },
+          ],
+          meta: { pagination: { total_pages: 1, current_page: 1 } },
+        },
+      ),
+    );
+    const client = new FireflyClient({ ...opts, fetchImpl: fetchImpl as unknown as typeof fetch });
+    const txs = await client.fetchTransactions(new Date('2026-01-01T00:00:00Z'), new Date('2026-01-31T00:00:00Z'));
+    expect(txs.map((t) => t.fireflyJournalId)).toEqual(['312:0']);
   });
 });
 

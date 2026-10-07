@@ -38,6 +38,8 @@ export interface FireflyClientOptions {
 }
 
 interface FireflySplit {
+  /** Stable per-journal id. Lives on the split, not on the journal attributes. */
+  transaction_journal_id?: string | number;
   type?: string;
   date?: string;
   amount?: string;
@@ -50,8 +52,8 @@ interface FireflySplit {
 }
 
 interface FireflyJournal {
+  id?: string | number;
   attributes?: {
-    transaction_journal_id?: string | number;
     transactions?: FireflySplit[];
   };
 }
@@ -108,9 +110,12 @@ export class FireflyClient {
       if (journals.length === 0) break;
       for (const journal of journals) {
         const attributes = journal.attributes;
-        const journalId = attributes?.transaction_journal_id;
         (attributes?.transactions ?? []).forEach((split, splitIndex) => {
-          const mapped = this.mapSplit(journalId, splitIndex, split);
+          const mapped = this.mapSplit(
+            split.transaction_journal_id ?? journal.id,
+            splitIndex,
+            split,
+          );
           if (mapped) out.push(mapped);
         });
       }
