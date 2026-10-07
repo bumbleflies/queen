@@ -58,7 +58,7 @@ The work was done task by task with a fresh implementer per task and a spec-plus
 
 ## Deployment results
 
-- Merged to `master` (`67f8cc4`). It ships with the next release-please release after `queen-v0.9.0`.
+- Merged to `master` (`67f8cc4`). Released in `queen-v0.10.0`.
 - Not yet deployed to servyy-test at the time of writing.
 
 ## Verification commands

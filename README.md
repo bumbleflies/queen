@@ -9,7 +9,7 @@ Finance and operations app for bumbleflies. It covers:
 
 queen replaces the "Debitoren und Ausgangsrechnungen" Google Sheet. It is meant to become the invoicing backend for [leagues.finance](https://github.com/bumbleflies/leagues.finance).
 
-**Status:** the first version runs on servyy-test; production is still gated (latest release `queen-v0.9.0`, see [CHANGELOG](CHANGELOG.md)). Accounting phase 1, the ledger, is merged. Expenses, USt-VA and Jahresabschluss come next ([spec](docs/plans/2026-10-07-accounting.md)).
+**Status:** the first version runs on servyy-test; production is still gated (latest release `queen-v0.10.0`, see [CHANGELOG](CHANGELOG.md)). Accounting phase 1, the ledger, shipped in 0.10.0. Expenses, USt-VA and Jahresabschluss come next ([spec](docs/plans/2026-10-07-accounting.md)).
 
 ## Features
 

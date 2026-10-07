@@ -19,4 +19,4 @@ The plans in `docs/plans/` say what was intended. These logs say what actually s
 | Date | Log | Release |
 |------|-----|---------|
 | 2026-10-06 | [First version: invoicing, Drive filing, bank reconcile](2026-10-06_queen-v1-invoicing-reconcile.md) | `queen-v0.2.0` – `0.9.0` |
-| 2026-10-07 | [Accounting phase 1: ledger foundation](2026-10-07_accounting-ledger-phase1.md) | next release after `0.9.0` |
+| 2026-10-07 | [Accounting phase 1: ledger foundation](2026-10-07_accounting-ledger-phase1.md) | `queen-v0.10.0` |

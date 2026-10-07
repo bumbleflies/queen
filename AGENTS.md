@@ -2,7 +2,7 @@
 
 Finance & ops app for bumbleflies: clients, invoices, credit notes, Drive filing, GLS/Firefly III auto-reconcile, and a double-entry SKR04 ledger.
 
-**Status:** the first version is live on servyy-test (releases `queen-v0.2.0`–`0.9.0`). Production is gated, and accounting phase 1 (the ledger) is merged.
+**Status:** the first version is live on servyy-test (releases `queen-v0.2.0`–`0.10.0`). Production is gated. Accounting phase 1 (the ledger) shipped in `queen-v0.10.0`.
 
 **Where to read:**
 - [`CONTRIBUTING.md`](CONTRIBUTING.md): how to work (commands, checks, branching, releases).
