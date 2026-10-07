@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.0](https://github.com/bumbleflies/queen/compare/queen-v0.7.0...queen-v0.8.0) (2026-10-07)
+
+
+### Features
+
+* add Open Graph share card and favicon ([7b9bea3](https://github.com/bumbleflies/queen/commit/7b9bea3ca9a97ed53529622d5519f6c63ab31da4))
+* Open Graph share card and favicon ([589ac82](https://github.com/bumbleflies/queen/commit/589ac82a23cd8d2e725ba81d37673636615d0e99))
+
 ## [0.7.0](https://github.com/bumbleflies/queen/compare/queen-v0.6.1...queen-v0.7.0) (2026-10-07)
 
 
