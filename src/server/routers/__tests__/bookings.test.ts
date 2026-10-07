@@ -151,7 +151,7 @@ describe('bookings', () => {
     const invoice = await sentInvoice(caller);
     const payment = await tx({ direction: 'in', amountCents: invoice.totals.grossCents, description: 'Lizenz' });
     await caller.bank.assign({ bankTxId: String(payment._id), invoiceId: String(invoice._id) });
-    await caller.bookings.book({ bankTxId: String(expense._id), account: '6837', vatRate: 0.19, mode: 'normal' });
+    await caller.bookings.book({ bankTxId: String(expense._id), account: '6837', vatRate: 0, mode: 'normal' });
 
     const rows = (await caller.bookings.stream({ year: 2026 })) as unknown as {
       id: string;
