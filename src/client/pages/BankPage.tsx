@@ -3,9 +3,8 @@ import { Link } from 'react-router-dom';
 import { trpc } from '../lib/trpc';
 import { useToast } from '../components/Toast';
 import { formatDate, formatDateTime, formatEUR } from '../lib/format';
-import { parseReference } from '../lib/reference';
+import { suggestionsFor } from '../lib/suggestions';
 import { useLanguage } from '../i18n/LanguageContext';
-import type { Lang } from '../i18n/LanguageContext';
 
 interface BankTx {
   _id: unknown;
@@ -30,10 +29,21 @@ interface OpenItem {
   dueDate?: string | Date | null;
 }
 
+interface ClientRow {
+  _id: unknown;
+  name: string;
+}
+
 interface InvoiceSummary {
   _id: unknown;
   invoiceNumber: string;
+  kind: string;
   status: string;
+  customerNumber: number;
+  clientId: unknown;
+  totals: { grossCents: number };
+  payments: { amountCents: number }[];
+  dueDate?: string | Date | null;
 }
 
 interface ReconcileRunRow {
@@ -45,99 +55,13 @@ interface ReconcileRunRow {
   error?: string | null;
 }
 
-interface Suggestion {
-  id: string;
-  invoiceNumber: string;
-  clientName: string;
-  openCents: number;
-  why: string;
-  exact: boolean;
-}
-
-function normalize(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9äöüß]/g, '');
-}
-
-const BANK_TEXT: Record<Lang, {
-  noRef: string;
-  mismatch: (customerNumber: number | null, invoiceNumber: string, actual: number) => string;
-  recognized: string;
-  whyRef: string;
-  whyExact: string;
-  whyPayer: string;
-}> = {
-  de: {
-    noRef: 'Kein Verwendungszweck im Format Kundennr-Rechnungsnr erkannt.',
-    mismatch: (customerNumber, invoiceNumber, actual) =>
-      `Kundennummer ${customerNumber} passt nicht zu Rechnung ${invoiceNumber} (Kunde ${actual}).`,
-    recognized: 'Verwendungszweck erkannt, Betrag/Nummer prüfen.',
-    whyRef: 'Rechnungsnr. passt',
-    whyExact: 'Betrag exakt',
-    whyPayer: 'Auftraggeber ≈ Kunde',
-  },
-  en: {
-    noRef: 'No reference in customerNo-invoiceNo format found.',
-    mismatch: (customerNumber, invoiceNumber, actual) =>
-      `Customer number ${customerNumber} does not match invoice ${invoiceNumber} (customer ${actual}).`,
-    recognized: 'Reference recognized, check amount/number.',
-    whyRef: 'Invoice no. matches',
-    whyExact: 'Exact amount',
-    whyPayer: 'Payer ≈ customer',
-  },
-};
-
-function suggestionsFor(tx: BankTx, openItems: OpenItem[], lang: Lang = 'de'): { reason: string; suggestions: Suggestion[] } {
-  const txt = BANK_TEXT[lang];
-  const parsed = parseReference(tx.description);
-  const out: Suggestion[] = [];
-  let reason = txt.noRef;
-
-  if (parsed) {
-    const candidate = openItems.find((i) => i.invoiceNumber === parsed.invoiceNumber);
-    if (candidate && parsed.customerNumber !== null && parsed.customerNumber !== candidate.customerNumber) {
-      reason = txt.mismatch(parsed.customerNumber, parsed.invoiceNumber, candidate.customerNumber);
-    } else if (candidate) {
-      reason = txt.recognized;
-    }
-  }
-
-  for (const item of openItems) {
-    const whys: string[] = [];
-    let exact = false;
-    if (parsed && parsed.invoiceNumber === item.invoiceNumber) whys.push(txt.whyRef);
-    if (item.openCents === tx.amountCents) {
-      whys.push(txt.whyExact);
-      exact = true;
-    }
-    if (
-      tx.counterpartyName &&
-      normalize(item.clientName).length > 0 &&
-      normalize(tx.counterpartyName).includes(normalize(item.clientName))
-    ) {
-      whys.push(txt.whyPayer);
-    }
-    if (whys.length > 0) {
-      out.push({
-        id: item.id,
-        invoiceNumber: item.invoiceNumber,
-        clientName: item.clientName,
-        openCents: item.openCents,
-        why: whys.join(' · '),
-        exact,
-      });
-    }
-  }
-
-  out.sort((a, b) => Number(b.exact) - Number(a.exact));
-  return { reason, suggestions: out };
-}
-
 export function BankPage() {
   const toast = useToast();
   const utils = trpc.useUtils();
   const bank = trpc.bank.list.useQuery();
   const openItemsQuery = trpc.reports.openItems.useQuery();
   const invoices = trpc.invoices.list.useQuery();
+  const clients = trpc.clients.list.useQuery();
   const reconcile = trpc.reconcile.status.useQuery();
   const assign = trpc.bank.assign.useMutation();
   const unassign = trpc.bank.unassign.useMutation();
@@ -152,6 +76,31 @@ export function BankPage() {
 
   const txs = (bank.data ?? []) as unknown as BankTx[];
   const openItems = (openItemsQuery.data?.items ?? []) as unknown as OpenItem[];
+  // Paid-but-unpaid invoices (e.g. imported as paid without a payment
+  // transaction) still await their bank transaction: suggest them too.
+  const awaitablePaid = useMemo(() => {
+    const openIds = new Set(openItems.map((i) => i.id));
+    const names = new Map(
+      ((clients.data ?? []) as unknown as ClientRow[]).map((c) => [String(c._id), c.name]),
+    );
+    return ((invoices.data ?? []) as unknown as InvoiceSummary[])
+      .filter(
+        (inv) =>
+          inv.status === 'paid' &&
+          inv.kind !== 'credit_note' &&
+          (inv.payments ?? []).length === 0 &&
+          !openIds.has(String(inv._id)),
+      )
+      .map((inv) => ({
+        id: String(inv._id),
+        invoiceNumber: inv.invoiceNumber,
+        customerNumber: inv.customerNumber,
+        clientName: names.get(String(inv.clientId)) ?? '',
+        openCents: inv.totals.grossCents,
+        dueDate: inv.dueDate,
+      }));
+  }, [invoices.data, clients.data, openItems]);
+  const candidates = useMemo(() => [...openItems, ...awaitablePaid], [openItems, awaitablePaid]);
   const invoiceById = useMemo(() => {
     const map = new Map<string, InvoiceSummary>();
     for (const inv of (invoices.data ?? []) as unknown as InvoiceSummary[]) {
@@ -329,7 +278,7 @@ export function BankPage() {
       {tab === 'open' ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {openTxs.map((tx) => {
-            const { reason, suggestions } = suggestionsFor(tx, openItems, lang);
+            const { reason, suggestions } = suggestionsFor(tx, candidates, lang);
             return (
               <article className="card" key={String(tx._id)} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>

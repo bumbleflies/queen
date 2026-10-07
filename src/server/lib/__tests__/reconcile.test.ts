@@ -41,6 +41,22 @@ describe('parseReference', () => {
     expect(parseReference('Zahlung 20260829-01')).toEqual({ invoiceNumber: '20260829-01' });
   });
 
+  it('parses labeled RNR/KD references in either order', () => {
+    expect(
+      parseReference('RNR 20260901-01 KD 10015 Datum 01.09.2026 Kto. 80691 EREF: 4625376385-0000014'),
+    ).toEqual({ customerNumber: 10015, invoiceNumber: '20260901-01' });
+    expect(parseReference('KD 10015, RNR 20260901-01')).toEqual({
+      customerNumber: 10015,
+      invoiceNumber: '20260901-01',
+    });
+  });
+
+  it('parses RNR without a customer label as a bare invoice number', () => {
+    expect(parseReference('RNR 20260901-01 EREF: 4625376385-0000014')).toEqual({
+      invoiceNumber: '20260901-01',
+    });
+  });
+
   it('returns null when no reference is present', () => {
     expect(parseReference('Gebühr Kontoführung')).toBeNull();
     expect(parseReference('')).toBeNull();
