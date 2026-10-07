@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.0](https://github.com/bumbleflies/queen/compare/queen-v0.6.1...queen-v0.7.0) (2026-10-07)
+
+
+### Features
+
+* **ui:** redesign dashboard with top bar shell and mobile-first layout ([414c422](https://github.com/bumbleflies/queen/commit/414c42205f4fe04134b6d701f73ce777dcb22e51))
+* **ui:** redesign dashboard with top bar shell and mobile-first layout ([5834508](https://github.com/bumbleflies/queen/commit/5834508e6c482803e235676bbb937791b84d1a1e))
+
 ## [0.6.1](https://github.com/bumbleflies/queen/compare/queen-v0.6.0...queen-v0.6.1) (2026-10-07)
 
 
