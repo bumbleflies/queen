@@ -13,18 +13,21 @@ export class FireflyError extends Error {
   }
 }
 
-/** A bank deposit mapped from one Firefly III transaction split. */
+export type TransactionDirection = 'in' | 'out';
+
+/** A bank transaction (deposit or withdrawal) mapped from one Firefly III split. */
 export interface FireflyTransaction {
   /** Stable idempotency key: `<transaction_journal_id>:<splitIndex>`. */
   fireflyJournalId: string;
   date: Date;
-  /** Positive integer cents for the deposit. */
+  /** Positive integer cents, regardless of direction. */
   amountCents: number;
   currency: string;
   description: string;
-  destinationIban?: string;
-  sourceIban?: string;
-  sourceName?: string;
+  direction: TransactionDirection;
+  /** The other party: the source for `in`, the destination for `out`. */
+  counterpartyName?: string;
+  counterpartyIban?: string;
 }
 
 export interface FireflyClientOptions {
@@ -35,6 +38,7 @@ export interface FireflyClientOptions {
 }
 
 interface FireflySplit {
+  type?: string;
   date?: string;
   amount?: string;
   currency_code?: string;
@@ -52,7 +56,7 @@ interface FireflyJournal {
   };
 }
 
-interface FireflyDepositsResponse {
+interface FireflyTransactionsResponse {
   data?: FireflyJournal[];
   meta?: { pagination?: { total_pages?: number; current_page?: number } };
 }
@@ -67,7 +71,7 @@ function formatDate(d: Date): string {
 }
 
 /**
- * Minimal Firefly III API v1 client for reading GLS deposits. Paginates
+ * Minimal Firefly III API v1 client for reading GLS transactions (deposits and withdrawals). Paginates
  * `GET /api/v1/accounts/{glsAccountId}/transactions` using the response's
  * `meta.pagination.total_pages`. Dates are inclusive; amounts become integer
  * cents. The `fetchImpl` is injectable so tests never touch the network.
@@ -88,50 +92,60 @@ export class FireflyClient {
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
-  async fetchDeposits(start: Date, end: Date): Promise<FireflyTransaction[]> {
+  /** All GLS transactions in [start, end]; transfers and other types are skipped. */
+  async fetchTransactions(start: Date, end: Date): Promise<FireflyTransaction[]> {
     const out: FireflyTransaction[] = [];
     let page = 1;
     let totalPages = 1;
-
     do {
       const url =
         `${this.baseUrl}/api/v1/accounts/${this.glsAccountId}/transactions` +
-        `?type=deposit&start=${formatDate(start)}&end=${formatDate(end)}` +
+        `?type=all&start=${formatDate(start)}&end=${formatDate(end)}` +
         `&limit=${PAGE_LIMIT}&page=${page}`;
-
-      const body = await this.getJson<FireflyDepositsResponse>(url);
+      const body = await this.getJson<FireflyTransactionsResponse>(url);
       totalPages = body.meta?.pagination?.total_pages ?? 1;
       const journals = body.data ?? [];
       if (journals.length === 0) break;
-
       for (const journal of journals) {
         const attributes = journal.attributes;
         const journalId = attributes?.transaction_journal_id;
-        const splits = attributes?.transactions ?? [];
-        splits.forEach((split, splitIndex) => {
-          out.push(this.mapSplit(journalId, splitIndex, split));
+        (attributes?.transactions ?? []).forEach((split, splitIndex) => {
+          const mapped = this.mapSplit(journalId, splitIndex, split);
+          if (mapped) out.push(mapped);
         });
       }
       page += 1;
     } while (page <= totalPages);
-
     return out;
+  }
+
+  /** Account balance at the end of the LOCAL business date `date`, in cents. */
+  async fetchBalance(date: Date): Promise<number> {
+    // Local date components: `date` is a German business date (e.g. new Date(year, 11, 31));
+    // formatDate() uses UTC and would shift local midnight to the previous day.
+    const day = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    const body = await this.getJson<{ data?: { attributes?: { current_balance?: string } } }>(
+      `${this.baseUrl}/api/v1/accounts/${this.glsAccountId}?date=${day}`,
+    );
+    return fireflyAmountToCents(body.data?.attributes?.current_balance ?? '0');
   }
 
   private mapSplit(
     journalId: string | number | undefined,
     splitIndex: number,
     split: FireflySplit,
-  ): FireflyTransaction {
+  ): FireflyTransaction | null {
+    const direction = split.type === 'deposit' ? 'in' : split.type === 'withdrawal' ? 'out' : null;
+    if (!direction) return null;
     return {
       fireflyJournalId: `${journalId ?? 'unknown'}:${splitIndex}`,
       date: split.date ? new Date(split.date) : new Date(0),
       amountCents: Math.abs(fireflyAmountToCents(split.amount ?? '0')),
       currency: split.currency_code ?? 'EUR',
       description: split.description ?? '',
-      destinationIban: split.destination_iban,
-      sourceIban: split.source_iban,
-      sourceName: split.source_name,
+      direction,
+      counterpartyName: direction === 'in' ? split.source_name : split.destination_name,
+      counterpartyIban: direction === 'in' ? split.source_iban : split.destination_iban,
     };
   }
 

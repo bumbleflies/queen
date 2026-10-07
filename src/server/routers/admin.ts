@@ -1,14 +1,13 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { google } from 'googleapis';
 import { router, adminProcedure } from '../trpcInit';
 import { buildImportPlan } from '../lib/sheetImport';
 import { applySheetImport, type DriveFileRef } from '../lib/applySheetImport';
-import { getGoogleAccessTokenForUser } from '../services/AuthService';
-import { createOAuth2Client } from '../services/DriveService';
 import { createInvoicePdfFinder, type DriveListLike } from '../services/driveLookup';
 import { Invoice } from '../models/Invoice';
 import { backfillLedger } from '../lib/accounting/backfill';
+import { parseCreditorsCsv, applyCreditorImport } from '../lib/accounting/creditorImport';
+import { driveForUser } from '../services/driveForUser';
 
 const linkDriveFilesSchema = z.object({
   links: z
@@ -36,14 +35,20 @@ async function driveResolver(
   userId: string,
   folderId: string,
 ): Promise<(fileName: string) => Promise<DriveFileRef | null>> {
-  const { accessToken, refreshToken } = await getGoogleAccessTokenForUser(userId);
-  const auth = createOAuth2Client(refreshToken);
-  auth.setCredentials({ refresh_token: refreshToken, access_token: accessToken });
-  const drive = google.drive({ version: 'v3', auth });
-  return createInvoicePdfFinder(drive as unknown as DriveListLike, folderId);
+  return createInvoicePdfFinder((await driveForUser(userId)) as unknown as DriveListLike, folderId);
 }
 
 export const adminRouter = router({
+  /** One-off import of the Sheet's creditor list (CSV export). Dry run by default; errors → nothing written. */
+  importCreditors: adminProcedure
+    .input(z.object({ csv: z.string().min(1), dryRun: z.boolean().default(true) }))
+    .mutation(async ({ input }) => {
+      const { rows, errors } = parseCreditorsCsv(input.csv);
+      if (errors.length > 0) return { rows: rows.length, created: 0, existing: 0, errors };
+      const res = await applyCreditorImport(rows, input.dryRun);
+      return { rows: rows.length, ...res, errors };
+    }),
+
   /** Post invoice/payment entries the hooks missed. Dry run by default. */
   ledgerBackfill: adminProcedure
     .input(z.object({ year: z.number().int().min(2000).max(2100), dryRun: z.boolean().default(true) }))

@@ -22,24 +22,27 @@ export interface SyncWindowArgs {
   lastRunFinishedAt?: Date | null;
   bankStart: Date;
   now: Date;
+  /** Ignore earlier runs and re-sync everything from `bankStart`. */
+  full?: boolean;
 }
 
 /**
  * Inclusive sync window: first run covers `[bankStart, now]`; later runs look
  * back 7 days from the last successful finish to catch late bank bookings.
  */
-export function computeSyncWindow({ lastRunFinishedAt, bankStart, now }: SyncWindowArgs): {
+export function computeSyncWindow({ lastRunFinishedAt, bankStart, now, full }: SyncWindowArgs): {
   from: Date;
   to: Date;
 } {
-  const from = lastRunFinishedAt
-    ? new Date(lastRunFinishedAt.getTime() - LOOKBACK_DAYS * MS_PER_DAY)
-    : bankStart;
+  const from =
+    full || !lastRunFinishedAt
+      ? bankStart
+      : new Date(lastRunFinishedAt.getTime() - LOOKBACK_DAYS * MS_PER_DAY);
   return { from, to: now };
 }
 
 export interface SyncBankTransactionsArgs {
-  client: { fetchDeposits(start: Date, end: Date): Promise<FireflyTransaction[]> };
+  client: { fetchTransactions(start: Date, end: Date): Promise<FireflyTransaction[]> };
   from: Date;
   to: Date;
   now?: Date;
@@ -47,7 +50,7 @@ export interface SyncBankTransactionsArgs {
 }
 
 /**
- * Fetch deposits for the window and upsert them by `fireflyJournalId`.
+ * Fetch transactions for the window and upsert them by `fireflyJournalId`.
  * Idempotent: the unique-key upsert means re-syncing never duplicates rows.
  * Returns the counts; matching invoices is Task 7's concern.
  */
@@ -58,7 +61,7 @@ export async function syncBankTransactions({
   now = new Date(),
   model = defaultModel,
 }: SyncBankTransactionsArgs): Promise<{ fetched: number; upserted: number }> {
-  const transactions = await client.fetchDeposits(from, to);
+  const transactions = await client.fetchTransactions(from, to);
 
   let upserted = 0;
   for (const tx of transactions) {
@@ -70,8 +73,9 @@ export async function syncBankTransactions({
           amountCents: tx.amountCents,
           currency: tx.currency,
           description: tx.description,
-          counterpartyName: tx.sourceName,
-          counterpartyIban: tx.sourceIban,
+          direction: tx.direction,
+          counterpartyName: tx.counterpartyName,
+          counterpartyIban: tx.counterpartyIban,
         },
         $setOnInsert: {
           fireflyJournalId: tx.fireflyJournalId,

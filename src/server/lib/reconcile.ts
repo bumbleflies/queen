@@ -202,6 +202,9 @@ async function applyPayment(
 export async function reconcileBankTransaction(
   bankTx: HydratedDocument<BankTransactionDoc>,
 ): Promise<ReconcileOutcome> {
+  if (bankTx.direction === 'out') {
+    return { outcome: 'unmatched', reason: 'withdrawal' };
+  }
   if (isAlreadyProcessed(bankTx)) {
     return { outcome: 'unmatched', reason: 'already processed' };
   }
@@ -247,6 +250,9 @@ export async function assignBankTransactionToInvoice(
   invoiceId: string | Types.ObjectId,
   createdBy?: string,
 ): Promise<ReconcileOutcome> {
+  if (bankTx.direction === 'out') {
+    return { outcome: 'unmatched', reason: 'withdrawal' };
+  }
   if (isAlreadyProcessed(bankTx)) {
     return { outcome: 'unmatched', reason: 'already processed' };
   }
@@ -295,6 +301,7 @@ export async function reconcilePendingTransactions(): Promise<ReconcileCounts> {
   const transactions = await BankTransaction.find({
     matchedInvoiceId: null,
     ignored: { $ne: true },
+    direction: { $ne: 'out' },
   });
 
   const counts: ReconcileCounts = { matched: 0, partial: 0, unmatched: 0 };

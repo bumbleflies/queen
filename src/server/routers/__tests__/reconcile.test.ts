@@ -74,6 +74,19 @@ async function makeTx(overrides: Record<string, unknown> = {}) {
 }
 
 describe('reconcile (DB)', () => {
+  it('never matches a withdrawal even with a valid Verwendungszweck', async (ctx) => {
+    skipIfNoDb(ctx);
+    const invoice = await makeInvoice();
+    const tx = await makeTx({ direction: 'out' });
+
+    await reconcilePendingTransactions();
+    expect((await reconcileBankTransaction(tx)).outcome).toBe('unmatched');
+
+    const after = await BankTransaction.findById(tx._id);
+    expect(after!.matchedInvoiceId).toBeFalsy();
+    expect((await Invoice.findById(invoice._id))!.status).toBe('sent');
+  });
+
   it('exact payment marks the invoice paid and links the transaction', async (ctx) => {
     skipIfNoDb(ctx);
     const invoice = await makeInvoice();

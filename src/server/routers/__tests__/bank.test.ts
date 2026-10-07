@@ -68,16 +68,17 @@ async function createSentInvoice(caller: ReturnType<typeof adminCaller>): Promis
 describe('buildBankListFilter (pure)', () => {
   it('unmatchedOnly = not matched and not ignored', () => {
     expect(buildBankListFilter({ unmatchedOnly: true })).toEqual({
+      direction: { $ne: 'out' },
       matchedInvoiceId: null,
       ignored: { $ne: true },
     });
   });
   it('filters ignored true/false explicitly', () => {
-    expect(buildBankListFilter({ ignored: true })).toEqual({ ignored: true });
-    expect(buildBankListFilter({ ignored: false })).toEqual({ ignored: { $ne: true } });
+    expect(buildBankListFilter({ ignored: true })).toEqual({ direction: { $ne: 'out' }, ignored: true });
+    expect(buildBankListFilter({ ignored: false })).toEqual({ direction: { $ne: 'out' }, ignored: { $ne: true } });
   });
-  it('defaults to no filter', () => {
-    expect(buildBankListFilter()).toEqual({});
+  it('always filters direction != out (legacy rows without direction count as incoming)', () => {
+    expect(buildBankListFilter()).toEqual({ direction: { $ne: 'out' } });
   });
 });
 

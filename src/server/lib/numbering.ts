@@ -52,3 +52,27 @@ export async function allocateCustomerNumber(
     .lean();
   return doc?.seq ?? 1;
 }
+
+const SUPPLIER_FLOOR = 69999; // first allocated Kreditor number is 70000
+
+/** Raise the supplier counter so the next allocation is above `atLeast`. */
+export async function raiseSupplierCounter(atLeast: number): Promise<void> {
+  await Counter.updateOne(
+    { _id: 'supplier' },
+    { $max: { seq: Math.max(atLeast, SUPPLIER_FLOOR) } },
+    { upsert: true },
+  );
+}
+
+/** Next Kreditor number (70000–99999), atomic. */
+export async function allocateSupplierNumber(): Promise<number> {
+  await raiseSupplierCounter(SUPPLIER_FLOOR);
+  const doc = await Counter.findOneAndUpdate(
+    { _id: 'supplier' },
+    { $inc: { seq: 1 } },
+    { upsert: true, returnDocument: 'after' },
+  ).lean();
+  const seq = doc?.seq ?? SUPPLIER_FLOOR + 1;
+  if (seq > 99999) throw new Error('Kreditornummern erschöpft (max. 99999)');
+  return seq;
+}

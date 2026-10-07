@@ -6,8 +6,8 @@ import { computeSyncWindow, syncBankTransactions } from '../lib/bankSync';
 import { isCliEntrypoint, reconcilePendingTransactions } from '../lib/reconcile';
 import { findLastSuccessfulRun, readFireflyEnv } from '../lib/fireflyEnv';
 
-export interface DepositSource {
-  fetchDeposits(start: Date, end: Date): Promise<FireflyTransaction[]>;
+export interface TransactionSource {
+  fetchTransactions(start: Date, end: Date): Promise<FireflyTransaction[]>;
 }
 
 export interface RunReconcileOptions {
@@ -15,12 +15,12 @@ export interface RunReconcileOptions {
   /** Skip the Firefly sync and only (re)match what is already in Mongo. */
   skipSync?: boolean;
   /** Inject a Firefly client (tests); otherwise built from env. */
-  client?: DepositSource;
+  client?: TransactionSource;
   bankStart?: Date;
 }
 
 /**
- * One reconcile pass: sync GLS deposits into `BankTransaction` (idempotent),
+ * One reconcile pass: sync GLS transactions into `BankTransaction` (idempotent),
  * then match every fresh transaction against invoices. Errors are recorded on
  * the `ReconcileRun` and returned; the CLI inspects `run.error` to exit non-zero.
  * Shared by the Ofelia cron entrypoint and `reconcile.runNow`.
