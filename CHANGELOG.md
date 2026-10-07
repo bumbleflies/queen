@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.12.1](https://github.com/bumbleflies/queen/compare/queen-v0.12.0...queen-v0.12.1) (2026-10-07)
+
+
+### Bug Fixes
+
+* **ci:** publish semver image tags from queen-v* releases ([b6185af](https://github.com/bumbleflies/queen/commit/b6185afa004d0e9763e81b2ec0aa22af32631c02))
+* **ci:** strip queen-v prefix so semver image tags publish ([31900f4](https://github.com/bumbleflies/queen/commit/31900f46dc0e6e27826a17a84b8054ebf6490c85))
+
 ## [0.12.0](https://github.com/bumbleflies/queen/compare/queen-v0.11.0...queen-v0.12.0) (2026-10-07)
 
 
