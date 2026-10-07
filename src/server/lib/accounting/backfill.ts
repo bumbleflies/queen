@@ -30,6 +30,17 @@ export async function backfillLedger(
 
   for (const invoice of issued) {
     const kind = invoice.kind === 'credit_note' ? 'credit_note' : 'invoice';
+    // Reported on every run, independent of whether the invoice entry is new.
+    if (invoice.importedPaid && invoice.status === 'paid' && kind === 'invoice') {
+      const refs = [`markPaid:${invoice._id}`, ...invoice.payments.map((p) => `bank:${p.bankTxId}`)];
+      const booked = await Promise.all(refs.map((r) => findActiveBySource('payment', r)));
+      if (!booked.some(Boolean)) {
+        report.skipped.push({
+          ref: invoice.invoiceNumber,
+          reason: 'imported as paid without payment date — book payment manually',
+        });
+      }
+    }
     if (await findActiveBySource(kind, String(invoice._id))) continue;
     // A credit note mirrors its original exactly; without `cancels` post its own (negative) lines.
     const negate = kind === 'credit_note' && !!invoice.cancels;
@@ -40,16 +51,6 @@ export async function backfillLedger(
       }
       if (kind === 'credit_note') report.creditNotes += 1;
       else report.invoices += 1;
-      if (invoice.importedPaid && invoice.status === 'paid' && kind === 'invoice') {
-        const refs = [`markPaid:${invoice._id}`, ...invoice.payments.map((p) => `bank:${p.bankTxId}`)];
-        const booked = await Promise.all(refs.map((r) => findActiveBySource('payment', r)));
-        if (!booked.some(Boolean)) {
-          report.skipped.push({
-            ref: invoice.invoiceNumber,
-            reason: 'imported as paid without payment date — book payment manually',
-          });
-        }
-      }
     } catch (err) {
       report.skipped.push({ ref: invoice.invoiceNumber, reason: (err as Error).message });
     }

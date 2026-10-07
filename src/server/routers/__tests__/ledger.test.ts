@@ -215,6 +215,10 @@ describe('admin.ledgerBackfill', () => {
         { ref: 'LEG-1', reason: expect.stringContaining('imported as paid') },
       ]);
       await expectBalanced(11900);
+
+      const again = await caller.admin.ledgerBackfill({ year: 2026, dryRun: false });
+      expect(again).toMatchObject({ invoices: 0, payments: 0 });
+      expect(again.skipped).toEqual(report.skipped);
     });
   });
 });
