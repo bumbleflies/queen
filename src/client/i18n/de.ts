@@ -372,6 +372,17 @@ export const de = {
   'ledger.err.amount': 'Betrag',
   'ledger.err.invalid': 'ungültig',
   'ledger.err.notPositive': 'Betrag muss positiv sein',
+  'ledger.backfill.title': 'Fehlende Buchungen nachtragen',
+  'ledger.backfill.sub': 'Bucht Rechnungs- und Zahlungsbuchungen nach, die den Hooks entgangen sind. Erst prüfen, dann einbuchen.',
+  'ledger.backfill.check': 'Prüfen',
+  'ledger.backfill.apply': 'Fehlende einbuchen',
+  'ledger.backfill.confirm': 'Fehlende Buchungen wirklich einbuchen?',
+  'ledger.backfill.invoices': 'Rechnungen',
+  'ledger.backfill.creditNotes': 'Stornorechnungen',
+  'ledger.backfill.payments': 'Zahlungen',
+  'ledger.backfill.skipped': 'Übersprungen — manuell prüfen',
+  'ledger.backfill.none': 'Nichts nachzutragen.',
+  'ledger.backfill.posted': 'Fehlende Buchungen eingebucht.',
 };
 
 export type Dict = typeof de;
