@@ -1,12 +1,13 @@
 import { Link } from 'react-router-dom';
 import { trpc } from '../lib/trpc';
+import { LanguageToggle } from '../components/LanguageToggle';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useTheme } from '../theme/ThemeContext';
 
 export function SettingsPage() {
   const me = trpc.me.useQuery();
   const user = me.data?.user;
-  const { lang, setLang, t } = useLanguage();
+  const { t } = useLanguage();
   const { theme, setTheme } = useTheme();
 
   return (
@@ -17,25 +18,8 @@ export function SettingsPage() {
 
       <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h2 style={{ margin: 0, fontSize: 18 }}>{t('settings.language')}</h2>
-        <div className="row" role="group" aria-label={t('settings.language')}>
-          <button
-            type="button"
-            className={`btn${lang === 'de' ? '' : ' ghost'}`}
-            aria-pressed={lang === 'de'}
-            title={t('settings.deName')}
-            onClick={() => setLang('de')}
-          >
-            DE
-          </button>
-          <button
-            type="button"
-            className={`btn${lang === 'en' ? '' : ' ghost'}`}
-            aria-pressed={lang === 'en'}
-            title={t('settings.enName')}
-            onClick={() => setLang('en')}
-          >
-            EN
-          </button>
+        <div className="row">
+          <LanguageToggle className="btn" />
         </div>
       </section>
 

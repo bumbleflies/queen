@@ -322,6 +322,7 @@ export const de = {
   'settings.csv': 'Rechnungen als CSV exportieren',
   'settings.deName': 'Deutsch',
   'settings.enName': 'Englisch',
+  'settings.switchTo': 'Wechseln zu {lang}',
   'settings.toggleTheme': 'Design umschalten',
   'settings.themeSystem': 'System',
   'settings.themeLight': 'Hell',

@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, vi } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { LanguageProvider, useLanguage } from '../i18n/LanguageContext';
 
@@ -24,6 +24,13 @@ import { LedgerPage } from '../pages/LedgerPage';
 
 beforeEach(() => {
   localStorage.clear();
+  Object.defineProperty(navigator, 'language', { value: 'de-DE', configurable: true });
+  Object.defineProperty(navigator, 'languages', { value: ['de-DE', 'de'], configurable: true });
+});
+
+afterEach(() => {
+  Reflect.deleteProperty(navigator, 'language');
+  Reflect.deleteProperty(navigator, 'languages');
 });
 
 function ToEn() {

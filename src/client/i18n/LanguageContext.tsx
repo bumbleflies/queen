@@ -10,7 +10,7 @@ const STORAGE_KEY = 'queen-lang';
 
 const dicts = { de, en } as const;
 
-function readInitialLang(): Lang {
+function readStoredLang(): Lang | null {
   try {
     if (typeof localStorage !== 'undefined') {
       const stored = localStorage.getItem(STORAGE_KEY);
@@ -19,7 +19,27 @@ function readInitialLang(): Lang {
   } catch {
     // ignore (SSR / test env without localStorage)
   }
+  return null;
+}
+
+function browserLang(): Lang {
+  try {
+    if (typeof navigator !== 'undefined') {
+      const candidates = [navigator.language, ...(Array.isArray(navigator.languages) ? navigator.languages : [])];
+      for (const candidate of candidates) {
+        const lower = candidate?.toLowerCase();
+        if (lower?.startsWith('de')) return 'de';
+        if (lower?.startsWith('en')) return 'en';
+      }
+    }
+  } catch {
+    // ignore environments without navigator
+  }
   return 'de';
+}
+
+function readInitialLang(): Lang {
+  return readStoredLang() ?? browserLang();
 }
 
 interface LanguageContextValue {

@@ -1,6 +1,7 @@
 import { Link, NavLink } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { Brand } from './Brand';
+import { LanguageToggle } from './LanguageToggle';
 import { trpc } from '../lib/trpc';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useTheme } from '../theme/ThemeContext';
@@ -74,7 +75,7 @@ const navClass = ({ isActive }: { isActive: boolean }) => (isActive ? 'on' : '')
 export function Navigation({ onLogout }: { onLogout?: () => void }) {
   const unmatched = trpc.bank.list.useQuery({ unmatchedOnly: true });
   const bankCount = unmatched.data?.length ?? 0;
-  const { lang, setLang, t } = useLanguage();
+  const { t } = useLanguage();
   const { setTheme, resolved } = useTheme();
 
   const badge = (item: NavItem) =>
@@ -83,19 +84,6 @@ export function Navigation({ onLogout }: { onLogout?: () => void }) {
         {bankCount}
       </span>
     ) : null;
-
-  const langBtn = (code: 'de' | 'en', label: string) => (
-    <button
-      key={code}
-      type="button"
-      className={`lang-btn${lang === code ? ' on' : ''}`}
-      aria-pressed={lang === code}
-      title={label}
-      onClick={() => setLang(code)}
-    >
-      {code.toUpperCase()}
-    </button>
-  );
 
   return (
     <>
@@ -151,10 +139,7 @@ export function Navigation({ onLogout }: { onLogout?: () => void }) {
                 </svg>
               )}
             </button>
-            <div className="lang-switch" role="group" aria-label={t('settings.language')}>
-              {langBtn('de', t('settings.deName'))}
-              {langBtn('en', t('settings.enName'))}
-            </div>
+            <LanguageToggle />
             <NavLink
               to="/settings"
               className={({ isActive }) => `topbar-icon${isActive ? ' on' : ''}`}
