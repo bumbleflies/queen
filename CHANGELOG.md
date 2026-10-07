@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.16.0](https://github.com/bumbleflies/queen/compare/queen-v0.15.2...queen-v0.16.0) (2026-10-07)
+
+
+### Features
+
+* **bookings:** unified incoming/outgoing Buchen page with booking dialog and bulk confirm ([d5c57eb](https://github.com/bumbleflies/queen/commit/d5c57eb4e467d0d9a36db9ee2a383aec4b22cce5))
+* **bookings:** unified incoming/outgoing Buchen page with booking dialog and bulk confirm ([64888c7](https://github.com/bumbleflies/queen/commit/64888c76a756648be1c80d5918b16a6c0a6294ce))
+
 ## [0.15.2](https://github.com/bumbleflies/queen/compare/queen-v0.15.1...queen-v0.15.2) (2026-10-07)
 
 
