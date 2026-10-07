@@ -153,6 +153,57 @@ describe('reverse', () => {
   });
 });
 
+describe('hardening', () => {
+  it('reverse() resumes after a half-failure', async (ctx) => {
+    skipIfNoDb(ctx);
+    const original = await post(draft());
+    const manual = await post(
+      draft({
+        source: { kind: 'reversal', refId: String(original._id) },
+        reverses: original._id,
+        lines: [
+          { account: '1800', debitCents: 0, creditCents: 1000 },
+          { account: '1200', debitCents: 1000, creditCents: 0 },
+        ],
+      }),
+    );
+    const res = await reverse(String(original._id), { reason: 'x', createdBy: 't' });
+    expect(String(res.reversal._id)).toBe(String(manual._id));
+    expect(await JournalEntry.countDocuments()).toBe(2);
+    const reloaded = await JournalEntry.findById(original._id);
+    expect(reloaded?.active).toBe(false);
+    expect(String(reloaded?.reversedBy)).toBe(String(manual._id));
+  });
+
+  it('cannot reactivate a reversed entry', async (ctx) => {
+    skipIfNoDb(ctx);
+    const original = await post(draft());
+    await reverse(String(original._id), { reason: 'x', createdBy: 't' });
+    const reloaded = await JournalEntry.findById(original._id);
+    reloaded!.active = true;
+    await expect(reloaded!.save()).rejects.toThrowError(/immutable/);
+  });
+
+  it('validates text/createdBy/refId before allocating a number', async (ctx) => {
+    skipIfNoDb(ctx);
+    await expect(post(draft({ text: '' }))).rejects.toMatchObject({ code: 'INVALID_ENTRY' });
+    await expect(post(draft({ createdBy: ' ' }))).rejects.toMatchObject({ code: 'INVALID_ENTRY' });
+    await expect(post(draft({ source: { kind: 'bank', refId: '' } }))).rejects.toMatchObject({
+      code: 'INVALID_ENTRY',
+    });
+    expect((await post(draft())).entryNumber).toBe('2026-00001');
+  });
+
+  it('concurrent postOnce on one source yields one active entry', async (ctx) => {
+    skipIfNoDb(ctx);
+    const source = { kind: 'bank' as const, refId: 'race:1' };
+    const [a, b] = await Promise.all([postOnce(draft({ source })), postOnce(draft({ source }))]);
+    expect(String(a.entry._id)).toBe(String(b.entry._id));
+    expect([a.created, b.created].filter(Boolean)).toHaveLength(1);
+    expect(await JournalEntry.countDocuments({ active: true })).toBe(1);
+  });
+});
+
 describe('immutability', () => {
   it('rejects edits and deletes of posted entries', async (ctx) => {
     skipIfNoDb(ctx);

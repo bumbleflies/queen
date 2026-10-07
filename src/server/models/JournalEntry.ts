@@ -61,6 +61,12 @@ journalEntrySchema.pre('save', function () {
   if (this.isNew) return;
   const changed = this.modifiedPaths().filter((p) => !MUTABLE_AFTER_POST.has(p));
   if (changed.length > 0) throw new Error(`${IMMUTABLE} (tried to change ${changed.join(', ')})`);
+  // The only legal transition is active -> inactive with reversedBy set.
+  if (this.isModified('active') || this.isModified('reversedBy')) {
+    if (this.active !== false || this.reversedBy == null) {
+      throw new Error(`${IMMUTABLE} (a reversed entry cannot be reactivated)`);
+    }
+  }
 });
 
 for (const op of [
