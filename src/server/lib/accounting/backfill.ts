@@ -12,8 +12,8 @@ export interface BackfillReport {
 
 /**
  * Post every invoice/credit-note/payment entry of `year` that is missing.
- * Idempotent. A payment for an invoice dated before the year needs an opening
- * Forderung the backfill cannot see → listed in `skipped` for manual booking.
+ * Idempotent. A payment for an invoice dated before the year needs the opening
+ * entry (Forderung) first → listed in `skipped` until `opening:<year>` exists.
  */
 export async function backfillLedger(
   year: number,
@@ -41,6 +41,16 @@ export async function backfillLedger(
         });
       }
     }
+    if (invoice.status === 'canceled' && kind === 'invoice') {
+      // Sheet cancellations carry no credit note: booking revenue would overstate it.
+      if (!(await Invoice.exists({ cancels: invoice._id }))) {
+        report.skipped.push({
+          ref: invoice.invoiceNumber,
+          reason: 'storniert ohne Stornorechnung — prüfen',
+        });
+        continue;
+      }
+    }
     if (await findActiveBySource(kind, String(invoice._id))) continue;
     // A credit note mirrors its original exactly; without `cancels` post its own (negative) lines.
     const negate = kind === 'credit_note' && !!invoice.cancels;
@@ -56,6 +66,7 @@ export async function backfillLedger(
     }
   }
 
+  const hasOpening = !!(await findActiveBySource('opening', `opening:${year}`));
   const inYear = { $gte: start, $lt: end };
   const paid = await Invoice.find({
     $or: [{ 'payments.date': inYear }, { status: 'paid', paidAt: inYear }],
@@ -86,10 +97,10 @@ export async function backfillLedger(
 
     for (const c of candidates) {
       if (await findActiveBySource('payment', c.refId)) continue;
-      if (!invoice.invoiceDate || invoice.invoiceDate < start) {
+      if ((!invoice.invoiceDate || invoice.invoiceDate < start) && !hasOpening) {
         report.skipped.push({
           ref: invoice.invoiceNumber,
-          reason: `invoice dated before ${year}: needs an opening Forderung — book manually`,
+          reason: `erst Eröffnungsbuchung erfassen (Rechnung vor ${year})`,
         });
         continue;
       }

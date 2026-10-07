@@ -1,6 +1,7 @@
 import type { HydratedDocument, Types } from 'mongoose';
 import { BankTransaction, type BankTransactionDoc } from '../models/BankTransaction';
 import { Invoice, type InvoiceDoc } from '../models/Invoice';
+import { findActiveBySource } from './accounting/ledger';
 import { postPaymentEntry, reversePaymentEntry, safeLedger } from './accounting/ledgerHooks';
 
 /**
@@ -141,7 +142,9 @@ async function applyPayment(
   bankTx: HydratedDocument<BankTransactionDoc>,
   decision: PaymentDecision,
   matchMethod: 'reference' | 'manual',
+  createdBy?: string,
 ): Promise<void> {
+  const actor = createdBy ?? (matchMethod === 'manual' ? 'admin' : 'reconcile');
   invoice.payments.push({
     bankTxId: bankTx.fireflyJournalId,
     amountCents: bankTx.amountCents,
@@ -160,15 +163,35 @@ async function applyPayment(
   bankTx.matchMethod = matchMethod;
   await bankTx.save();
 
-  await safeLedger(`payment ${bankTx.fireflyJournalId}`, () =>
-    postPaymentEntry({
+  await safeLedger(`payment ${bankTx.fireflyJournalId}`, async () => {
+    // A manual "mark paid" already booked the cash; the real bank payment replaces it.
+    const manual = await findActiveBySource('payment', `markPaid:${invoice._id}`);
+    if (manual) {
+      await reversePaymentEntry(
+        `markPaid:${invoice._id}`,
+        `Bankzahlung ${bankTx.fireflyJournalId} ersetzt manuelle Zahlung`,
+        actor,
+      );
+    }
+    await postPaymentEntry({
       refId: `bank:${bankTx.fireflyJournalId}`,
       date: bankTx.date,
       amountCents: bankTx.amountCents,
       text: `Zahlung ${invoice.invoiceNumber} · ${bankTx.counterpartyName ?? ''}`.trim(),
-      createdBy: matchMethod === 'manual' ? 'admin' : 'reconcile',
-    }),
-  );
+      createdBy: actor,
+    });
+    const openCents =
+      invoice.totals.grossCents - invoice.payments.reduce((sum, p) => sum + p.amountCents, 0);
+    if (manual && openCents > 0 && invoice.status === 'paid' && invoice.paidAt) {
+      await postPaymentEntry({
+        refId: `markPaid:${invoice._id}`,
+        date: invoice.paidAt,
+        amountCents: openCents,
+        text: `Zahlung ${invoice.invoiceNumber} (manuell)`,
+        createdBy: actor,
+      });
+    }
+  });
 }
 
 /**
@@ -222,6 +245,7 @@ export async function reconcileBankTransaction(
 export async function assignBankTransactionToInvoice(
   bankTx: HydratedDocument<BankTransactionDoc>,
   invoiceId: string | Types.ObjectId,
+  createdBy?: string,
 ): Promise<ReconcileOutcome> {
   if (isAlreadyProcessed(bankTx)) {
     return { outcome: 'unmatched', reason: 'already processed' };
@@ -256,7 +280,7 @@ export async function assignBankTransactionToInvoice(
     return { outcome: 'unmatched', reason: decision.reason };
   }
 
-  await applyPayment(invoice, bankTx, decision, 'manual');
+  await applyPayment(invoice, bankTx, decision, 'manual', createdBy);
   return { outcome: decision.action };
 }
 
@@ -291,6 +315,7 @@ export async function reconcilePendingTransactions(): Promise<ReconcileCounts> {
 export async function reversePayment(
   invoiceId: string | Types.ObjectId,
   bankTxId: string,
+  createdBy = 'admin',
 ): Promise<void> {
   const invoice = await Invoice.findById(invoiceId);
   if (!invoice) return;
@@ -313,12 +338,12 @@ export async function reversePayment(
   await invoice.save();
 
   await safeLedger(`unassign ${bankTxId}`, () =>
-    reversePaymentEntry(`bank:${bankTxId}`, 'Zahlung zurückgenommen', 'admin'),
+    reversePaymentEntry(`bank:${bankTxId}`, 'Zahlung zurückgenommen', createdBy),
   );
   if (revertedToSent) {
     // A manual "mark paid" remainder no longer stands once the invoice is open again.
     await safeLedger(`unassign markPaid ${invoice.invoiceNumber}`, () =>
-      reversePaymentEntry(`markPaid:${invoice._id}`, 'Zahlung zurückgenommen', 'admin'),
+      reversePaymentEntry(`markPaid:${invoice._id}`, 'Zahlung zurückgenommen', createdBy),
     );
   }
 }

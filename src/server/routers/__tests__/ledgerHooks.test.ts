@@ -73,6 +73,7 @@ describe('ledger hooks', () => {
 
     const payments = await JournalEntry.find({ 'source.kind': 'payment' });
     expect(payments).toHaveLength(2);
+    expect(payments.every((p) => p.createdBy === 'admin-id-1')).toBe(true);
     expect(payments.filter((p) => p.active)).toHaveLength(1);
     expect(await JournalEntry.countDocuments({ 'source.kind': 'reversal' })).toBe(1);
 
@@ -97,6 +98,30 @@ describe('ledger hooks', () => {
       debitCents: invoice.totals.grossCents,
       creditCents: 0,
     });
+  });
+
+  it('bank payment after manual markPaid replaces the markPaid entry instead of double-booking', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    const invoice = await sentInvoice(caller);
+    const id = invoice._id.toString();
+    await caller.invoices.markPaid({ id, paidAt: new Date(2026, 3, 2) });
+    const tx = await BankTransaction.create({
+      fireflyJournalId: '55:0',
+      date: new Date(2026, 3, 3),
+      amountCents: invoice.totals.grossCents,
+      description: 'Zahlung',
+    });
+    await caller.bank.assign({ bankTxId: tx._id.toString(), invoiceId: id });
+
+    const markPaid = await JournalEntry.find({
+      'source.kind': 'payment',
+      'source.refId': `markPaid:${id}`,
+    });
+    expect(markPaid.every((e) => !e.active)).toBe(true);
+    const tb = trialBalance(await JournalEntry.find({}));
+    expect(tb.rows.find((r) => r.account === '1800')?.balanceCents).toBe(invoice.totals.grossCents);
+    expect(tb.rows.find((r) => r.account === '1200')?.balanceCents ?? 0).toBe(0);
   });
 
   it('unassign of a partial bank payment also reverses the markPaid remainder', async (ctx) => {

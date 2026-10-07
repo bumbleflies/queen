@@ -40,7 +40,18 @@ describe('ledger router', () => {
     const caller = adminCaller();
     const entry = await caller.ledger.postManual(opening);
     expect(new Date(entry.date).getTime()).toBe(new Date(2026, 0, 1).getTime());
-    await expect(caller.ledger.postManual(opening)).rejects.toThrowError(/Already posted/);
+    await expect(caller.ledger.postManual(opening)).rejects.toThrowError(/existiert bereits/);
+  });
+
+  it('postManual opening uses the explicit year', async (ctx) => {
+    skipIfNoDb(ctx);
+    const entry = await adminCaller().ledger.postManual({
+      ...opening,
+      date: new Date(2026, 5, 1),
+      year: 2025,
+    });
+    expect(new Date(entry.date).getTime()).toBe(new Date(2025, 0, 1).getTime());
+    expect(entry.source.refId).toBe('opening:2025');
   });
 
   it('postManual rejects unbalanced input with BAD_REQUEST', async (ctx) => {
@@ -54,7 +65,10 @@ describe('ledger router', () => {
           { account: '2900', debitCents: 0, creditCents: 99 },
         ],
       }),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Soll und Haben sind nicht ausgeglichen',
+    });
   });
 
   it('trialBalance includes account names and balances to zero', async (ctx) => {
@@ -115,9 +129,7 @@ describe('admin.ledgerBackfill', () => {
     expect(tb.rows.find((r) => r.account === '1200')?.balanceCents).toBe(0);
   });
 
-  it('skips payments for invoices dated before the year instead of posting them', async (ctx) => {
-    skipIfNoDb(ctx);
-    const caller = adminCaller();
+  async function preYearPayment(caller: ReturnType<typeof adminCaller>) {
     const invoice = await sentInvoice(caller, new Date(2025, 11, 15));
     const tx = await BankTransaction.create({
       fireflyJournalId: '99:0',
@@ -127,12 +139,79 @@ describe('admin.ledgerBackfill', () => {
     });
     await caller.bank.assign({ bankTxId: tx._id.toString(), invoiceId: invoice._id.toString() });
     await JournalEntry.collection.deleteMany({});
+    return invoice;
+  }
+
+  it('skips pre-year payments until an opening entry exists', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    const invoice = await preYearPayment(caller);
 
     const report = await caller.admin.ledgerBackfill({ year: 2026, dryRun: false });
     expect(report.payments).toBe(0);
     expect(report.skipped).toEqual([
-      { ref: invoice.invoiceNumber, reason: expect.stringContaining('before 2026') },
+      {
+        ref: invoice.invoiceNumber,
+        reason: 'erst Eröffnungsbuchung erfassen (Rechnung vor 2026)',
+      },
     ]);
+  });
+
+  it('posts pre-year payments once an opening entry exists', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    const invoice = await preYearPayment(caller);
+    const gross = invoice.totals.grossCents;
+    await caller.ledger.postManual({
+      kind: 'opening',
+      date: new Date(2026, 0, 1),
+      text: 'Eröffnung',
+      lines: [
+        { account: '1200', debitCents: gross, creditCents: 0 },
+        { account: '2900', debitCents: 0, creditCents: gross },
+      ],
+    });
+
+    const report = await caller.admin.ledgerBackfill({ year: 2026, dryRun: false });
+    expect(report).toMatchObject({ payments: 1, skipped: [] });
+    const tb = trialBalance(await JournalEntry.find({}));
+    expect(tb.rows.find((r) => r.account === '1200')?.balanceCents).toBe(0);
+    expect(tb.rows.find((r) => r.account === '1800')?.balanceCents).toBe(gross);
+  });
+
+  it('does not book revenue for Sheet-canceled invoices without a credit note', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    const client = await caller.clients.create({ name: 'Storno GmbH', invoiceAddress: 'Str. 3' });
+    const invoice = await Invoice.create({
+      invoiceNumber: 'LEG-2',
+      legacy: true,
+      clientId: (client as any)._id,
+      customerNumber: (client as any).customerNumber,
+      invoiceAddress: 'Str. 3',
+      title: 'Storniert',
+      servicePeriod: '01.2026',
+      paymentTermDays: 14,
+      invoiceDate: new Date(2026, 0, 20),
+      status: 'canceled',
+      kind: 'invoice',
+      totals: { netCents: 10000, vatCents: 1900, grossCents: 11900 },
+    });
+    await InvoiceLine.create({
+      invoiceId: invoice._id,
+      position: '1',
+      description: 'Alt',
+      quantity: 1,
+      unitNetCents: 10000,
+      vatRate: 0.19,
+    });
+    const reason = 'storniert ohne Stornorechnung — prüfen';
+    for (let run = 0; run < 2; run += 1) {
+      const report = await caller.admin.ledgerBackfill({ year: 2026, dryRun: false });
+      expect(report).toMatchObject({ invoices: 0, creditNotes: 0, payments: 0 });
+      expect(report.skipped).toEqual([{ ref: 'LEG-2', reason }]);
+    }
+    expect(await JournalEntry.countDocuments()).toBe(0);
   });
 
   describe('scenarios', () => {
