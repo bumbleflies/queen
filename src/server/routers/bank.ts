@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { router, adminProcedure } from '../trpcInit';
+import { router, authedProcedure } from '../trpcInit';
 import { BankTransaction } from '../models/BankTransaction';
 import { Invoice } from '../models/Invoice';
 import { ReconcileRun } from '../models/ReconcileRun';
@@ -29,7 +29,7 @@ export function buildBankListFilter(input: BankListFilterInput = {}): Record<str
 }
 
 export const bankRouter = router({
-  list: adminProcedure
+  list: authedProcedure
     .input(
       z
         .object({
@@ -40,7 +40,7 @@ export const bankRouter = router({
     )
     .query(async ({ input }) => BankTransaction.find(buildBankListFilter(input)).sort({ date: -1 })),
 
-  assign: adminProcedure
+  assign: authedProcedure
     .input(z.object({ bankTxId: z.string().min(1), invoiceId: z.string().min(1) }))
     .mutation(async ({ input, ctx }) => {
       const tx = await BankTransaction.findById(input.bankTxId);
@@ -65,7 +65,7 @@ export const bankRouter = router({
       return assignBankTransactionToInvoice(tx, invoice._id, ctx.user.sub);
     }),
 
-  unassign: adminProcedure
+  unassign: authedProcedure
     .input(z.object({ bankTxId: z.string().min(1) }))
     .mutation(async ({ input, ctx }) => {
       const tx = await BankTransaction.findById(input.bankTxId);
@@ -81,7 +81,7 @@ export const bankRouter = router({
       return updated!;
     }),
 
-  ignore: adminProcedure
+  ignore: authedProcedure
     .input(z.object({ bankTxId: z.string().min(1) }))
     .mutation(async ({ input }) => {
       const tx = await BankTransaction.findByIdAndUpdate(
@@ -93,7 +93,7 @@ export const bankRouter = router({
       return tx;
     }),
 
-  unignore: adminProcedure
+  unignore: authedProcedure
     .input(z.object({ bankTxId: z.string().min(1) }))
     .mutation(async ({ input }) => {
       const tx = await BankTransaction.findByIdAndUpdate(
@@ -110,7 +110,7 @@ export const bankRouter = router({
    * upsert them. Errors are recorded on the ReconcileRun and returned as
    * `{ ok: false }` — never thrown into the CRUD path. Matching is Task 7.
    */
-  syncNow: adminProcedure
+  syncNow: authedProcedure
     .input(z.object({ full: z.boolean().optional() }).optional())
     .mutation(async ({ input }) => {
       const run = await ReconcileRun.create({ startedAt: new Date() });

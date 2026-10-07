@@ -1,4 +1,4 @@
-import { router, adminProcedure } from '../trpcInit';
+import { router, authedProcedure } from '../trpcInit';
 import { Invoice } from '../models/Invoice';
 import { Client } from '../models/Client';
 
@@ -19,7 +19,7 @@ function paidCents(payments: { amountCents: number }[] | undefined): number {
  */
 export const reportsRouter = router({
   /** Sent invoices with their computed overdue flag and open amount. */
-  openItems: adminProcedure.query(async () => {
+  openItems: authedProcedure.query(async () => {
     const [invoices, clients] = await Promise.all([
       Invoice.find({ status: 'sent' }),
       Client.find({}).select('customerNumber name'),
@@ -76,7 +76,7 @@ export const reportsRouter = router({
   }),
 
   /** Gross sums of paid invoices grouped by year of payment (`paidAt`). */
-  revenueByYear: adminProcedure.query(async () => {
+  revenueByYear: authedProcedure.query(async () => {
     const paid = await Invoice.find({ status: 'paid', paidAt: { $ne: null } });
     const byYear = new Map<number, number>();
     for (const inv of paid) {
@@ -90,7 +90,7 @@ export const reportsRouter = router({
   }),
 
   /** Gross sums of paid invoices grouped by client. */
-  revenueByClient: adminProcedure.query(async () => {
+  revenueByClient: authedProcedure.query(async () => {
     const [paid, clients] = await Promise.all([
       Invoice.find({ status: 'paid' }),
       Client.find({}).select('customerNumber name'),

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { router, adminProcedure } from '../trpcInit';
+import { router, authedProcedure } from '../trpcInit';
 import { BankTransaction } from '../models/BankTransaction';
 import { Supplier } from '../models/Supplier';
 import { rankReceipts } from '../lib/accounting/receipts';
@@ -8,7 +8,7 @@ import { listReceiptFiles } from '../services/receiptsDrive';
 import { driveForUser } from '../services/driveForUser';
 
 export const receiptsRouter = router({
-  list: adminProcedure
+  list: authedProcedure
     .input(z.object({ year: z.number().int().min(2000).max(2100), bankTxId: z.string().optional() }))
     .query(async ({ input, ctx }) => {
       const root = process.env.QUEEN_RECEIPTS_FOLDER_ID;

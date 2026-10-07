@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { router, adminProcedure } from '../trpcInit';
+import { router, authedProcedure } from '../trpcInit';
 import { Supplier } from '../models/Supplier';
 import { Account } from '../models/Account';
 import { allocateSupplierNumber } from '../lib/numbering';
@@ -28,13 +28,13 @@ async function assertAccount(account: string | null | undefined): Promise<void> 
 }
 
 export const suppliersRouter = router({
-  list: adminProcedure
+  list: authedProcedure
     .input(z.object({ includeArchived: z.boolean().optional() }).optional())
     .query(async ({ input }) =>
       Supplier.find(input?.includeArchived ? {} : { archived: false }).sort({ kreditorNumber: 1 }),
     ),
 
-  create: adminProcedure.input(fields).mutation(async ({ input }) => {
+  create: authedProcedure.input(fields).mutation(async ({ input }) => {
     await assertAccount(input.defaultAccount);
     return Supplier.create({
       ...input,
@@ -45,7 +45,7 @@ export const suppliersRouter = router({
     });
   }),
 
-  update: adminProcedure
+  update: authedProcedure
     .input(fields.partial().extend({ id: z.string().min(1) }))
     .mutation(async ({ input }) => {
       const { id, ...patch } = input;
@@ -63,7 +63,7 @@ export const suppliersRouter = router({
       return supplier;
     }),
 
-  setArchived: adminProcedure
+  setArchived: authedProcedure
     .input(z.object({ id: z.string().min(1), archived: z.boolean() }))
     .mutation(async ({ input }) => {
       const supplier = await Supplier.findById(input.id);

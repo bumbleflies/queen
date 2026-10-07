@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { router, adminProcedure } from '../trpcInit';
+import { router, authedProcedure } from '../trpcInit';
 import { Client } from '../models/Client';
 import { Invoice } from '../models/Invoice';
 import { allocateCustomerNumber } from '../lib/numbering';
@@ -33,7 +33,7 @@ export const clientsRouter = router({
   /** List all clients by default; `archivedOnly` returns only archived ones,
    *  `archived` filters explicitly, `includeArchived` is an alias for no filter.
    *  Each row carries `openCount`/`overdueCount` for the status summary. */
-  list: adminProcedure
+  list: authedProcedure
     .input(
       z
         .object({
@@ -54,13 +54,13 @@ export const clientsRouter = router({
       return find({});
     }),
 
-  get: adminProcedure.input(z.object({ id: z.string().min(1) })).query(async ({ input }) => {
+  get: authedProcedure.input(z.object({ id: z.string().min(1) })).query(async ({ input }) => {
     const client = await Client.findById(input.id);
     if (!client) throw new TRPCError({ code: 'NOT_FOUND', message: 'Client not found' });
     return client;
   }),
 
-  create: adminProcedure.input(createClientSchema).mutation(async ({ input }) => {
+  create: authedProcedure.input(createClientSchema).mutation(async ({ input }) => {
     const customerNumber = input.customerNumber ?? (await allocateCustomerNumber());
     try {
       const { customerNumber: _omit, ...rest } = input;
@@ -76,7 +76,7 @@ export const clientsRouter = router({
     }
   }),
 
-  update: adminProcedure.input(updateClientSchema).mutation(async ({ input }) => {
+  update: authedProcedure.input(updateClientSchema).mutation(async ({ input }) => {
     const { id, ...patch } = input;
     const client = await Client.findById(id);
     if (!client) throw new TRPCError({ code: 'NOT_FOUND', message: 'Client not found' });
@@ -108,7 +108,7 @@ export const clientsRouter = router({
     return client;
   }),
 
-  delete: adminProcedure
+  delete: authedProcedure
     .input(z.object({ id: z.string().min(1) }))
     .mutation(async ({ input }) => {
       const client = await Client.findById(input.id);
@@ -124,7 +124,7 @@ export const clientsRouter = router({
       return { deleted: true as const };
     }),
 
-  archive: adminProcedure
+  archive: authedProcedure
     .input(z.object({ id: z.string().min(1) }))
     .mutation(async ({ input }) => {
       const client = await Client.findById(input.id);

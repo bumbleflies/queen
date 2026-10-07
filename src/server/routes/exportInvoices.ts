@@ -18,8 +18,8 @@ function formatGermanDate(value: Date | null | undefined): string {
 }
 
 /**
- * Sheet-shaped CSV export for the tax advisor. Admin-authenticated via
- * `requireAuth` + `requireAdmin` before this handler runs.
+ * Sheet-shaped CSV export for the tax advisor. Authenticated via
+ * `requireAuth` before this handler runs.
  */
 export async function exportInvoicesCsv(_req: Request, res: Response): Promise<void> {
   try {

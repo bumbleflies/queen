@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { router, adminProcedure } from '../trpcInit';
+import { router, authedProcedure } from '../trpcInit';
 import { Client } from '../models/Client';
 import { Invoice } from '../models/Invoice';
 import { InvoiceLine } from '../models/InvoiceLine';
@@ -53,7 +53,7 @@ async function getInvoiceOrThrow(id: string) {
 }
 
 export const invoicesRouter = router({
-  list: adminProcedure.input(listSchema.optional()).query(async ({ input }) => {
+  list: authedProcedure.input(listSchema.optional()).query(async ({ input }) => {
     const filter: Record<string, unknown> = {};
     if (input?.overdueOnly) {
       filter.status = 'sent';
@@ -82,14 +82,14 @@ export const invoicesRouter = router({
     return Invoice.find(filter).sort({ createdAt: -1 });
   }),
 
-  get: adminProcedure.input(z.object({ id: z.string().min(1) })).query(async ({ input }) => {
+  get: authedProcedure.input(z.object({ id: z.string().min(1) })).query(async ({ input }) => {
     const invoice = await getInvoiceOrThrow(input.id);
     const lines = await InvoiceLine.find({ invoiceId: invoice._id });
     lines.sort((a, b) => comparePositions(a.position, b.position));
     return { ...invoice.toObject(), lines };
   }),
 
-  createDraft: adminProcedure.input(createDraftSchema).mutation(async ({ input }) => {
+  createDraft: authedProcedure.input(createDraftSchema).mutation(async ({ input }) => {
     const client = await Client.findById(input.clientId);
     if (!client) throw new TRPCError({ code: 'NOT_FOUND', message: 'Client not found' });
     const invoiceNumber = await allocateInvoiceNumber(new Date());
@@ -113,7 +113,7 @@ export const invoicesRouter = router({
     return invoice;
   }),
 
-  updateDraft: adminProcedure.input(updateDraftSchema).mutation(async ({ input }) => {
+  updateDraft: authedProcedure.input(updateDraftSchema).mutation(async ({ input }) => {
     const { id, ...patch } = input;
     const invoice = await getInvoiceOrThrow(id);
     assertTransition(invoice.status, 'update');
@@ -125,7 +125,7 @@ export const invoicesRouter = router({
     return invoice;
   }),
 
-  setLines: adminProcedure.input(setLinesSchema).mutation(async ({ input }) => {
+  setLines: authedProcedure.input(setLinesSchema).mutation(async ({ input }) => {
     const invoice = await getInvoiceOrThrow(input.id);
     assertTransition(invoice.status, 'setLines');
     const totals = invoiceTotals(
@@ -147,7 +147,7 @@ export const invoicesRouter = router({
     return { ...invoice.toObject(), lines };
   }),
 
-  deleteDraft: adminProcedure
+  deleteDraft: authedProcedure
     .input(z.object({ id: z.string().min(1) }))
     .mutation(async ({ input }) => {
       const invoice = await getInvoiceOrThrow(input.id);
@@ -157,7 +157,7 @@ export const invoicesRouter = router({
       return { deleted: true as const };
     }),
 
-  markSent: adminProcedure
+  markSent: authedProcedure
     .input(z.object({ id: z.string().min(1), invoiceDate: z.coerce.date().optional() }))
     .mutation(async ({ input, ctx }) => {
       const invoice = await getInvoiceOrThrow(input.id);
@@ -203,7 +203,7 @@ export const invoicesRouter = router({
       return invoice;
     }),
 
-  markPaid: adminProcedure
+  markPaid: authedProcedure
     .input(
       z.object({
         id: z.string().min(1),
@@ -237,7 +237,7 @@ export const invoicesRouter = router({
       return invoice;
     }),
 
-  cancel: adminProcedure
+  cancel: authedProcedure
     .input(z.object({ id: z.string().min(1), reason: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {
       const original = await getInvoiceOrThrow(input.id);
