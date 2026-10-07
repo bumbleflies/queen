@@ -16,6 +16,9 @@ vi.mock('../lib/trpc', () => ({
       postManual: { useMutation: () => ({ mutateAsync: async () => {}, isPending: false }) },
       reverse: { useMutation: () => ({ mutateAsync: async () => {} }) },
     },
+    bank: {
+      syncNow: { useMutation: () => ({ mutateAsync: async () => ({ ok: true, fetched: 0 }), isPending: false }) },
+    },
   },
 }));
 vi.mock('../components/Toast', () => ({ useToast: () => ({ show: () => {}, error: () => {} }) }));
