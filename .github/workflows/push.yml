@@ -2,9 +2,15 @@ name: Push Tests
 
 on:
   push:
-    branches-ignore:
-      - master
+  workflow_dispatch:
 
 jobs:
-  call-pr-tests:
+  pr-tests:
     uses: ./.github/workflows/pr-tests.yml
+
+  build-publish:
+    needs: pr-tests
+    uses: ./.github/workflows/build-publish.yml
+    with:
+      publish: ${{ github.ref == 'refs/heads/master' }}
+    secrets: inherit

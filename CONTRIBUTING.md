@@ -44,7 +44,7 @@ With no `MONGO_URI` set, the server starts `mongodb-memory-server` and seeds the
 | **Tests** | Every change comes with tests (vitest); DB tests use mongodb-memory-server | CI (`pr-tests`) blocks merge |
 | **Lint** | `npm run lint` with zero errors | CI blocks merge |
 | **Types** | Both typechecks pass; no `any` in new code | CI blocks merge |
-| **Build & container** | Docker build plus `/health` check pass | CI (`docker-build-test`) blocks merge |
+| **Build & container** | Docker build plus `/health` check pass | CI (`build-publish`) blocks merge |
 | **Clean test output** | No unexpected `[ledger] … failed` lines or stray warnings (`--silent=false`) | Code review |
 | **i18n** | Every UI string goes through `t()` and has keys in both `de.ts` and `en.ts` | Parity test |
 | **Theming** | Colours come only from CSS variables in `index.css` (light and dark) | Code review |
