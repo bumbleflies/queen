@@ -205,6 +205,7 @@ function BackfillSection({ year }: { year: number }) {
     report.creditNotes === 0 &&
     report.payments === 0 &&
     report.skipped.length === 0;
+  const postable = (report?.invoices ?? 0) + (report?.creditNotes ?? 0) + (report?.payments ?? 0);
 
   return (
     <section className="card" style={{ marginBottom: 16 }}>
@@ -214,12 +215,15 @@ function BackfillSection({ year }: { year: number }) {
           <p className="page-sub" style={{ margin: '4px 0 0' }}>{t('ledger.backfill.sub')}</p>
         </div>
         <div className="row acts">
-          <button type="button" className="btn ghost" disabled={backfill.isPending} onClick={check}>
-            {t('ledger.backfill.check')}
-          </button>
-          <button type="button" className="btn" disabled={backfill.isPending} onClick={apply}>
-            {t('ledger.backfill.apply')}
-          </button>
+          {report === null || postable === 0 ? (
+            <button type="button" className="btn" disabled={backfill.isPending} onClick={check}>
+              {t('ledger.backfill.check')}
+            </button>
+          ) : (
+            <button type="button" className="btn" disabled={backfill.isPending} onClick={apply}>
+              {t('ledger.backfill.apply')} ({postable})
+            </button>
+          )}
         </div>
       </div>
       {report ? (
@@ -259,7 +263,6 @@ export function LedgerPage() {
   const balances = trpc.ledger.trialBalance.useQuery({ year }, { enabled: tab === 'balances' });
   const ledger = trpc.ledger.accountLedger.useQuery({ year, account }, { enabled: tab === 'account' });
   const reverse = trpc.ledger.reverse.useMutation();
-  const fullSync = trpc.bank.syncNow.useMutation();
 
   const years = useMemo(() => {
     const set = new Set([new Date().getFullYear(), ...((fiscalYears.data ?? []) as unknown as { year: number }[]).map((f) => f.year)]);
@@ -273,20 +276,6 @@ export function LedgerPage() {
       await reverse.mutateAsync({ id, reason });
       await utils.ledger.invalidate();
       toast.show(t('ledger.reversed'));
-    } catch (err) {
-      toast.error((err as Error).message);
-    }
-  }
-
-  async function doFullBankSync() {
-    if (!window.confirm(t('ledger.resyncConfirm'))) return;
-    try {
-      const res = await fullSync.mutateAsync({ full: true });
-      if (res.ok) {
-        toast.show(`${t('bank.synced')} ${res.fetched} ${t('bank.bookings')}.`);
-      } else {
-        toast.error(res.error ?? t('bank.syncFail'));
-      }
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -307,15 +296,6 @@ export function LedgerPage() {
               <option key={y} value={y}>{y}</option>
             ))}
           </select>
-          <button
-            type="button"
-            className="btn ghost"
-            disabled={fullSync.isPending}
-            title={t('ledger.resyncConfirm')}
-            onClick={doFullBankSync}
-          >
-            {fullSync.isPending ? t('ledger.resyncRunning') : t('ledger.resyncBank')}
-          </button>
           <button type="button" className="btn" onClick={() => setShowForm(true)}>{t('ledger.new')}</button>
         </div>
       </header>

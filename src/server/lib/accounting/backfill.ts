@@ -37,7 +37,7 @@ export async function backfillLedger(
       if (!booked.some(Boolean)) {
         report.skipped.push({
           ref: invoice.invoiceNumber,
-          reason: 'imported as paid without payment date — book payment manually',
+          reason: 'als bezahlt importiert ohne Zahlungsdatum — Zahlung manuell buchen',
         });
       }
     }

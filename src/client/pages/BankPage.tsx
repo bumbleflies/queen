@@ -229,6 +229,18 @@ export function BankPage() {
     }
   }
 
+  async function handleFullSync() {
+    if (!window.confirm(t('bank.fullSyncConfirm'))) return;
+    try {
+      const result = await syncNow.mutateAsync({ full: true });
+      await utils.invalidate();
+      if (result.ok) toast.show(`${t('bank.synced')} ${result.fetched} ${t('bank.bookings')}.`);
+      else toast.error(result.error ?? t('bank.syncFail'));
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
   return (
     <>
       <header className="page-head">
@@ -239,6 +251,15 @@ export function BankPage() {
         <div className="row acts">
           <button type="button" className="btn ghost" onClick={handleSync}>
             {t('bank.syncNow')}
+          </button>
+          <button
+            type="button"
+            className="btn ghost"
+            disabled={syncNow.isPending}
+            title={t('bank.fullSyncConfirm')}
+            onClick={handleFullSync}
+          >
+            {syncNow.isPending ? t('bank.fullSyncRunning') : t('bank.fullSync')}
           </button>
           <button type="button" className="btn" onClick={handleRun}>
             {t('bank.runNow')}

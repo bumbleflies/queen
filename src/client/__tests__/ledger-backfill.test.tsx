@@ -10,7 +10,7 @@ const dryReport = {
   invoices: 9,
   creditNotes: 0,
   payments: 0,
-  skipped: [{ ref: '20260529-01', reason: 'imported as paid without payment date' }],
+  skipped: [{ ref: '20260529-01', reason: 'als bezahlt importiert ohne Zahlungsdatum' }],
 };
 
 vi.mock('../lib/trpc', () => ({
@@ -36,9 +36,6 @@ vi.mock('../lib/trpc', () => ({
         }),
       },
     },
-    bank: {
-      syncNow: { useMutation: () => ({ mutateAsync: async () => ({ ok: true, fetched: 0 }), isPending: false }) },
-    },
   },
 }));
 vi.mock('../components/Toast', () => ({
@@ -56,16 +53,17 @@ beforeEach(() => {
 });
 
 describe('LedgerPage backfill', () => {
-  it('check runs a dry run and shows counts plus skipped', async () => {
+  it('check runs a dry run and reveals the apply button with the count', async () => {
     render(
       <LanguageProvider>
         <LedgerPage />
       </LanguageProvider>,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Prüfen' }));
-    expect(await screen.findByText(/imported as paid without payment date/)).toBeInTheDocument();
+    expect(await screen.findByText(/als bezahlt importiert ohne Zahlungsdatum/)).toBeInTheDocument();
     expect(calls).toEqual([{ year: new Date().getFullYear(), dryRun: true }]);
     expect(screen.getByText(/9 Rechnungen/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Fehlende einbuchen (9)' })).toBeInTheDocument();
   });
 
   it('apply confirms and posts with dryRun:false, then invalidates', async () => {
@@ -76,9 +74,13 @@ describe('LedgerPage backfill', () => {
           <LedgerPage />
         </LanguageProvider>,
       );
-      fireEvent.click(screen.getByRole('button', { name: 'Fehlende einbuchen' }));
-      expect(await screen.findByText(/imported as paid without payment date/)).toBeInTheDocument();
-      expect(calls).toEqual([{ year: new Date().getFullYear(), dryRun: false }]);
+      fireEvent.click(screen.getByRole('button', { name: 'Prüfen' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Fehlende einbuchen (9)' }));
+      await screen.findByText(/als bezahlt importiert ohne Zahlungsdatum/);
+      expect(calls).toEqual([
+        { year: new Date().getFullYear(), dryRun: true },
+        { year: new Date().getFullYear(), dryRun: false },
+      ]);
       expect(invalidateCalls).toHaveLength(1);
       expect(shown).toEqual(['Fehlende Buchungen eingebucht.']);
     } finally {
@@ -94,9 +96,10 @@ describe('LedgerPage backfill', () => {
           <LedgerPage />
         </LanguageProvider>,
       );
-      fireEvent.click(screen.getByRole('button', { name: 'Fehlende einbuchen' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Prüfen' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Fehlende einbuchen (9)' }));
       await new Promise((r) => setTimeout(r, 20));
-      expect(calls).toEqual([]);
+      expect(calls).toEqual([{ year: new Date().getFullYear(), dryRun: true }]);
     } finally {
       confirm.mockRestore();
     }
