@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import type { HydratedDocument } from 'mongoose';
-import { router, adminProcedure } from '../trpcInit';
+import { router, authedProcedure } from '../trpcInit';
 import { BankTransaction, type BankTransactionDoc } from '../models/BankTransaction';
 import { JournalEntry } from '../models/JournalEntry';
 import { Supplier } from '../models/Supplier';
@@ -83,14 +83,14 @@ const bookFields = {
 };
 
 export const bookingsRouter = router({
-  inbox: adminProcedure.input(yearInput).query(async ({ input }) => {
+  inbox: authedProcedure.input(yearInput).query(async ({ input }) => {
     const [{ txs, coverage }, suppliers] = await Promise.all([loadYear(input.year), Supplier.find({ archived: false })]);
     return txs
       .filter((t) => !t.matchedInvoiceId && !coverage.has(t.fireflyJournalId))
       .map((t) => ({ ...row(t), suggestion: suggest(t, suppliers) }));
   }),
 
-  booked: adminProcedure.input(yearInput).query(async ({ input }) => {
+  booked: authedProcedure.input(yearInput).query(async ({ input }) => {
     const { txs, coverage } = await loadYear(input.year);
     const supplierIds = txs.flatMap((t) => (t.supplierId ? [t.supplierId] : []));
     const names = new Map((await Supplier.find({ _id: { $in: supplierIds } }).lean() as unknown as { _id: unknown; name: string }[]).map((s) => [String(s._id), s.name]));
@@ -109,7 +109,7 @@ export const bookingsRouter = router({
       .reverse();
   }),
 
-  stats: adminProcedure.input(yearInput).query(async ({ input }) => {
+  stats: authedProcedure.input(yearInput).query(async ({ input }) => {
     const { txs, coverage } = await loadYear(input.year);
     const bankBooked = txs.filter((t) => coverage.get(t.fireflyJournalId)?.source?.kind === 'bank');
     return {
@@ -119,7 +119,7 @@ export const bookingsRouter = router({
     };
   }),
 
-  book: adminProcedure
+  book: authedProcedure
     .input(z.object({ bankTxId: z.string().min(1), ...bookFields }))
     .mutation(async ({ input, ctx }) => {
       try {
@@ -130,7 +130,7 @@ export const bookingsRouter = router({
       }
     }),
 
-  bookBulk: adminProcedure
+  bookBulk: authedProcedure
     .input(z.object({ bankTxIds: z.array(z.string().min(1)).min(1).max(200) }))
     .mutation(async ({ input, ctx }) => {
       const suppliers = await Supplier.find({ archived: false });
@@ -159,7 +159,7 @@ export const bookingsRouter = router({
       return results;
     }),
 
-  unbook: adminProcedure
+  unbook: authedProcedure
     .input(z.object({ bankTxId: z.string().min(1), reason: z.string().trim().min(1) }))
     .mutation(async ({ input, ctx }) => {
       try {
@@ -170,7 +170,7 @@ export const bookingsRouter = router({
       }
     }),
 
-  setReceipt: adminProcedure
+  setReceipt: authedProcedure
     .input(
       z.object({
         bankTxId: z.string().min(1),
@@ -187,7 +187,7 @@ export const bookingsRouter = router({
       return row(tx);
     }),
 
-  balanceCheck: adminProcedure.input(yearInput).query(async ({ input }) => {
+  balanceCheck: authedProcedure.input(yearInput).query(async ({ input }) => {
     const entries = await JournalEntry.find({ fiscalYear: input.year, 'lines.account': '1800' }).select('lines');
     const ledgerCents = entries
       .flatMap((e) => e.lines)

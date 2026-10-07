@@ -33,6 +33,52 @@ describe('tRPC auth procedures', () => {
     await expect(adminCaller.adminPing()).resolves.toEqual({ ok: true });
   });
 
+  it("regular user can read data routers (queries don't FORBIDDEN)", async () => {
+    const userCaller = appRouter.createCaller({
+      user: { sub: 'user-id-1', email: 'user@example.de', role: 'user' },
+      serviceAuth: false,
+    });
+    // The auth middleware runs before the resolver, so a FORBIDDEN rejection
+    // always settles first. Without a connected DB the resolver buffers until
+    // timeout — that still proves the permission check passed.
+    const expectNotForbidden = async (promise: Promise<unknown>) => {
+      const outcome = promise.then(
+        () => 'resolved' as const,
+        (err: unknown) =>
+          err instanceof TRPCError && err.code === 'FORBIDDEN' ? ('forbidden' as const) : ('other' as const),
+      );
+      const winner = await Promise.race([
+        outcome,
+        new Promise<'resolver-pending'>((resolve) => setTimeout(() => resolve('resolver-pending'), 250)),
+      ]);
+      expect(winner).not.toBe('forbidden');
+    };
+    await expectNotForbidden(userCaller.clients.list());
+    await expectNotForbidden(userCaller.reports.openItems());
+    await expectNotForbidden(userCaller.accounts.list());
+    await expectNotForbidden(userCaller.suppliers.list());
+    await expectNotForbidden(userCaller.bookings.stats({ year: 2026 }));
+  });
+
+  it("regular user calling admin-only config procedures → FORBIDDEN", async () => {
+    const userCaller = appRouter.createCaller({
+      user: { sub: 'user-id-1', email: 'user@example.de', role: 'user' },
+      serviceAuth: false,
+    });
+    await expectTrpcCode(
+      userCaller.accounts.create({
+        number: '8400',
+        name: 'Test',
+        type: 'revenue',
+      }),
+      'FORBIDDEN',
+    );
+    await expectTrpcCode(
+      userCaller.accounts.setArchived({ number: '8400', archived: true }),
+      'FORBIDDEN',
+    );
+  });
+
   it('wrong service token → UNAUTHORIZED', async () => {
     expect(isServiceTokenValid('wrong-token', 'correct-token')).toBe(false);
     const caller = appRouter.createCaller({ user: undefined, serviceAuth: false });

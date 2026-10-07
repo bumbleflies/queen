@@ -1,11 +1,11 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { router, adminProcedure } from '../trpcInit';
+import { router, adminProcedure, authedProcedure } from '../trpcInit';
 import { Account } from '../models/Account';
 import { ACCOUNT_TYPES } from '../lib/accounting/skr04';
 
 export const accountsRouter = router({
-  list: adminProcedure
+  list: authedProcedure
     .input(z.object({ includeArchived: z.boolean().optional() }).optional())
     .query(async ({ input }) =>
       Account.find(input?.includeArchived ? {} : { archived: false }).sort({ number: 1 }),

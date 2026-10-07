@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { router, adminProcedure } from '../trpcInit';
+import { router, authedProcedure } from '../trpcInit';
 import { Account } from '../models/Account';
 import { FiscalYear } from '../models/FiscalYear';
 import { JournalEntry } from '../models/JournalEntry';
@@ -56,9 +56,9 @@ async function mapLedgerErrors<T>(fn: () => Promise<T>): Promise<T> {
 const yearInput = z.number().int().min(2000).max(2100);
 
 export const ledgerRouter = router({
-  fiscalYears: adminProcedure.query(async () => FiscalYear.find({}).sort({ year: -1 })),
+  fiscalYears: authedProcedure.query(async () => FiscalYear.find({}).sort({ year: -1 })),
 
-  list: adminProcedure
+  list: authedProcedure
     .input(z.object({ year: yearInput, account: z.string().optional() }))
     .query(async ({ input }) =>
       JournalEntry.find({
@@ -67,13 +67,13 @@ export const ledgerRouter = router({
       }).sort({ date: 1, entryNumber: 1 }),
     ),
 
-  get: adminProcedure.input(z.object({ id: z.string().min(1) })).query(async ({ input }) => {
+  get: authedProcedure.input(z.object({ id: z.string().min(1) })).query(async ({ input }) => {
     const entry = await JournalEntry.findById(input.id);
     if (!entry) throw new TRPCError({ code: 'NOT_FOUND', message: 'Buchung nicht gefunden' });
     return entry;
   }),
 
-  trialBalance: adminProcedure.input(z.object({ year: yearInput })).query(async ({ input }) => {
+  trialBalance: authedProcedure.input(z.object({ year: yearInput })).query(async ({ input }) => {
     const [entries, accounts] = await Promise.all([
       JournalEntry.find({ fiscalYear: input.year }).select('lines'),
       Account.find({}).select('number name'),
@@ -83,7 +83,7 @@ export const ledgerRouter = router({
     return { ...tb, rows: tb.rows.map((r) => ({ ...r, name: names.get(r.account) ?? '' })) };
   }),
 
-  accountLedger: adminProcedure
+  accountLedger: authedProcedure
     .input(z.object({ year: yearInput, account: z.string().min(1) }))
     .query(async ({ input }) => {
       const entries = await JournalEntry.find({
@@ -93,7 +93,7 @@ export const ledgerRouter = router({
       return accountLedger(input.account, entries);
     }),
 
-  postManual: adminProcedure
+  postManual: authedProcedure
     .input(
       z.object({
         kind: z.enum(['manual', 'opening']),
@@ -117,7 +117,7 @@ export const ledgerRouter = router({
       }),
     ),
 
-  reverse: adminProcedure
+  reverse: authedProcedure
     .input(z.object({ id: z.string().min(1), reason: z.string().min(1) }))
     .mutation(async ({ input, ctx }) => {
       const entry = await JournalEntry.findById(input.id);

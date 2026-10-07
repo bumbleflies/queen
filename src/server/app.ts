@@ -5,7 +5,7 @@ import path from 'path';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { healthHandler } from './health';
 import { appRouter, buildContext } from './trpc';
-import { AUTH_COOKIE, createAuthRouter, initPassport, requireAdmin, requireAuth } from './routes/auth';
+import { AUTH_COOKIE, createAuthRouter, initPassport, requireAuth } from './routes/auth';
 import { getJwtSecret } from './services/AuthService';
 import { exportInvoicesCsv } from './routes/exportInvoices';
 
@@ -25,7 +25,7 @@ export function createApp() {
 
   app.use('/auth', createAuthRouter());
 
-  app.get('/api/export/invoices.csv', requireAuth, requireAdmin, exportInvoicesCsv);
+  app.get('/api/export/invoices.csv', requireAuth, exportInvoicesCsv);
 
   app.use(
     '/trpc',
