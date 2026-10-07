@@ -40,33 +40,48 @@ export async function backfillLedger(
       }
       if (kind === 'credit_note') report.creditNotes += 1;
       else report.invoices += 1;
+      if (invoice.importedPaid && invoice.status === 'paid' && kind === 'invoice') {
+        const refs = [`markPaid:${invoice._id}`, ...invoice.payments.map((p) => `bank:${p.bankTxId}`)];
+        const booked = await Promise.all(refs.map((r) => findActiveBySource('payment', r)));
+        if (!booked.some(Boolean)) {
+          report.skipped.push({
+            ref: invoice.invoiceNumber,
+            reason: 'imported as paid without payment date — book payment manually',
+          });
+        }
+      }
     } catch (err) {
       report.skipped.push({ ref: invoice.invoiceNumber, reason: (err as Error).message });
     }
   }
 
+  const inYear = { $gte: start, $lt: end };
   const paid = await Invoice.find({
-    $or: [
-      { 'payments.date': { $gte: start, $lt: end } },
-      { status: 'paid', payments: { $size: 0 }, paidAt: { $gte: start, $lt: end } },
-    ],
+    $or: [{ 'payments.date': inYear }, { status: 'paid', paidAt: inYear }],
   }).sort({ paidAt: 1 });
 
   for (const invoice of paid) {
-    const candidates =
-      invoice.payments.length > 0
-        ? invoice.payments
-            .filter((p) => p.date >= start && p.date < end)
-            .map((p) => ({ refId: `bank:${p.bankTxId}`, date: p.date, amountCents: p.amountCents }))
-        : invoice.importedPaid
-          ? []
-          : [
-              {
-                refId: `markPaid:${invoice._id}`,
-                date: invoice.paidAt!,
-                amountCents: invoice.totals.grossCents,
-              },
-            ];
+    const candidates = invoice.payments
+      .filter((p) => p.date >= start && p.date < end)
+      .map((p) => ({ refId: `bank:${p.bankTxId}`, date: p.date, amountCents: p.amountCents }));
+    // Mirror the markPaid hook: post the remainder not covered by bank payments.
+    const openCents =
+      invoice.totals.grossCents - invoice.payments.reduce((sum, p) => sum + p.amountCents, 0);
+    if (
+      invoice.status === 'paid' &&
+      invoice.kind === 'invoice' &&
+      !invoice.importedPaid &&
+      openCents > 0 &&
+      invoice.paidAt &&
+      invoice.paidAt >= start &&
+      invoice.paidAt < end
+    ) {
+      candidates.push({
+        refId: `markPaid:${invoice._id}`,
+        date: invoice.paidAt,
+        amountCents: openCents,
+      });
+    }
 
     for (const c of candidates) {
       if (await findActiveBySource('payment', c.refId)) continue;

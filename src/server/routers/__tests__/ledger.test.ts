@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest';
+import { Invoice } from '../../models/Invoice';
+import { InvoiceLine } from '../../models/InvoiceLine';
 import { BankTransaction } from '../../models/BankTransaction';
 import { JournalEntry } from '../../models/JournalEntry';
 import { trialBalance } from '../../lib/accounting/balances';
@@ -131,5 +133,88 @@ describe('admin.ledgerBackfill', () => {
     expect(report.skipped).toEqual([
       { ref: invoice.invoiceNumber, reason: expect.stringContaining('before 2026') },
     ]);
+  });
+
+  describe('scenarios', () => {
+    async function backfill(caller: ReturnType<typeof adminCaller>) {
+      await JournalEntry.collection.deleteMany({});
+      return caller.admin.ledgerBackfill({ year: 2026, dryRun: false });
+    }
+    async function expectBalanced(balance1200: number) {
+      const tb = trialBalance(await JournalEntry.find({}));
+      expect(tb.debitCents).toBe(tb.creditCents);
+      expect(tb.rows.find((r) => r.account === '1200')?.balanceCents ?? 0).toBe(balance1200);
+    }
+
+    it('cancel posts invoice and credit note; receivable nets to zero', async (ctx) => {
+      skipIfNoDb(ctx);
+      const caller = adminCaller();
+      const invoice = await sentInvoice(caller);
+      await caller.invoices.cancel({ id: invoice._id.toString() });
+      const report = await backfill(caller);
+      expect(report).toMatchObject({ invoices: 1, creditNotes: 1, payments: 0, skipped: [] });
+      await expectBalanced(0);
+    });
+
+    it('markPaid without bank payment posts the full amount', async (ctx) => {
+      skipIfNoDb(ctx);
+      const caller = adminCaller();
+      const invoice = await sentInvoice(caller);
+      await caller.invoices.markPaid({ id: invoice._id.toString(), paidAt: new Date(2026, 3, 2) });
+      const report = await backfill(caller);
+      expect(report).toMatchObject({ invoices: 1, payments: 1, skipped: [] });
+      await expectBalanced(0);
+    });
+
+    it('partial bank payment plus markPaid posts bank and remainder', async (ctx) => {
+      skipIfNoDb(ctx);
+      const caller = adminCaller();
+      const invoice = await sentInvoice(caller);
+      const tx = await BankTransaction.create({
+        fireflyJournalId: '77:0',
+        date: new Date(2026, 3, 1),
+        amountCents: 1000,
+        description: 'Teilzahlung',
+      });
+      await caller.bank.assign({ bankTxId: tx._id.toString(), invoiceId: invoice._id.toString() });
+      await caller.invoices.markPaid({ id: invoice._id.toString(), paidAt: new Date(2026, 3, 5) });
+      const report = await backfill(caller);
+      expect(report).toMatchObject({ invoices: 1, payments: 2, skipped: [] });
+      await expectBalanced(0);
+    });
+
+    it('flags importedPaid invoices instead of leaving the receivable silently open', async (ctx) => {
+      skipIfNoDb(ctx);
+      const caller = adminCaller();
+      const client = await caller.clients.create({ name: 'Alt GmbH', invoiceAddress: 'Str. 2' });
+      const invoice = await Invoice.create({
+        invoiceNumber: 'LEG-1',
+        legacy: true,
+        clientId: (client as any)._id,
+        customerNumber: (client as any).customerNumber,
+        invoiceAddress: 'Str. 2',
+        title: 'Alt',
+        servicePeriod: '01.2026',
+        paymentTermDays: 14,
+        invoiceDate: new Date(2026, 0, 20),
+        status: 'paid',
+        importedPaid: true,
+        totals: { netCents: 10000, vatCents: 1900, grossCents: 11900 },
+      });
+      await InvoiceLine.create({
+        invoiceId: invoice._id,
+        position: '1',
+        description: 'Alt',
+        quantity: 1,
+        unitNetCents: 10000,
+        vatRate: 0.19,
+      });
+      const report = await backfill(caller);
+      expect(report).toMatchObject({ invoices: 1, payments: 0 });
+      expect(report.skipped).toEqual([
+        { ref: 'LEG-1', reason: expect.stringContaining('imported as paid') },
+      ]);
+      await expectBalanced(11900);
+    });
   });
 });
