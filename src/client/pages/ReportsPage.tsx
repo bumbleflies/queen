@@ -48,7 +48,7 @@ export function ReportsPage() {
                   <td data-l="Offen" className="num right">{formatEUR(item.openCents)}</td>
                   <td data-l="Status">
                     <span className={`badge ${item.overdue ? 'b-over' : 'b-sent'}`}>
-                      {item.overdue ? `überfällig · ${item.daysOverdue} T` : 'gesendet'}
+                      {item.overdue ? `überfällig · ${item.daysOverdue} T` : 'ausgestellt'}
                     </span>
                   </td>
                 </tr>

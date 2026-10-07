@@ -8,8 +8,8 @@ The files are Design Component pages (`.dc.html`). They need the canvas runtime 
 |------|--------|--------|
 | `Main.dc.html` | Dashboard | KPIs (open, overdue, paid YTD, drafts), Firefly import + reconcile status, due/overdue list |
 | `Invoices.dc.html` | Rechnungen | status filter chips incl. Storno, search, client/year filter, gross sum |
-| `InvoiceDetail.dc.html` | Rechnung (gesendet) | frozen address, Verwendungszweck, hierarchical positions, VAT breakdown, payments, history, Storno → credit-note dialog |
-| `InvoiceEdit.dc.html` | Entwurf bearbeiten | line editor (add/remove, negative discount lines, per-line VAT, 0 % exemption note), live totals per rate, "Senden & ablegen" |
+| `InvoiceDetail.dc.html` | Rechnung (ausgestellt) | frozen address, Verwendungszweck, hierarchical positions, VAT breakdown, payments, history, Storno → credit-note dialog |
+| `InvoiceEdit.dc.html` | Entwurf bearbeiten | line editor (add/remove, negative discount lines, per-line VAT, 0 % exemption note), live totals per rate, "Ausstellen & ablegen" |
 | `Bank.dc.html` | Bankabgleich | unmatched queue with reason + suggestions, assign/ignore, matched/ignored tabs |
 | `MobileInvoices.dc.html` | Mobil – Rechnungen | card list, filter chips, bottom tab bar, FAB |
 | `MobileInvoice.dc.html` | Mobil – Rechnung | copy Verwendungszweck, collapsible positions, action sheet |

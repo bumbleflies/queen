@@ -27,7 +27,7 @@ interface ClientRow {
 const CHIPS: { key: InvoiceChip; label: string }[] = [
   { key: 'all', label: 'Alle' },
   { key: 'draft', label: 'Entwurf' },
-  { key: 'sent', label: 'Gesendet' },
+  { key: 'sent', label: 'Ausgestellt' },
   { key: 'over', label: 'Überfällig' },
   { key: 'paid', label: 'Bezahlt' },
   { key: 'cancel', label: 'Storniert' },

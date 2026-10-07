@@ -130,9 +130,9 @@ class Component extends DCLogic {
     var all = [
       { nr: '20261006-01', client: 'Nordlicht Consulting GmbH', cno: '10016', title: 'Workshop Teamkultur', date: '—', due: '—', net: '2.400,00 €', gross: '2.856,00 €', g: 2856.00, k: 'draft', status: 'Entwurf', cls: 'badge b-draft', href: 'InvoiceEdit.dc.html' },
       { nr: '20261002-02', client: 'Musterakademie GbR', cno: '10006', title: 'Übungsgruppe Q4', date: '—', due: '—', net: '380,00 €', gross: '380,00 €', g: 380.00, k: 'draft', status: 'Entwurf', cls: 'badge b-draft', href: 'InvoiceEdit.dc.html' },
-      { nr: '20261002-01', client: 'AFCV Beispielverband e.V.', cno: '10010', title: 'LeagueSphere Saison 2026', date: '02.10.2026', due: '01.11.2026', net: '2.400,00 €', gross: '2.856,00 €', g: 2856.00, k: 'sent', status: 'gesendet', cls: 'badge b-sent', href: 'InvoiceDetail.dc.html' },
+      { nr: '20261002-01', client: 'AFCV Beispielverband e.V.', cno: '10010', title: 'LeagueSphere Saison 2026', date: '02.10.2026', due: '01.11.2026', net: '2.400,00 €', gross: '2.856,00 €', g: 2856.00, k: 'sent', status: 'ausgestellt', cls: 'badge b-sent', href: 'InvoiceDetail.dc.html' },
       { nr: '20260921-01', client: 'Musterakademie GbR', cno: '10006', title: 'Übungsgruppe Q3', date: '21.09.2026', due: '21.10.2026', net: '380,00 €', gross: '380,00 €', g: 380.00, k: 'sent', status: 'teilbezahlt', cls: 'badge b-part', href: 'InvoiceDetail.dc.html' },
-      { nr: '20260915-01', client: 'Nordlicht Consulting GmbH', cno: '10016', title: 'Moderation Strategietag', date: '15.09.2026', due: '15.10.2026', net: '4.080,00 €', gross: '4.855,20 €', g: 4855.20, k: 'sent', status: 'gesendet', cls: 'badge b-sent', href: 'InvoiceDetail.dc.html' },
+      { nr: '20260915-01', client: 'Nordlicht Consulting GmbH', cno: '10016', title: 'Moderation Strategietag', date: '15.09.2026', due: '15.10.2026', net: '4.080,00 €', gross: '4.855,20 €', g: 4855.20, k: 'sent', status: 'ausgestellt', cls: 'badge b-sent', href: 'InvoiceDetail.dc.html' },
       { nr: '20260829-01', client: 'AFV Beispielland e.V.', cno: '10009', title: 'LeagueSphere Saison 2026', date: '29.08.2026', due: '28.09.2026', net: '900,00 €', gross: '1.071,00 €', g: 1071.00, k: 'over', status: 'überfällig · 8 T', cls: 'badge b-over', href: 'InvoiceDetail.dc.html' },
       { nr: '20260714-01', client: 'Hafenblick Training GmbH', cno: '10008', title: 'Training Moderation', date: '14.07.2026', due: '13.08.2026', net: '3.200,00 €', gross: '3.808,00 €', g: 3808.00, k: 'paid', status: 'bezahlt', cls: 'badge b-paid', href: 'InvoiceDetail.dc.html' },
       { nr: '20260611-01', client: 'AFV Beispielland e.V.', cno: '10009', title: 'Storno zu 20260129-01', date: '11.06.2026', due: '—', net: '−900,00 €', gross: '−1.071,00 €', g: -1071.00, k: 'cancel', status: 'Stornorechnung', cls: 'badge b-credit', href: 'InvoiceDetail.dc.html' },
@@ -140,7 +140,7 @@ class Component extends DCLogic {
     ];
     var self = this;
     var f = this.state.f;
-    var defs = [['all', 'Alle'], ['draft', 'Entwurf'], ['sent', 'Gesendet'], ['over', 'Überfällig'], ['paid', 'Bezahlt'], ['cancel', 'Storniert']];
+    var defs = [['all', 'Alle'], ['draft', 'Entwurf'], ['sent', 'Ausgestellt'], ['over', 'Überfällig'], ['paid', 'Bezahlt'], ['cancel', 'Storniert']];
     var match = function (r, k) { return k === 'all' || r.k === k || (k === 'sent' && r.k === 'over'); };
     var chips = defs.map(function (d) {
       return { label: d[1], count: all.filter(function (r) { return match(r, d[0]); }).length, cls: d[0] === f ? 'chip on' : 'chip', pick: function () { self.setState({ f: d[0] }); } };
