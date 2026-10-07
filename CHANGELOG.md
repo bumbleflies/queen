@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.9.0](https://github.com/bumbleflies/queen/compare/queen-v0.8.1...queen-v0.9.0) (2026-10-07)
+
+
+### Features
+
+* dark mode with system default and toggle ([65f3ef2](https://github.com/bumbleflies/queen/commit/65f3ef2eaa1aa6c2c068c37d172bc37ca2e3bce6))
+* i18n (DE/EN), customer status fix, dark mode ([56c4412](https://github.com/bumbleflies/queen/commit/56c4412214d67e9c6d24ee8e9a0bda163c2bf84c))
+* translate all pages DE/EN with topbar language switcher ([ad0e5a0](https://github.com/bumbleflies/queen/commit/ad0e5a0ceac55cba92d3076000735242d465afbf))
+
+
+### Bug Fixes
+
+* customer list shows aktiv + open/overdue summary ([768cc1c](https://github.com/bumbleflies/queen/commit/768cc1c7bc08e779e8327eb8a2216e843260107f))
+
 ## [0.8.1](https://github.com/bumbleflies/queen/compare/queen-v0.8.0...queen-v0.8.1) (2026-10-07)
 
 
