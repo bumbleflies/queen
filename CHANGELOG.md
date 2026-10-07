@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.18.0](https://github.com/bumbleflies/queen/compare/queen-v0.17.0...queen-v0.18.0) (2026-10-07)
+
+
+### Features
+
+* **finance:** unify Bankabgleich, Buchen and Buchhaltung into one transaction stream ([35755a8](https://github.com/bumbleflies/queen/commit/35755a8e353bc775e4c853bfa0941382546bfc91))
+* **finance:** unify Bankabgleich, Buchen and Buchhaltung into one transaction stream ([cdeeb27](https://github.com/bumbleflies/queen/commit/cdeeb27101878563861938ace5fab54d380e1032))
+
+
+### Bug Fixes
+
+* **finance:** assert both bank entry lines in stream test ([001ec0d](https://github.com/bumbleflies/queen/commit/001ec0dc168ec62236ba36bf66436520e16570fe))
+* **finance:** stream test books the expense vat-free, matching the asserted lines ([603dcf9](https://github.com/bumbleflies/queen/commit/603dcf9897614415dd300ff4c5ded8ce9d3e9167))
+* **finance:** stream test counted three year txs, not four ([d2596aa](https://github.com/bumbleflies/queen/commit/d2596aa513b73a36662da1f0e8c114ebec826569))
+
 ## [0.17.0](https://github.com/bumbleflies/queen/compare/queen-v0.16.1...queen-v0.17.0) (2026-10-07)
 
 
