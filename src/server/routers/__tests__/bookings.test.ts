@@ -168,7 +168,7 @@ describe('bookings', () => {
     const expenseRow = byId.get(String(expense._id))!;
     expect(expenseRow.state).toBe('booked');
     expect(expenseRow.entry?.entryNumber).toMatch(/^2026-\d{5}$/);
-    expect(expenseRow.entry?.lines).toEqual([{ account: '6837', debitCents: 824, creditCents: 0 }]);
+    expect(expenseRow.entry?.lines).toEqual([{ account: '1800', debitCents: 0, creditCents: 824 }, { account: '6837', debitCents: 824, creditCents: 0 }]);
 
     const paymentRow = byId.get(String(payment._id))!;
     expect(paymentRow.state).toBe('invoice');
