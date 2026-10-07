@@ -19,6 +19,14 @@ vi.mock('../lib/trpc', () => ({
     bank: {
       syncNow: { useMutation: () => ({ mutateAsync: async () => ({ ok: true, fetched: 0 }), isPending: false }) },
     },
+    admin: {
+      ledgerBackfill: {
+        useMutation: () => ({
+          mutateAsync: async () => ({ invoices: 0, creditNotes: 0, payments: 0, skipped: [] }),
+          isPending: false,
+        }),
+      },
+    },
   },
 }));
 vi.mock('../components/Toast', () => ({ useToast: () => ({ show: () => {}, error: () => {} }) }));
