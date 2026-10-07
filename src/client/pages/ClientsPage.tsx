@@ -13,6 +13,8 @@ interface ClientRow {
   defaultPaymentTermDays: number;
   email?: string;
   archived?: boolean;
+  openCount?: number;
+  overdueCount?: number;
 }
 
 export function ClientsPage() {
@@ -140,7 +142,25 @@ export function ClientsPage() {
                   <td data-l={t('clients.domain')}>{c.domain || '—'}</td>
                   <td data-l={t('clients.termShort')} className="num right">{c.defaultPaymentTermDays} {t('common.days')}</td>
                   <td data-l={t('clients.status')}>
-                    {c.archived ? <span className="badge b-draft">{t('clients.archived')}</span> : null}
+                    {c.archived ? (
+                      <span className="badge b-draft">{t('clients.archived')}</span>
+                    ) : (
+                      <span className="badge b-sent">
+                        {t('clients.active')}
+                        {(c.openCount ?? 0) > 0 ? (
+                          <small style={{ color: 'var(--muted)' }}>
+                            {' '}
+                            · {c.openCount} {t('clients.open')}
+                          </small>
+                        ) : null}
+                        {(c.overdueCount ?? 0) > 0 ? (
+                          <small className="over">
+                            {' '}
+                            ({c.overdueCount} {t('clients.overdue')})
+                          </small>
+                        ) : null}
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}

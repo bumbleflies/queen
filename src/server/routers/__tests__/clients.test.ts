@@ -67,6 +67,43 @@ describe('clients router', () => {
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 
+  it('list includes openCount and overdueCount per client', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    const active = (await caller.clients.create({
+      name: 'Acme GmbH',
+      invoiceAddress: 'Musterstr. 1\n12345 Berlin',
+    })) as any;
+    const quiet = (await caller.clients.create({
+      name: 'Quiet UG',
+      invoiceAddress: 'Ruhigstr. 2\n12345 Berlin',
+    })) as any;
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const base = {
+      clientId: active._id,
+      customerNumber: active.customerNumber,
+      invoiceAddress: 'Musterstr. 1\n12345 Berlin',
+      servicePeriod: '05.2025',
+      paymentTermDays: 30,
+    };
+    await Invoice.create([
+      { ...base, invoiceNumber: '20990101-01', title: 'Open work', status: 'sent', dueDate: tomorrow },
+      { ...base, invoiceNumber: '20990101-02', title: 'Late work', status: 'sent', dueDate: yesterday },
+      { ...base, invoiceNumber: '20990101-03', title: 'Draft work', status: 'draft' },
+      { ...base, invoiceNumber: '20990101-04', title: 'Paid work', status: 'paid', dueDate: yesterday },
+    ]);
+    const rows = (await caller.clients.list()) as any[];
+    const row = rows.find((r) => String(r._id) === String(active._id));
+    const other = rows.find((r) => String(r._id) === String(quiet._id));
+    expect(row.openCount).toBe(2);
+    expect(row.overdueCount).toBe(1);
+    expect(other.openCount).toBe(0);
+    expect(other.overdueCount).toBe(0);
+  });
+
   it('client with invoices cannot be deleted (BAD_REQUEST)', async (ctx) => {
     skipIfNoDb(ctx);
     const caller = adminCaller();
