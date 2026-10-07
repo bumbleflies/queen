@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/bumbleflies/queen/compare/queen-v0.9.0...queen-v0.10.0) (2026-10-07)
+
+
+### Features
+
+* ledger foundation (accounting phase 1) ([67f8cc4](https://github.com/bumbleflies/queen/commit/67f8cc4511eef15fb6127906490b3f653634800f))
+
 ## [0.9.0](https://github.com/bumbleflies/queen/compare/queen-v0.8.1...queen-v0.9.0) (2026-10-07)
 
 
