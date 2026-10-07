@@ -254,6 +254,7 @@ export function LedgerPage() {
   const [tab, setTab] = useState<Tab>('journal');
   const [account, setAccount] = useState('1800');
   const [showForm, setShowForm] = useState(false);
+  const [resyncOpen, setResyncOpen] = useState(false);
   const fiscalYears = trpc.ledger.fiscalYears.useQuery();
   const journal = trpc.ledger.list.useQuery({ year }, { enabled: tab === 'journal' });
   const balances = trpc.ledger.trialBalance.useQuery({ year }, { enabled: tab === 'balances' });
@@ -279,11 +280,11 @@ export function LedgerPage() {
   }
 
   async function doFullBankSync() {
-    if (!window.confirm(t('ledger.resyncConfirm'))) return;
     try {
       const res = await fullSync.mutateAsync({ full: true });
       if (res.ok) {
         toast.show(`${t('bank.synced')} ${res.fetched} ${t('bank.bookings')}.`);
+        setResyncOpen(false);
       } else {
         toast.error(res.error ?? t('bank.syncFail'));
       }
@@ -311,14 +312,33 @@ export function LedgerPage() {
             type="button"
             className="btn ghost"
             disabled={fullSync.isPending}
-            title={t('ledger.resyncConfirm')}
-            onClick={doFullBankSync}
+            onClick={() => setResyncOpen(true)}
           >
             {fullSync.isPending ? t('ledger.resyncRunning') : t('ledger.resyncBank')}
           </button>
           <button type="button" className="btn" onClick={() => setShowForm(true)}>{t('ledger.new')}</button>
         </div>
       </header>
+
+      {resyncOpen ? (
+        <section className="card" role="dialog" aria-label={t('ledger.resyncBank')}>
+          <h2 style={{ marginTop: 0, fontSize: 18 }}>{t('ledger.resyncBank')}</h2>
+          <p style={{ margin: '8px 0 0', color: '#3a3a40', maxWidth: '70ch' }}>{t('ledger.resyncConfirm')}</p>
+          <div className="row" style={{ marginTop: 12 }}>
+            <button type="button" className="btn" disabled={fullSync.isPending} onClick={doFullBankSync}>
+              {fullSync.isPending ? t('ledger.resyncRunning') : t('ledger.resyncBank')}
+            </button>
+            <button
+              type="button"
+              className="btn ghost"
+              disabled={fullSync.isPending}
+              onClick={() => setResyncOpen(false)}
+            >
+              {t('common.cancel')}
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       {showForm ? <EntryForm key={year} year={year} onDone={() => setShowForm(false)} /> : null}
 
