@@ -14,6 +14,7 @@ import { InvoiceDetailPage } from './pages/InvoiceDetailPage';
 import { ClientsPage } from './pages/ClientsPage';
 import { ClientDetailPage } from './pages/ClientDetailPage';
 import { BankPage } from './pages/BankPage';
+import { LedgerPage } from './pages/LedgerPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import './index.css';
@@ -49,6 +50,7 @@ function App() {
                 <Route path="/clients" element={<ClientsPage />} />
                 <Route path="/clients/:id" element={<ClientDetailPage />} />
                 <Route path="/bank" element={<BankPage />} />
+                <Route path="/ledger" element={<LedgerPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
               </Route>
