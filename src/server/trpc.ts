@@ -5,6 +5,7 @@ import { bankRouter } from './routers/bank';
 import { reconcileRouter } from './routers/reconcile';
 import { reportsRouter } from './routers/reports';
 import { adminRouter } from './routers/admin';
+import { accountsRouter } from './routers/accounts';
 
 export * from './trpcInit';
 
@@ -14,6 +15,7 @@ export const appRouter = router({
   me: authedProcedure.query(({ ctx }) => ({ user: ctx.user })),
   adminPing: adminProcedure.query(() => ({ ok: true as const })),
   servicePing: serviceProcedure.query(() => ({ ok: true as const })),
+  accounts: accountsRouter,
   clients: clientsRouter,
   invoices: invoicesRouter,
   bank: bankRouter,
