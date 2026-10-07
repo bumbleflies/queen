@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.12.0](https://github.com/bumbleflies/queen/compare/queen-v0.11.0...queen-v0.12.0) (2026-10-07)
+
+
+### Features
+
+* accounting phase 2 — bank import and Buchen inbox (Tasks 1–5) ([475078f](https://github.com/bumbleflies/queen/commit/475078fad04dbeb26bc43d94bf0a59d5ed4d3d27))
+
+
+### Bug Fixes
+
+* **deps:** update dependency nodemailer to v10.0.16 ([#35](https://github.com/bumbleflies/queen/issues/35)) ([b7feac1](https://github.com/bumbleflies/queen/commit/b7feac1decb09694d16a40bdc69fe932ab4cae34))
+
 ## [0.11.0](https://github.com/bumbleflies/queen/compare/queen-v0.10.0...queen-v0.11.0) (2026-10-07)
 
 
