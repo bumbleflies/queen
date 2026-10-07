@@ -57,14 +57,19 @@ journalEntrySchema.index(
   },
 );
 
+// Remember the persisted `active` so the save guard can judge the transition.
+journalEntrySchema.post('init', function () {
+  this.$locals.wasActive = this.active;
+});
+
 journalEntrySchema.pre('save', function () {
   if (this.isNew) return;
   const changed = this.modifiedPaths().filter((p) => !MUTABLE_AFTER_POST.has(p));
   if (changed.length > 0) throw new Error(`${IMMUTABLE} (tried to change ${changed.join(', ')})`);
-  // The only legal transition is active -> inactive with reversedBy set.
+  // The only legal transition is persisted active=true -> active=false with reversedBy set.
   if (this.isModified('active') || this.isModified('reversedBy')) {
-    if (this.active !== false || this.reversedBy == null) {
-      throw new Error(`${IMMUTABLE} (a reversed entry cannot be reactivated)`);
+    if (this.$locals.wasActive !== true || this.active !== false || this.reversedBy == null) {
+      throw new Error(`${IMMUTABLE} (a reversed entry cannot be changed again)`);
     }
   }
 });

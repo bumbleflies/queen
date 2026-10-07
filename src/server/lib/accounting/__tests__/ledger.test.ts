@@ -184,6 +184,15 @@ describe('hardening', () => {
     await expect(reloaded!.save()).rejects.toThrowError(/immutable/);
   });
 
+  it('cannot re-link a reversed entry to another reversal', async (ctx) => {
+    skipIfNoDb(ctx);
+    const original = await post(draft());
+    await reverse(String(original._id), { reason: 'x', createdBy: 't' });
+    const reloaded = await JournalEntry.findById(original._id);
+    reloaded!.reversedBy = new mongoose.Types.ObjectId();
+    await expect(reloaded!.save()).rejects.toThrowError(/immutable/);
+  });
+
   it('validates text/createdBy/refId before allocating a number', async (ctx) => {
     skipIfNoDb(ctx);
     await expect(post(draft({ text: '' }))).rejects.toMatchObject({ code: 'INVALID_ENTRY' });
