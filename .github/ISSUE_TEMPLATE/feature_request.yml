@@ -1,0 +1,65 @@
+name: ✨ Feature request
+description: Propose a new capability or improvement for queen
+title: "[Area] Short description"
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Feature requests that name the area and the concrete workflow they unblock get picked up
+        faster than general ideas. Larger features get a spec and a plan in `docs/plans/` first.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of queen does this affect?
+      options:
+        - Rechnungen (invoices, credit notes, numbering)
+        - PDF / Drive filing
+        - Kunden (clients)
+        - Bankabgleich (Firefly sync, reconcile)
+        - Buchhaltung (ledger, expenses, USt, Jahresabschluss)
+        - Berichte (reports, exports)
+        - Auth / login
+        - UI (layout, i18n, dark mode, mobile)
+        - leagues.finance integration
+        - infrastructure / deployment (Docker, CI, servyy-container)
+        - other / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What's the current pain point? Who runs into it, and how often?
+      placeholder: |
+        e.g. "At year end the receipts for every bank withdrawal have to be matched by hand
+        in Drive; there's no overview of which bookings still lack a Beleg."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should happen instead? Sketch the UI, API or workflow if you can.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you thought about, and why you didn't pick them.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and this isn't a duplicate
+          required: true

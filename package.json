@@ -2,6 +2,7 @@
   "name": "queen",
   "version": "0.9.0",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "NODE_ENV=development tsx watch src/server/index.ts",
