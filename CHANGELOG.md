@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.1](https://github.com/bumbleflies/queen/compare/queen-v0.15.0...queen-v0.15.1) (2026-10-07)
+
+
+### Bug Fixes
+
+* **deps:** update dependency googleapis to v184 ([3ad368c](https://github.com/bumbleflies/queen/commit/3ad368c13a95f46eb49906b7e87ff735668ad098))
+
 ## [0.15.0](https://github.com/bumbleflies/queen/compare/queen-v0.14.1...queen-v0.15.0) (2026-10-07)
 
 
