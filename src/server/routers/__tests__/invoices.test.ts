@@ -5,6 +5,7 @@ import { Client } from '../../models/Client';
 import { Invoice } from '../../models/Invoice';
 import { InvoiceLine } from '../../models/InvoiceLine';
 import { enqueueFileInvoice } from '../../jobs/queue';
+import { initLedgerModels, resetLedgerDb } from './helpers/ledgerFixtures';
 
 vi.mock('../../jobs/queue', () => ({
   enqueueFileInvoice: vi.fn(async (_invoiceId: string) => {}),
@@ -30,6 +31,7 @@ beforeAll(async () => {
   await Client.init();
   await Invoice.init();
   await InvoiceLine.init();
+  await initLedgerModels();
 });
 
 beforeEach(async () => {
@@ -38,6 +40,7 @@ beforeEach(async () => {
   await Client.deleteMany({});
   await Invoice.deleteMany({});
   await InvoiceLine.deleteMany({});
+  await resetLedgerDb(); // seeds accounts for the ledger hooks
 });
 
 async function createClientWithDraft(caller: ReturnType<typeof adminCaller>) {

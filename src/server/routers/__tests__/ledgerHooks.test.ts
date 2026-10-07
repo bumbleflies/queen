@@ -99,6 +99,30 @@ describe('ledger hooks', () => {
     });
   });
 
+  it('unassign of a partial bank payment also reverses the markPaid remainder', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    const invoice = await sentInvoice(caller);
+    const gross = invoice.totals.grossCents;
+    const tx = await BankTransaction.create({
+      fireflyJournalId: '88:0',
+      date: new Date(2026, 3, 1),
+      amountCents: 1000,
+      description: 'Teilzahlung',
+    });
+    const bankTxId = tx._id.toString();
+    const id = invoice._id.toString();
+    await caller.bank.assign({ bankTxId, invoiceId: id });
+    await caller.invoices.markPaid({ id, paidAt: new Date(2026, 3, 2) });
+    await caller.bank.unassign({ bankTxId });
+
+    const payments = await JournalEntry.find({ 'source.kind': 'payment' });
+    expect(payments).toHaveLength(2);
+    expect(payments.every((p) => !p.active)).toBe(true);
+    const tb = trialBalance(await JournalEntry.find({}));
+    expect(tb.rows.find((r) => r.account === '1200')?.balanceCents).toBe(gross);
+  });
+
   it('markSent into a closed year still succeeds and posts nothing', async (ctx) => {
     skipIfNoDb(ctx);
     await FiscalYear.create({ year: 2025, status: 'closed' });

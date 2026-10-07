@@ -305,7 +305,8 @@ export async function reversePayment(
   else if (paidCents === gross) invoice.reconcileState = 'matched';
   else invoice.reconcileState = 'overpaid';
 
-  if (invoice.status === 'paid' && paidCents < gross) {
+  const revertedToSent = invoice.status === 'paid' && paidCents < gross;
+  if (revertedToSent) {
     invoice.status = 'sent';
     invoice.paidAt = null;
   }
@@ -314,6 +315,12 @@ export async function reversePayment(
   await safeLedger(`unassign ${bankTxId}`, () =>
     reversePaymentEntry(`bank:${bankTxId}`, 'Zahlung zurückgenommen', 'admin'),
   );
+  if (revertedToSent) {
+    // A manual "mark paid" remainder no longer stands once the invoice is open again.
+    await safeLedger(`unassign markPaid ${invoice.invoiceNumber}`, () =>
+      reversePaymentEntry(`markPaid:${invoice._id}`, 'Zahlung zurückgenommen', 'admin'),
+    );
+  }
 }
 
 /** True only when this module is the process entrypoint, so tests can import safely. */
