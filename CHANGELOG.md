@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.15.0](https://github.com/bumbleflies/queen/compare/queen-v0.14.1...queen-v0.15.0) (2026-10-07)
+
+
+### Features
+
+* **ledger:** backfill dry-run/apply section on the ledger page ([9401f1f](https://github.com/bumbleflies/queen/commit/9401f1f2e7f60e51cd291af68cbaaabf770cf5bd))
+* **ledger:** backfill dry-run/apply section on the ledger page ([ca38248](https://github.com/bumbleflies/queen/commit/ca382480513a789894be5f8cf5746a115441aa04))
+
 ## [0.14.1](https://github.com/bumbleflies/queen/compare/queen-v0.14.0...queen-v0.14.1) (2026-10-07)
 
 
