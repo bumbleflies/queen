@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.2](https://github.com/bumbleflies/queen/compare/queen-v0.15.1...queen-v0.15.2) (2026-10-07)
+
+
+### Bug Fixes
+
+* **ui:** ledger full-reimport uses the inline card dialog ([fa0924d](https://github.com/bumbleflies/queen/commit/fa0924dbfd4c9c4e30805140617f30b2e938bc56))
+
 ## [0.15.1](https://github.com/bumbleflies/queen/compare/queen-v0.15.0...queen-v0.15.1) (2026-10-07)
 
 
