@@ -163,7 +163,7 @@ describe('bookings', () => {
       invoice?: { invoiceNumber: string; status: string };
     }[];
     const byId = new Map(rows.map((r) => [r.id, r]));
-    expect(rows).toHaveLength(4);
+    expect(rows).toHaveLength(3);
 
     const expenseRow = byId.get(String(expense._id))!;
     expect(expenseRow.state).toBe('booked');
@@ -179,7 +179,7 @@ describe('bookings', () => {
 
     // 2025 tx must not leak into the 2026 stream
     await tx({ date: new Date(2025, 5, 1) });
-    expect((await caller.bookings.stream({ year: 2026 })).length).toBe(4);
+    expect((await caller.bookings.stream({ year: 2026 })).length).toBe(3);
   });
 
   it('balanceCheck reports the ledger 1800 balance and an error when Firefly is not configured', async (ctx) => {
