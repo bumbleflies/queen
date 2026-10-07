@@ -9,6 +9,7 @@ import { createOAuth2Client } from '../services/DriveService';
 import { createInvoicePdfFinder, type DriveListLike } from '../services/driveLookup';
 import { Invoice } from '../models/Invoice';
 import { backfillLedger } from '../lib/accounting/backfill';
+import { parseCreditorsCsv, applyCreditorImport } from '../lib/accounting/creditorImport';
 
 const linkDriveFilesSchema = z.object({
   links: z
@@ -44,6 +45,16 @@ async function driveResolver(
 }
 
 export const adminRouter = router({
+  /** One-off import of the Sheet's creditor list (CSV export). Dry run by default; errors → nothing written. */
+  importCreditors: adminProcedure
+    .input(z.object({ csv: z.string().min(1), dryRun: z.boolean().default(true) }))
+    .mutation(async ({ input }) => {
+      const { rows, errors } = parseCreditorsCsv(input.csv);
+      if (errors.length > 0) return { rows: rows.length, created: 0, existing: 0, errors };
+      const res = await applyCreditorImport(rows, input.dryRun);
+      return { rows: rows.length, ...res, errors };
+    }),
+
   /** Post invoice/payment entries the hooks missed. Dry run by default. */
   ledgerBackfill: adminProcedure
     .input(z.object({ year: z.number().int().min(2000).max(2100), dryRun: z.boolean().default(true) }))
