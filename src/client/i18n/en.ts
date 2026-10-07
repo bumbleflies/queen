@@ -360,6 +360,7 @@ export const en: Dict = {
   'ledger.posted': 'Entry recorded.',
   'ledger.reversed': 'Reversed.',
   'ledger.resyncBank': 'Full bank reimport',
+  'ledger.resyncTitle': 'Reimport bank data',
   'ledger.resyncConfirm': 'Re-import all GLS transactions since QUEEN_BANK_START? This may take a moment.',
   'ledger.resyncRunning': 'Running …',
   'ledger.reverse': 'Reverse',
