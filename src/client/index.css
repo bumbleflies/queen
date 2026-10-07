@@ -99,6 +99,8 @@ h3 {
 .main {
   flex: 999 1 560px;
   min-width: 0;
+  /* Cap content width on wide desktops so cards and tables don't stretch. */
+  max-width: 1280px;
   padding: 32px 40px 48px 40px;
   display: flex;
   flex-direction: column;
