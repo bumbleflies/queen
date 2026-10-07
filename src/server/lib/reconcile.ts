@@ -26,6 +26,18 @@ const BARE_REFERENCE = /(\d{8})-(\d{2})/;
 /** Extract `<customerNumber>-<invoiceNumber>` (or a bare invoice number) from a bank description. */
 export function parseReference(desc: string): ParsedReference | null {
   if (!desc) return null;
+
+  // Labeled references (`RNR 20260901-01 KD 10015`, either order): tried first
+  // so EREF-style digit blocks later in the text can't shadow them.
+  const rnr = /RNR\s*(\d{8})\s*[-/ ]?\s*(\d{2})/i.exec(desc);
+  if (rnr) {
+    const kd = /(?:\bKD\b|\bKunde\b|\bKundennr\.?)\s*(\d{5})/i.exec(desc);
+    return {
+      customerNumber: kd ? Number(kd[1]) : undefined,
+      invoiceNumber: `${rnr[1]}-${rnr[2]}`,
+    };
+  }
+
   const compact = desc.replace(/\s+/g, '');
 
   const full = FULL_REFERENCE.exec(compact);
