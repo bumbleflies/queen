@@ -26,6 +26,11 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      - name: Compute version number
+        id: ver
+        # metadata-action's semver tags cannot handle the queen-v prefix
+        run: echo "num=$(echo '${{ inputs.version }}' | sed -E 's/^queen-v//')" >> "$GITHUB_OUTPUT"
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v6
@@ -33,8 +38,8 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest
-            type=semver,pattern={{version}},value=${{ inputs.version }},enable=${{ inputs.version != '' }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ inputs.version }},enable=${{ inputs.version != '' }}
+            type=semver,pattern={{version}},value=${{ steps.ver.outputs.num }},enable=${{ inputs.version != '' }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.ver.outputs.num }},enable=${{ inputs.version != '' }}
             type=sha,prefix=queen-,enable=${{ github.event_name != 'pull_request' }}
 
       - name: Build Docker image to tar
