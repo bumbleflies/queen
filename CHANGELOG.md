@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.1](https://github.com/bumbleflies/queen/compare/queen-v0.18.0...queen-v0.18.1) (2026-10-07)
+
+
+### Bug Fixes
+
+* **deps:** update dependency google-auth-library to v11.2.0 ([#63](https://github.com/bumbleflies/queen/issues/63)) ([1bc376a](https://github.com/bumbleflies/queen/commit/1bc376ae86abbafd1216aa09762bd0ba6b050055))
+
 ## [0.18.0](https://github.com/bumbleflies/queen/compare/queen-v0.17.0...queen-v0.18.0) (2026-10-07)
 
 
