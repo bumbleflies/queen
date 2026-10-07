@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.1](https://github.com/bumbleflies/queen/compare/queen-v0.6.0...queen-v0.6.1) (2026-10-07)
+
+
+### Bug Fixes
+
+* **ui:** open invoice positions expanded, cap content width on desktop ([9fa6411](https://github.com/bumbleflies/queen/commit/9fa6411c4f8ccfa71fbfca5f603835699171ce0c))
+* **ui:** open invoice positions expanded, cap content width on desktop ([2dcb5bb](https://github.com/bumbleflies/queen/commit/2dcb5bb771d0b4001a42c57a59a425e48f6a5222))
+
 ## [0.6.0](https://github.com/bumbleflies/queen/compare/queen-v0.5.1...queen-v0.6.0) (2026-10-07)
 
 
