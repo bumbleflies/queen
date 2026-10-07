@@ -120,6 +120,51 @@ BankTransaction (existing) += direction: 'in' | 'out' (default 'in'), journalEnt
 3. **USt:** `vat.ts`, USt page, VA periods, Finanzamt payment booking.
 4. **Jahresabschluss:** checks, `taxProvision`, `appropriation`, closing steps, PDF/DATEV/CSV exports, lock + carry-forward.
 
+## Phase 2 detail: bank import and Buchen inbox (design approved 2026-10-07)
+
+Goal: fill the 2026 books from the bank feed. **Every** GLS transaction ends up in the journal exactly once, so ledger 1800 equals the Firefly balance. Nothing posts without confirmation (inbox plus rules, no auto-booking).
+
+1. **Sync all transactions.** `FireflyClient.fetchTransactions(start, end)` returns deposits and withdrawals; transfers are ignored, since there is one account.
+   - `BankTransaction` gains `direction: 'in' | 'out'` (existing rows default to `'in'`), `journalEntryId?` and `bookingState: 'open' | 'booked'` (derived for invoice payments).
+   - Reconcile still matches only `direction: 'in'`.
+   - Sync and reconcile keep their schedule, so the daily cron also pulls withdrawals.
+2. **Coverage rule.** A transaction counts as covered by either:
+   - an active `payment` entry (`bank:<fireflyJournalId>`, from invoice matching), or
+   - an active `bank` entry (source `{ kind: 'bank', refId: <fireflyJournalId> }`) from the inbox.
+
+   A transaction matched to an invoice can't be inbox-booked. An inbox-booked transaction can't be assigned to an invoice until its entry is reversed.
+3. **Booking a transaction** (`postingRules.bankPosting`, pure):
+   - Input: gross from the bank, account, VAT rate (0 / 0.07 / 0.19), and a mode:
+     - `normal`: net and VAT split half-up.
+       - Outgoing: S account (net) + S 1406/1401 (VAT) / H 1800.
+       - Incoming: S 1800 / H account (net) + H 3806/3801 (VAT).
+     - `vatOnly`: the whole amount goes to 1406 (outgoing) or 3806 (incoming). Used for a bank's separate "Mehrwertsteuerbelast" debit.
+   - Also: an optional supplier, a booking text (defaults to counterparty plus Verwendungszweck) and an optional receipt.
+   - Corrections by Storno. Reversing frees the transaction back to the inbox.
+4. **Suppliers and rules.**
+   - `Supplier { kreditorNumber (Counter 'supplier', starts above the highest imported number, ≥ 70000), name, ibans[], namePatterns[], purposePatterns[], defaultAccount, defaultVatRate, defaultMode, archived }`.
+   - `suggest(tx, suppliers)` is pure. Priority: IBAN, then purpose pattern, then name pattern. It returns supplier, account, VAT rate, mode and confidence.
+   - A "remember as rule" tick box in the booking dialog creates or extends a supplier.
+   - **Bulk confirm** books every selected inbox transaction with its suggestion in one action. Each transaction gets its own entry; a single failure doesn't stop the batch, and each result is reported.
+5. **Creditor import.** `admin.importCreditors({ csv, dryRun = true })` takes `creditorName, creditorId` rows (the Sheet export), upserts suppliers by Kreditor number and sets the counter. Creditor names never go into git.
+6. **Receipts.**
+   - `QUEEN_RECEIPTS_FOLDER_ID` points at the "Eingangsrechnungen / überwiesen" folder, with year subfolders.
+   - `receipts.list({ year })` lists the PDFs, read-only, through the existing Drive client.
+   - Suggestions are ranked by date proximity, amount appearing in the file name, and supplier name tokens.
+   - The booking dialog links `{ driveFileId, fileName, link }` to the entry, or records `receiptMissingReason` for an Eigenbeleg.
+   - The journal and inbox show a "Beleg fehlt" count for `bank` entries without a receipt.
+7. **Balance check.** `bookings.balanceCheck({ year })` compares ledger 1800 with the Firefly account balance at today's date (or 31.12). It is shown on the Buchen page with the difference and the count of open transactions.
+8. **UI.** A new "Buchen" page (DE/EN, dark mode, mobile) with:
+   - an inbox (open transactions with suggestion and receipt status) and a "booked" tab
+   - a booking dialog
+   - bulk confirm
+   - a suppliers list and edit view
+   - the balance-check banner
+
+   The nav badge shows the open count.
+
+**Out of scope for Phase 2:** automatic reverse charge (§13b) rules and splitting one transaction across several accounts. Both are booked as manual multi-line entries. Also out of scope: OCR of receipts.
+
 ## Verification
 
 - Unit (vitest): posting rules for every event incl. credit note, negative/discount lines and mixed VAT rates; ledger rejects unbalanced entries, unknown accounts and a closed FY; reversal nets to 0; VA rounding; `taxProvision` golden cases with anonymised inputs incl. rounding edges; `appropriation` incl. Verlustvortrag and the 25k cap.
