@@ -44,6 +44,7 @@ export const reportsRouter = router({
         invoiceNumber: inv.invoiceNumber,
         kind: inv.kind,
         customerNumber: inv.customerNumber,
+        clientId: String(inv.clientId),
         clientName: client?.name ?? '',
         title: inv.title,
         invoiceDate: inv.invoiceDate ?? null,
