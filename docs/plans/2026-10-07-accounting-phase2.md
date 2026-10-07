@@ -17,6 +17,27 @@
 
 **Spec:** `docs/plans/2026-10-07-accounting.md`, section "Phase 2 detail: bank import and Buchen inbox". Read it first. Phase 1 plan for conventions: `docs/plans/2026-10-07-accounting-phase1.md`.
 
+## Progress (paused 2026-10-07)
+
+| Task | State | Commits |
+|------|-------|---------|
+| 1. Sync withdrawals | ✅ done, reviewed | `a3ba6b4` |
+| 2. Bank posting rule | ✅ done, reviewed | `e078787` |
+| 3–8 | not started | — |
+
+Rulings made during execution (apply when resuming):
+
+1. In Task 4, the `balanceCheck` test must not depend on the ambient env. Stub `FIREFLY_*` (e.g. `vi.stubEnv`) in that test.
+2. Push, PR and deploy stay with the controller and need user approval.
+3. In Task 6, the Buchen page also gets a "Bank vollständig neu einlesen" button that calls `bank.syncNow({ full: true })`, so the go-live resync doesn't need the browser console.
+
+Deferred minors, to triage in the final review:
+- T1: the reconcile withdrawal test doesn't isolate the query filter.
+- T1: the `assignBankTransactionToInvoice` withdrawal guard has no test.
+- T1: stale "deposits" wording in the `syncNow` comment and in one Firefly test name.
+- T2: no debit = credit property test.
+- T2: reject cases only cover `direction: 'out'`.
+
 ## Global Constraints
 
 - **Money:** integer cents everywhere. Reuse `fireflyAmountToCents`, `parseGermanAmount` and `formatGermanEUR` from `src/server/lib/money.ts`.
