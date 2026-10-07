@@ -88,3 +88,55 @@ export function reversalLines(lines: PostingLine[]): PostingLine[] {
     creditCents: l.debitCents,
   }));
 }
+
+export type BankBookingMode = 'normal' | 'vatOnly';
+export const BANK_VAT_RATES = [0, 0.07, 0.19] as const;
+
+const INPUT_VAT: Record<string, string> = { '0.19': '1406', '0.07': '1401' };
+const OUTPUT_VAT: Record<string, string> = { '0.19': '3806', '0.07': '3801' };
+
+/** Gross bank amount → net + VAT, half-up on the net. */
+export function splitGross(grossCents: number, vatRate: number): { netCents: number; vatCents: number } {
+  const netCents = Math.round(grossCents / (1 + vatRate));
+  return { netCents, vatCents: grossCents - netCents };
+}
+
+export interface BankPostingInput {
+  direction: 'in' | 'out';
+  grossCents: number;
+  account: string;
+  vatRate: number;
+  mode: BankBookingMode;
+}
+
+/**
+ * Book one bank transaction. Outgoing: account (net) + Vorsteuer an Bank.
+ * Incoming: Bank an account (net) + Umsatzsteuer. `vatOnly` books the whole
+ * amount to the VAT account (e.g. a bank's separate "Mehrwertsteuerbelast").
+ */
+export function bankPosting(input: BankPostingInput): PostingLine[] {
+  const { direction, grossCents, account, vatRate, mode } = input;
+  if (!Number.isInteger(grossCents) || grossCents <= 0) {
+    throw new PostingError(`Bank amount must be positive integer cents, got ${grossCents}`);
+  }
+  if (!(BANK_VAT_RATES as readonly number[]).includes(vatRate)) {
+    throw new PostingError(`Unsupported VAT rate ${vatRate}`);
+  }
+  const sign = direction === 'out' ? 1 : -1; // debit side of the counter account
+  const vatAccount = (direction === 'out' ? INPUT_VAT : OUTPUT_VAT)[String(vatRate)];
+  const signed = new Map<string, number>();
+  add(signed, BANK, -sign * grossCents);
+
+  if (mode === 'vatOnly') {
+    if (!vatAccount) throw new PostingError('vatOnly needs a VAT rate above 0');
+    add(signed, vatAccount, sign * grossCents);
+    return toLines(signed);
+  }
+
+  if (!account) throw new PostingError('Booking account is required');
+  if (account === BANK) throw new PostingError('Cannot book a bank transaction to the bank account');
+  const { netCents, vatCents } = splitGross(grossCents, vatRate);
+  add(signed, account, sign * netCents);
+  if (vatCents !== 0 && vatAccount) add(signed, vatAccount, sign * vatCents);
+  return toLines(signed);
+}

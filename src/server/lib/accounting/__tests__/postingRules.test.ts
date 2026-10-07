@@ -5,6 +5,8 @@ import {
   reversalLines,
   PostingError,
   type PostingLine,
+  splitGross,
+  bankPosting,
 } from '../postingRules';
 
 function sums(lines: PostingLine[]) {
@@ -87,5 +89,84 @@ describe('reversalLines', () => {
     expect(reversalLines([{ account: '1800', debitCents: 5, creditCents: 0 }])).toEqual([
       { account: '1800', debitCents: 0, creditCents: 5 },
     ]);
+  });
+});
+
+describe('splitGross', () => {
+  it('splits gross half-up into net + VAT', () => {
+    expect(splitGross(11900, 0.19)).toEqual({ netCents: 10000, vatCents: 1900 });
+    expect(splitGross(999, 0.19)).toEqual({ netCents: 839, vatCents: 160 });
+    expect(splitGross(107, 0.07)).toEqual({ netCents: 100, vatCents: 7 });
+    expect(splitGross(1, 0.19)).toEqual({ netCents: 1, vatCents: 0 });
+    expect(splitGross(5000, 0)).toEqual({ netCents: 5000, vatCents: 0 });
+  });
+});
+
+describe('bankPosting', () => {
+  it('outgoing 19 %: expense net + Vorsteuer an Bank', () => {
+    expect(
+      bankPosting({ direction: 'out', grossCents: 11900, account: '6837', vatRate: 0.19, mode: 'normal' }),
+    ).toEqual([
+      { account: '1406', debitCents: 1900, creditCents: 0 },
+      { account: '1800', debitCents: 0, creditCents: 11900 },
+      { account: '6837', debitCents: 10000, creditCents: 0 },
+    ]);
+  });
+
+  it('outgoing 0 %: account an Bank, no VAT line', () => {
+    expect(
+      bankPosting({ direction: 'out', grossCents: 17500, account: '6420', vatRate: 0, mode: 'normal' }),
+    ).toEqual([
+      { account: '1800', debitCents: 0, creditCents: 17500 },
+      { account: '6420', debitCents: 17500, creditCents: 0 },
+    ]);
+  });
+
+  it('incoming 7 %: Bank an revenue net + USt', () => {
+    expect(
+      bankPosting({ direction: 'in', grossCents: 1070, account: '4300', vatRate: 0.07, mode: 'normal' }),
+    ).toEqual([
+      { account: '1800', debitCents: 1070, creditCents: 0 },
+      { account: '3801', debitCents: 0, creditCents: 70 },
+      { account: '4300', debitCents: 0, creditCents: 1000 },
+    ]);
+  });
+
+  it('vatOnly outgoing books the whole amount to Vorsteuer (separate bank VAT debit)', () => {
+    expect(
+      bankPosting({ direction: 'out', grossCents: 157, account: '', vatRate: 0.19, mode: 'vatOnly' }),
+    ).toEqual([
+      { account: '1406', debitCents: 157, creditCents: 0 },
+      { account: '1800', debitCents: 0, creditCents: 157 },
+    ]);
+  });
+
+  it('vatOnly incoming books the whole amount to Umsatzsteuer', () => {
+    expect(
+      bankPosting({ direction: 'in', grossCents: 300, account: '', vatRate: 0.19, mode: 'vatOnly' }),
+    ).toEqual([
+      { account: '1800', debitCents: 300, creditCents: 0 },
+      { account: '3806', debitCents: 0, creditCents: 300 },
+    ]);
+  });
+
+  it.each([
+    ['zero amount', { grossCents: 0 }],
+    ['fractional amount', { grossCents: 1.5 }],
+    ['unknown rate', { vatRate: 0.16 }],
+    ['booking to the bank account itself', { account: '1800' }],
+    ['missing account in normal mode', { account: '' }],
+    ['vatOnly with rate 0', { mode: 'vatOnly', vatRate: 0 }],
+  ])('rejects %s', (_name, override) => {
+    expect(() =>
+      bankPosting({
+        direction: 'out',
+        grossCents: 1000,
+        account: '6300',
+        vatRate: 0.19,
+        mode: 'normal',
+        ...(override as object),
+      }),
+    ).toThrowError(PostingError);
   });
 });
