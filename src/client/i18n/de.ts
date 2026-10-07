@@ -359,6 +359,7 @@ export const de = {
   'ledger.posted': 'Buchung erfasst.',
   'ledger.reversed': 'Storniert.',
   'bank.fullSync': 'Bank vollständig neu einlesen',
+  'bank.fullSyncTitle': 'Bank neu einlesen',
   'bank.fullSyncConfirm': 'Alle GLS-Transaktionen seit QUEEN_BANK_START neu einlesen? Das kann einen Moment dauern.',
   'bank.fullSyncRunning': 'Läuft …',
   'ledger.reverse': 'Stornieren',

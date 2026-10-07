@@ -361,6 +361,7 @@ export const en: Dict = {
   'ledger.posted': 'Entry recorded.',
   'ledger.reversed': 'Reversed.',
   'bank.fullSync': 'Full bank reimport',
+  'bank.fullSyncTitle': 'Reimport bank data',
   'bank.fullSyncConfirm': 'Re-import all GLS transactions since QUEEN_BANK_START? This may take a moment.',
   'bank.fullSyncRunning': 'Running …',
   'ledger.reverse': 'Reverse',

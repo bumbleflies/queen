@@ -148,6 +148,7 @@ export function BankPage() {
   const { lang, t } = useLanguage();
 
   const [tab, setTab] = useState<'open' | 'done' | 'ignored'>('open');
+  const [resyncOpen, setResyncOpen] = useState(false);
 
   const txs = (bank.data ?? []) as unknown as BankTx[];
   const openItems = (openItemsQuery.data?.items ?? []) as unknown as OpenItem[];
@@ -230,12 +231,13 @@ export function BankPage() {
   }
 
   async function handleFullSync() {
-    if (!window.confirm(t('bank.fullSyncConfirm'))) return;
     try {
       const result = await syncNow.mutateAsync({ full: true });
       await utils.invalidate();
-      if (result.ok) toast.show(`${t('bank.synced')} ${result.fetched} ${t('bank.bookings')}.`);
-      else toast.error(result.error ?? t('bank.syncFail'));
+      if (result.ok) {
+        toast.show(`${t('bank.synced')} ${result.fetched} ${t('bank.bookings')}.`);
+        setResyncOpen(false);
+      } else toast.error(result.error ?? t('bank.syncFail'));
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -256,8 +258,7 @@ export function BankPage() {
             type="button"
             className="btn ghost"
             disabled={syncNow.isPending}
-            title={t('bank.fullSyncConfirm')}
-            onClick={handleFullSync}
+            onClick={() => setResyncOpen(true)}
           >
             {syncNow.isPending ? t('bank.fullSyncRunning') : t('bank.fullSync')}
           </button>
@@ -266,6 +267,26 @@ export function BankPage() {
           </button>
         </div>
       </header>
+
+      {resyncOpen ? (
+        <section className="card" role="dialog" aria-label={t('bank.fullSyncTitle')} style={{ marginBottom: 16 }}>
+          <h2 style={{ marginTop: 0, fontSize: 18 }}>{t('bank.fullSyncTitle')}</h2>
+          <p style={{ margin: '8px 0 0', maxWidth: '70ch' }}>{t('bank.fullSyncConfirm')}</p>
+          <div className="row" style={{ marginTop: 12 }}>
+            <button type="button" className="btn" disabled={syncNow.isPending} onClick={handleFullSync}>
+              {syncNow.isPending ? t('bank.fullSyncRunning') : t('bank.fullSync')}
+            </button>
+            <button
+              type="button"
+              className="btn ghost"
+              disabled={syncNow.isPending}
+              onClick={() => setResyncOpen(false)}
+            >
+              {t('common.cancel')}
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       <section className="card row" style={{ padding: '14px 20px' }}>
         <span className={`badge ${run?.error ? 'b-cancel' : 'b-paid'}`}>{run?.error ? t('bank.error') : t('bank.ok')}</span>
