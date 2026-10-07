@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { trpc } from '../lib/trpc';
 import { formatDate, formatEUR, matchesChip, type InvoiceChip } from '../lib/format';
 import { StatusBadge } from '../components/StatusBadge';
@@ -36,7 +36,9 @@ const CHIPS: { key: InvoiceChip; label: string }[] = [
 export function InvoicesPage() {
   const invoices = trpc.invoices.list.useQuery();
   const clients = trpc.clients.list.useQuery();
-  const [chip, setChip] = useState<InvoiceChip>('all');
+  const [searchParams] = useSearchParams();
+  const initialChip = CHIPS.find((c) => c.key === searchParams.get('status'))?.key ?? 'all';
+  const [chip, setChip] = useState<InvoiceChip>(initialChip);
   const [search, setSearch] = useState('');
   const [clientId, setClientId] = useState('');
   const [year, setYear] = useState('');

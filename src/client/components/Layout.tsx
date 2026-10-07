@@ -15,15 +15,9 @@ export function Layout() {
     }
   }
 
-  const footer = (
-    <button type="button" className="btn ghost" style={{ marginTop: 'auto' }} onClick={logout}>
-      Abmelden
-    </button>
-  );
-
   return (
     <div className="shell">
-      <Navigation footer={footer} />
+      <Navigation onLogout={logout} />
       <main className="main">
         <Outlet />
       </main>
