@@ -22,7 +22,10 @@ New i18n keys `ledger.backfill.*` in both `de.ts` (source) and `en.ts`.
 
 ## Deployment results
 
-- TODO after merge/release: servyy-test first, then production.
+- Merged to `master` (PR #46). Released in `queen-v0.15.0` (release PR #47).
+- servyy-test: ansible finance converge + `docker compose pull/up queen`; container healthy, `/health` 200, served bundle contains the backfill UI.
+- Production (queen.bumbleflies.de): same procedure; container healthy on the `0.15.0` image, `/health` 200, served bundle contains the backfill UI.
+- Note: the compose role does not pull `:latest` on its own (`state: present` only converges); the image pull + recreate was run via ansible explicitly, queen service only.
 
 ## Verification commands
 
