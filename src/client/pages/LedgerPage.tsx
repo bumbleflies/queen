@@ -50,7 +50,13 @@ function EntryForm({ year, onDone }: { year: number; onDone: () => void }) {
     try {
       // Parse <input type="date"> as a LOCAL date — new Date('YYYY-MM-DD') would be UTC midnight.
       const [y, m, d] = date.split('-').map(Number);
-      await postManual.mutateAsync({ kind, date: new Date(y, m - 1, d), text, lines: parsed.lines });
+      await postManual.mutateAsync({
+        kind,
+        date: new Date(y, m - 1, d),
+        ...(kind === 'opening' ? { year } : {}),
+        text,
+        lines: parsed.lines,
+      });
       await utils.ledger.invalidate();
       toast.show('Buchung erfasst.');
       onDone();
@@ -225,8 +231,8 @@ export function LedgerPage() {
                     <td data-l="Text" className="w">{e.text}</td>
                     <td data-l="Art">{KIND_LABEL[e.source.kind] ?? e.source.kind}</td>
                     <td data-l="Buchungen" className="num">
-                      {e.lines.map((l) => (
-                        <div key={`${l.account}-${l.debitCents}-${l.creditCents}`}>
+                      {e.lines.map((l, i) => (
+                        <div key={`${i}-${l.account}-${l.debitCents}-${l.creditCents}`}>
                           {l.debitCents > 0 ? `S ${l.account} ${formatEUR(l.debitCents)}` : `H ${l.account} ${formatEUR(l.creditCents)}`}
                         </div>
                       ))}
