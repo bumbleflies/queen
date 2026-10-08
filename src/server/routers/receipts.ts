@@ -16,13 +16,16 @@ export const receiptsRouter = router({
       if (!folder) {
         throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Kein Belege-Ordner gewählt (Einstellungen)' });
       }
+      const tx = input.bankTxId ? await BankTransaction.findById(input.bankTxId) : null;
+      // Receipts are filed per year folder; the transaction's own date decides
+      // which year — not the page's fiscal-year filter (late-December runs).
+      const year = tx ? new Date(tx.date).getFullYear() : input.year;
       let files;
       try {
-        files = await listReceiptFiles(await driveForUser(ctx.user.sub), folder.id, input.year);
+        files = await listReceiptFiles(await driveForUser(ctx.user.sub), folder.id, year);
       } catch (err) {
         throw new TRPCError({ code: 'BAD_GATEWAY', message: `Drive nicht erreichbar: ${(err as Error).message}` });
       }
-      const tx = input.bankTxId ? await BankTransaction.findById(input.bankTxId) : null;
       if (!tx) return files.map((f) => ({ ...f, score: 0 })).sort((a, b) => a.name.localeCompare(b.name));
       const supplier = tx.supplierId ? await Supplier.findById(tx.supplierId) : null;
       return rankReceipts(files, tx, supplier?.name);
