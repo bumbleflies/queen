@@ -8,6 +8,7 @@ vi.mock('../lib/trpc', () => ({
     bank: { list: { useQuery: () => ({ data: [] }) } },
     bookings: { stats: { useQuery: () => ({ data: { open: 0, booked: 0, missingReceipts: 0 } }) } },
     me: { useQuery: () => ({ data: { user: { email: 'a@example.com', role: 'admin' } } }) },
+    settings: { getDriveFolders: { useQuery: () => ({ data: null, isError: false }) } },
   },
 }));
 
