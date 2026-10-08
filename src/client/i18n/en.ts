@@ -440,6 +440,7 @@ export const en: Dict = {
   'bookings.receipt.none': 'No receipt (own record)',
   'bookings.receipt.reason': 'Reason',
   'bookings.receipt.unavailable': 'Receipts unavailable',
+  'bookings.receipt.unavailableHint': 'Pick a receipts folder in Settings (Google Drive).',
   'bookings.dialog.title': 'Book transaction',
   'bookings.dialog.account': 'Account',
   'bookings.dialog.vat': 'VAT rate',

@@ -159,7 +159,10 @@ export function BookingDialog({ year, tx, onDone }: { year: number; tx: InboxRow
         <label className="lab" style={{ gridColumn: '1 / -1' }}>
           {t('bookings.receipt.choose')}
           {receipts.isError ? (
-            <span className="muted">{t('bookings.receipt.unavailable')}</span>
+            <>
+              <span className="muted">{t('bookings.receipt.unavailable')}</span>
+              <span className="muted">{t('bookings.receipt.unavailableHint')}</span>
+            </>
           ) : (
             <select className="field" value={receiptId} onChange={(e) => setReceiptId(e.target.value)}>
               <option value="">{t('bookings.receipt.choose')}</option>

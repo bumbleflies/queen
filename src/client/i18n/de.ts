@@ -438,6 +438,7 @@ export const de = {
   'bookings.receipt.none': 'Kein Beleg (Eigenbeleg)',
   'bookings.receipt.reason': 'Begründung',
   'bookings.receipt.unavailable': 'Belege nicht abrufbar',
+  'bookings.receipt.unavailableHint': 'Belege-Ordner in den Einstellungen wählen (Google Drive).',
   'bookings.dialog.title': 'Transaktion buchen',
   'bookings.dialog.account': 'Konto',
   'bookings.dialog.vat': 'USt-Satz',
