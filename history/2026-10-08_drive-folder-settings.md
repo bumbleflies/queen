@@ -27,8 +27,8 @@ The Drive folders used by queen were hardcoded env vars: `GOOGLE_DRIVE_INVOICES_
 
 ## Deployment results
 
-- Local: lint + both typechecks + 266 tests pass (DB-backed tests skip in this Alpine container; they run in CI).
-- Not yet deployed (feature branch `feat/drive-folder-settings`).
+- Merged to `master` (PR #65), released in `queen-v0.19.0` (release PR #66).
+- Local: lint + both typechecks + 266 tests pass (DB-backed tests skip in this Alpine container; they run in CI). First CI run failed on a self-contradictory assertion in `settings.test.ts` (env fallback left set); fixed in the PR.
 
 ## Verification commands
 
