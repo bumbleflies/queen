@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.0](https://github.com/bumbleflies/queen/compare/queen-v0.18.1...queen-v0.19.0) (2026-10-08)
+
+
+### Features
+
+* drive folder settings + booking dialog modal ([#65](https://github.com/bumbleflies/queen/issues/65)) ([a147103](https://github.com/bumbleflies/queen/commit/a147103b9f6d75df85177631b82f4d3ae431a213))
+
 ## [0.18.1](https://github.com/bumbleflies/queen/compare/queen-v0.18.0...queen-v0.18.1) (2026-10-07)
 
 
