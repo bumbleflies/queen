@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.1](https://github.com/bumbleflies/queen/compare/queen-v0.19.0...queen-v0.19.1) (2026-10-08)
+
+
+### Bug Fixes
+
+* **drive:** request drive.readonly so folder picker and receipts can see existing files ([#68](https://github.com/bumbleflies/queen/issues/68)) ([58e5b28](https://github.com/bumbleflies/queen/commit/58e5b2852d0df29b17c10074023ce2c6442b30f3))
+
 ## [0.19.0](https://github.com/bumbleflies/queen/compare/queen-v0.18.1...queen-v0.19.0) (2026-10-08)
 
 
