@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.2](https://github.com/bumbleflies/queen/compare/queen-v0.19.1...queen-v0.19.2) (2026-10-08)
+
+
+### Bug Fixes
+
+* **receipts:** year folder from transaction date, not page filter ([#70](https://github.com/bumbleflies/queen/issues/70)) ([74c5f53](https://github.com/bumbleflies/queen/commit/74c5f53cfeb4180468100e11cf05b4819829cf55))
+
 ## [0.19.1](https://github.com/bumbleflies/queen/compare/queen-v0.19.0...queen-v0.19.1) (2026-10-08)
 
 
