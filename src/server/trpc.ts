@@ -10,6 +10,7 @@ import { ledgerRouter } from './routers/ledger';
 import { suppliersRouter } from './routers/suppliers';
 import { bookingsRouter } from './routers/bookings';
 import { receiptsRouter } from './routers/receipts';
+import { settingsRouter } from './routers/settings';
 
 export * from './trpcInit';
 
@@ -30,6 +31,7 @@ export const appRouter = router({
   suppliers: suppliersRouter,
   bookings: bookingsRouter,
   receipts: receiptsRouter,
+  settings: settingsRouter,
 });
 
 export type AppRouter = typeof appRouter;
