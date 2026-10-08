@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { trpc } from '../lib/trpc';
 import { formatDate, formatEUR } from '../lib/format';
 import { useToast } from '../components/Toast';
@@ -88,9 +88,28 @@ export function BookingDialog({ year, tx, onDone }: { year: number; tx: InboxRow
     }
   }
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onDone();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onDone]);
+
   return (
-    <section className="card">
-      <div className="card-head">
+    <div
+      className="backdrop"
+      role="dialog"
+      aria-modal="true"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onDone();
+      }}
+    >
+      <section
+        className="card"
+        style={{ width: '100%', maxWidth: 720, maxHeight: 'calc(100vh - 80px)', overflowY: 'auto' }}
+      >
+        <div className="card-head">
         <div>
           <h2>{t('bookings.dialog.title')}</h2>
           <p className="page-sub" style={{ margin: '4px 0 0' }}>
@@ -140,7 +159,10 @@ export function BookingDialog({ year, tx, onDone }: { year: number; tx: InboxRow
         <label className="lab" style={{ gridColumn: '1 / -1' }}>
           {t('bookings.receipt.choose')}
           {receipts.isError ? (
-            <span className="muted">{t('bookings.receipt.unavailable')}</span>
+            <>
+              <span className="muted">{t('bookings.receipt.unavailable')}</span>
+              <span className="muted">{t('bookings.receipt.unavailableHint')}</span>
+            </>
           ) : (
             <select className="field" value={receiptId} onChange={(e) => setReceiptId(e.target.value)}>
               <option value="">{t('bookings.receipt.choose')}</option>
@@ -195,6 +217,7 @@ export function BookingDialog({ year, tx, onDone }: { year: number; tx: InboxRow
           {t('bookings.dialog.save')}
         </button>
       </div>
-    </section>
+      </section>
+    </div>
   );
 }

@@ -8,6 +8,7 @@ import { Invoice } from '../models/Invoice';
 import { backfillLedger } from '../lib/accounting/backfill';
 import { parseCreditorsCsv, applyCreditorImport } from '../lib/accounting/creditorImport';
 import { driveForUser } from '../services/driveForUser';
+import { getInvoicesFolder } from '../services/appSettings';
 
 const linkDriveFilesSchema = z.object({
   links: z
@@ -65,7 +66,8 @@ export const adminRouter = router({
       throw new TRPCError({ code: 'BAD_REQUEST', message: (err as Error).message });
     }
 
-    const folderId = process.env.GOOGLE_DRIVE_INVOICES_FOLDER_ID;
+    const invoicesFolder = await getInvoicesFolder();
+    const folderId = invoicesFolder?.id;
     const warnings = [...plan.warnings];
     let resolveDriveFile: ((fileName: string) => Promise<DriveFileRef | null>) | undefined;
     if (folderId) {
@@ -75,7 +77,7 @@ export const adminRouter = router({
         warnings.push(`Drive lookup unavailable: ${(err as Error).message}`);
       }
     } else {
-      warnings.push('Drive lookup skipped: GOOGLE_DRIVE_INVOICES_FOLDER_ID is not set');
+      warnings.push('Drive lookup skipped: no invoices folder is selected (settings)');
     }
 
     if (!input.dryRun && plan.errors.length > 0) {

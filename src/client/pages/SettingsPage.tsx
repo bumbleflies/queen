@@ -1,12 +1,27 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { trpc } from '../lib/trpc';
 import { LanguageToggle } from '../components/LanguageToggle';
+import { FolderPicker, type PickerFolder, type PickerScope } from '../components/FolderPicker';
 import { useLanguage } from '../i18n/LanguageContext';
+import type { DictKey } from '../i18n/de';
 import { useTheme } from '../theme/ThemeContext';
+
+const SCOPE_KEYS: Record<PickerScope, DictKey> = {
+  invoices: 'settings.driveInvoices',
+  receipts: 'settings.driveReceipts',
+};
+
+function folderLabel(f: PickerFolder | null, none: string): string {
+  if (!f) return none;
+  return f.name ?? f.id;
+}
 
 export function SettingsPage() {
   const me = trpc.me.useQuery();
   const user = me.data?.user;
+  const folders = trpc.settings.getDriveFolders.useQuery(undefined, { enabled: user?.role === 'admin' });
+  const [picker, setPicker] = useState<PickerScope | null>(null);
   const { t } = useLanguage();
   const { theme, setTheme } = useTheme();
 
@@ -23,10 +38,30 @@ export function SettingsPage() {
         </div>
       </section>
 
-      <section
-        className="card"
-        style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
-      >
+      {user?.role === 'admin' ? (
+        <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <h2 style={{ margin: 0, fontSize: 18 }}>{t('settings.driveTitle')}</h2>
+          <div className="grid-form">
+            {(['invoices', 'receipts'] as PickerScope[]).map((scope) => {
+              const f: PickerFolder | null = scope === 'invoices' ? folders.data?.invoices ?? null : folders.data?.receipts ?? null;
+              return (
+                <div key={scope}>
+                  <div className="lbl">{t(SCOPE_KEYS[scope])}</div>
+                  <div className="row" style={{ marginTop: 4 }}>
+                    <span>{folderLabel(f, t('settings.drive.none'))}</span>
+                    {folders.isError ? <span style={{ color: 'var(--danger)' }}>{(folders.error as unknown as Error).message}</span> : null}
+                    <button type="button" className="btn" onClick={() => setPicker(scope)}>
+                      {t('settings.drive.change')}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h2 style={{ margin: 0, fontSize: 18 }}>{t('settings.theme')}</h2>
         <div className="row" role="group" aria-label={t('settings.theme')}>
           {(
@@ -73,6 +108,14 @@ export function SettingsPage() {
         <Link to="/reports">{t('nav.reports')}</Link>
         <a href="/api/export/invoices.csv">{t('settings.csv')}</a>
       </section>
+
+      {picker ? (
+        <FolderPicker
+          scope={picker}
+          current={picker === 'invoices' ? folders.data?.invoices ?? null : folders.data?.receipts ?? null}
+          onClose={() => setPicker(null)}
+        />
+      ) : null}
     </>
   );
 }
