@@ -27,6 +27,7 @@ describe('settings router', () => {
     const before = await adminCaller().settings.getDriveFolders();
     expect(before.invoices).toEqual({ id: 'env-inv', name: null });
     expect(before.receipts).toBeNull();
+    delete process.env.GOOGLE_DRIVE_INVOICES_FOLDER_ID;
 
     await adminCaller().settings.setDriveFolders({
       receipts: { id: 'ui-rec', name: 'Belege' },
