@@ -30,6 +30,10 @@ The Drive folders used by queen were hardcoded env vars: `GOOGLE_DRIVE_INVOICES_
 - Merged to `master` (PR #65), released in `queen-v0.19.0` (release PR #66).
 - Local: lint + both typechecks + 266 tests pass (DB-backed tests skip in this Alpine container; they run in CI). First CI run failed on a self-contradictory assertion in `settings.test.ts` (env fallback left set); fixed in the PR.
 
+## Follow-up fixes
+
+- **`drive.readonly` scope (`v0.19.0` post-release):** in production the folder picker listed only "—" — with the `drive.file` scope, `files.list` returns only files queen itself created, so it neither sees subfolders nor receipts. Added `drive.readonly` to `GOOGLE_SCOPES` (users re-consent on next login; `drive.file` still covers uploads) and shared-drive flags for the browse/receipts list queries.
+
 ## Verification commands
 
 ```

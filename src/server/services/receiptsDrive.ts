@@ -2,7 +2,14 @@ import type { ReceiptFile } from '../lib/accounting/receipts';
 
 export interface DriveFilesLike {
   files: {
-    list(params: { q: string; fields?: string; spaces?: string; pageSize?: number }): Promise<{
+    list(params: {
+      q: string;
+      fields?: string;
+      spaces?: string;
+      pageSize?: number;
+      includeItemsFromAllDrives?: boolean;
+      supportsAllDrives?: boolean;
+    }): Promise<{
       data: { files?: { id?: string | null; name?: string | null; webViewLink?: string | null }[] | null };
     }>;
   };
@@ -18,6 +25,8 @@ export async function listReceiptFiles(drive: DriveFilesLike, rootFolderId: stri
     q: `${q(rootFolderId)} in parents and name = ${q(String(year))} and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
     fields: 'files(id, name)',
     spaces: 'drive',
+    includeItemsFromAllDrives: true,
+    supportsAllDrives: true,
   });
   const yearFolder = folders.data.files?.[0]?.id;
   if (!yearFolder) return [];
@@ -26,6 +35,8 @@ export async function listReceiptFiles(drive: DriveFilesLike, rootFolderId: stri
     fields: 'files(id, name, webViewLink)',
     spaces: 'drive',
     pageSize: 1000,
+    includeItemsFromAllDrives: true,
+    supportsAllDrives: true,
   });
   return (res.data.files ?? [])
     .filter((f) => f.id && f.name)
