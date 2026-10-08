@@ -33,6 +33,9 @@ export const settingsRouter = router({
           fields: 'files(id, name)',
           spaces: 'drive',
           pageSize: 1000,
+          // shared drives (if any) are visible too
+          includeItemsFromAllDrives: true,
+          supportsAllDrives: true,
         });
         return (res.data.files ?? [])
           .filter((f): f is { id: string; name: string } => !!f.id && !!f.name)
