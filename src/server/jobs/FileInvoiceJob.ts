@@ -10,6 +10,7 @@ import {
   type UploadInvoicePdfResult,
 } from '../services/DriveService';
 import { getGoogleAccessTokenForUser, type GoogleAccess } from '../services/AuthService';
+import { getInvoicesFolder } from '../services/appSettings';
 
 /** Sheet `nameTemplate` convention: `YYYY-MM.<invoiceNumber> - <clientName> <customerNumber> - <title>.pdf`. */
 export interface FileNameInvoice {
@@ -81,12 +82,6 @@ export interface FileInvoiceDeps {
   generatePdf?: typeof generateInvoicePdf;
 }
 
-export function getInvoicesFolderId(): string {
-  const id = process.env.GOOGLE_DRIVE_INVOICES_FOLDER_ID;
-  if (!id) throw new Error('GOOGLE_DRIVE_INVOICES_FOLDER_ID is not set');
-  return id;
-}
-
 /** Resolve who owns the Drive refresh token used to file the invoice. */
 async function resolveFilingUserId(): Promise<string> {
   const user = await User.findOne({
@@ -117,7 +112,11 @@ export async function processFileInvoice(
   const getAccessToken = deps.getAccessToken ?? getGoogleAccessTokenForUser;
   const generatePdf = deps.generatePdf ?? generateInvoicePdf;
   const upload = deps.upload ?? uploadInvoicePdf;
-  const folderId = deps.folderId ?? getInvoicesFolderId();
+  const folderRef = deps.folderId != null ? { id: deps.folderId, name: null } : await getInvoicesFolder();
+  if (!folderRef) {
+    throw new Error('Drive invoices folder is not selected (settings)');
+  }
+  const folderId = folderRef.id;
   const fileName = buildInvoiceFileName(invoice, client);
 
   try {
