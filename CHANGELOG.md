@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.4](https://github.com/bumbleflies/queen/compare/queen-v0.19.3...queen-v0.19.4) (2026-10-08)
+
+
+### Miscellaneous Chores
+
+* release 0.19.4 after Docker Hub token rotation ([46abcac](https://github.com/bumbleflies/queen/commit/46abcac6b0a1624f7c8fb846b27ac66b67bebd5c))
+
 ## [0.19.3](https://github.com/bumbleflies/queen/compare/queen-v0.19.2...queen-v0.19.3) (2026-10-08)
 
 
