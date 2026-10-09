@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.19.5](https://github.com/bumbleflies/queen/compare/queen-v0.19.4...queen-v0.19.5) (2026-10-09)
+
+
+### Bug Fixes
+
+* **deps:** update dependency dotenv to v18.0.7 ([#77](https://github.com/bumbleflies/queen/issues/77)) ([7871ce3](https://github.com/bumbleflies/queen/commit/7871ce3e6ef1b498ecaeb48a5a0677516088face))
+* **deps:** update dependency express to v5.3.0 ([#78](https://github.com/bumbleflies/queen/issues/78)) ([755b799](https://github.com/bumbleflies/queen/commit/755b79925af2d860ccd99858f0a36ce832441dd8))
+
 ## [0.19.4](https://github.com/bumbleflies/queen/compare/queen-v0.19.3...queen-v0.19.4) (2026-10-08)
 
 
