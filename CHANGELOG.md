@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.19.8](https://github.com/bumbleflies/queen/compare/queen-v0.19.7...queen-v0.19.8) (2026-10-11)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @tanstack/react-query to v5.104.2 ([#84](https://github.com/bumbleflies/queen/issues/84)) ([a5550ad](https://github.com/bumbleflies/queen/commit/a5550ad086f723cc53d12f437808d2c80550ba85))
+* **deps:** update dependency zod to v4.6.6 ([#85](https://github.com/bumbleflies/queen/issues/85)) ([55a924a](https://github.com/bumbleflies/queen/commit/55a924a065d0fa5238fe53a6b632c76920101eb1))
+
 ## [0.19.7](https://github.com/bumbleflies/queen/compare/queen-v0.19.6...queen-v0.19.7) (2026-10-11)
 
 
