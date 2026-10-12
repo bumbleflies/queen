@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.9](https://github.com/bumbleflies/queen/compare/queen-v0.19.8...queen-v0.19.9) (2026-10-12)
+
+
+### Bug Fixes
+
+* **deps:** update dependency vitest to v5.0.4 ([#87](https://github.com/bumbleflies/queen/issues/87)) ([dc2a654](https://github.com/bumbleflies/queen/commit/dc2a6547c5f7b7a1f63020194f0953d6661b09e9))
+
 ## [0.19.8](https://github.com/bumbleflies/queen/compare/queen-v0.19.7...queen-v0.19.8) (2026-10-11)
 
 
