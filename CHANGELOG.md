@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.19.10](https://github.com/bumbleflies/queen/compare/queen-v0.19.9...queen-v0.19.10) (2026-10-13)
+
+
+### Bug Fixes
+
+* **deps:** update dependency mongoose to v9.11.2 ([#89](https://github.com/bumbleflies/queen/issues/89)) ([8989f36](https://github.com/bumbleflies/queen/commit/8989f36d59c71b7cf001d78344c80f58c418eef5))
+* **deps:** update dependency zod to v4.6.7 ([#90](https://github.com/bumbleflies/queen/issues/90)) ([e2ea2cb](https://github.com/bumbleflies/queen/commit/e2ea2cbb107bbcf2023e7eac09d30377782385d6))
+
 ## [0.19.9](https://github.com/bumbleflies/queen/compare/queen-v0.19.8...queen-v0.19.9) (2026-10-12)
 
 
