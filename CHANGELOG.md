@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.12](https://github.com/bumbleflies/queen/compare/queen-v0.19.11...queen-v0.19.12) (2026-10-13)
+
+
+### Bug Fixes
+
+* **deps:** update dependency oxlint to v1.88.0 ([#95](https://github.com/bumbleflies/queen/issues/95)) ([26375ee](https://github.com/bumbleflies/queen/commit/26375ee266d7cc914e1c019d30af5633b344a0ad))
+
 ## [0.19.11](https://github.com/bumbleflies/queen/compare/queen-v0.19.10...queen-v0.19.11) (2026-10-13)
 
 
