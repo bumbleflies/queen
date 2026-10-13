@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.19.11](https://github.com/bumbleflies/queen/compare/queen-v0.19.10...queen-v0.19.11) (2026-10-13)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @testing-library/user-event to v14.6.8 ([#92](https://github.com/bumbleflies/queen/issues/92)) ([ede9c26](https://github.com/bumbleflies/queen/commit/ede9c264af99e080625893172fd58915df40c241))
+* **deps:** update dependency google-auth-library to v11.3.0 ([#93](https://github.com/bumbleflies/queen/issues/93)) ([39b3ad7](https://github.com/bumbleflies/queen/commit/39b3ad7253ac21002a5bcaa3f961268400732ae1))
+
 ## [0.19.10](https://github.com/bumbleflies/queen/compare/queen-v0.19.9...queen-v0.19.10) (2026-10-13)
 
 
