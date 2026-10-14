@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.19.13](https://github.com/bumbleflies/queen/compare/queen-v0.19.12...queen-v0.19.13) (2026-10-14)
+
+
+### Bug Fixes
+
+* **deps:** update dependency dotenv to v18.0.8 ([#99](https://github.com/bumbleflies/queen/issues/99)) ([fc86c55](https://github.com/bumbleflies/queen/commit/fc86c55ece6497b303a436109507dc1f4daf2cd7))
+* **deps:** update dependency nodemailer to v10.1.1 ([#97](https://github.com/bumbleflies/queen/issues/97)) ([4ace19e](https://github.com/bumbleflies/queen/commit/4ace19e4ba5513866dad19cd342dc7eb75651391))
+* **deps:** update react monorepo to v19.3.1 ([#100](https://github.com/bumbleflies/queen/issues/100)) ([adb8159](https://github.com/bumbleflies/queen/commit/adb815949faf25dc7e4e91086865279a7e28493e))
+
 ## [0.19.12](https://github.com/bumbleflies/queen/compare/queen-v0.19.11...queen-v0.19.12) (2026-10-13)
 
 
