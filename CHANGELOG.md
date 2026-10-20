@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.19.25](https://github.com/bumbleflies/queen/compare/queen-v0.19.24...queen-v0.19.25) (2026-10-20)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @tanstack/react-query to v5.104.5 ([#124](https://github.com/bumbleflies/queen/issues/124)) ([df663dd](https://github.com/bumbleflies/queen/commit/df663dd56417cc44da6dd0eeeb34381e0b2aa1d3))
+* **deps:** update dependency oxlint to v1.89.0 ([#125](https://github.com/bumbleflies/queen/issues/125)) ([eb83780](https://github.com/bumbleflies/queen/commit/eb83780cbc2bd13d4c846f1fcf0fed5d00931ca7))
+
 ## [0.19.24](https://github.com/bumbleflies/queen/compare/queen-v0.19.23...queen-v0.19.24) (2026-10-18)
 
 
