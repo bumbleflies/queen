@@ -1,4 +1,4 @@
-import { lineNetCents, lineVatCents } from '../money';
+import { formatGermanEUR, lineNetCents, lineVatCents } from '../money';
 
 /** One side of a journal line; exactly one of debit/credit is > 0. */
 export interface PostingLine {
@@ -155,5 +155,30 @@ export function bankPosting(input: BankPostingInput): PostingLine[] {
   const { netCents, vatCents } = splitGross(grossCents, vatRate);
   add(signed, account, sign * netCents);
   if (vatCents !== 0 && vatAccount) add(signed, vatAccount, sign * vatCents);
+  return toLines(signed);
+}
+
+export interface SplitPart {
+  account: string;
+  vatRate: number;
+  grossCents: number;
+  mode: 'normal' | 'reverseCharge';
+}
+
+/** One bank transaction booked across several accounts / VAT rates; each part is posted like `bankPosting`, lines merged per account. */
+export function bankPostingSplit(input: {
+  direction: 'in' | 'out';
+  grossCents: number;
+  parts: SplitPart[];
+}): PostingLine[] {
+  const { direction, grossCents, parts } = input;
+  const sum = parts.reduce((s, p) => s + p.grossCents, 0);
+  if (sum !== grossCents) {
+    throw new PostingError(`Aufteilung ergibt ${formatGermanEUR(sum)} statt ${formatGermanEUR(grossCents)}`);
+  }
+  const signed = new Map<string, number>();
+  for (const part of parts) {
+    for (const l of bankPosting({ direction, ...part })) add(signed, l.account, l.debitCents - l.creditCents);
+  }
   return toLines(signed);
 }

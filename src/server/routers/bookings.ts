@@ -51,10 +51,18 @@ function row(tx: HydratedDocument<BankTransactionDoc>) {
   };
 }
 
+const splitPart = z.object({
+  account: z.string().min(1),
+  vatRate: z.number().refine((r) => (BANK_VAT_RATES as readonly number[]).includes(r)),
+  grossCents: z.number().int().positive(),
+  mode: z.enum(['normal', 'reverseCharge']),
+});
+
 const bookFields = {
   account: z.string(),
   vatRate: z.number().refine((r) => (BANK_VAT_RATES as readonly number[]).includes(r)),
   mode: z.enum(['normal', 'vatOnly', 'reverseCharge']),
+  split: z.array(splitPart).min(2).optional(),
   supplierId: z.string().optional(),
   text: z.string().max(200).optional(),
   rememberRule: z.boolean().optional(),

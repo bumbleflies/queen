@@ -4,7 +4,7 @@ import type { HydratedDocument } from 'mongoose';
 import { Supplier } from '../../models/Supplier';
 import { allocateSupplierNumber } from '../numbering';
 import { findActiveBySource, post, reverse } from './ledger';
-import { bankPosting, type BankBookingMode } from './postingRules';
+import { bankPosting, bankPostingSplit, type BankBookingMode, type SplitPart } from './postingRules';
 import { normalizeIban } from './suggest';
 
 export type BookingErrorCode = 'NOT_FOUND' | 'MATCHED' | 'ALREADY_BOOKED' | 'NOT_BOOKED' | 'SUPPLIER_NOT_FOUND';
@@ -42,6 +42,8 @@ export interface BookBankInput {
   account: string;
   vatRate: number;
   mode: BankBookingMode;
+  /** Several accounts / VAT rates; `account`/`vatRate`/`mode` are then ignored and no rule is remembered. */
+  split?: SplitPart[];
   supplierId?: string;
   text?: string;
   rememberRule?: boolean;
@@ -62,13 +64,10 @@ export async function bookBankTransaction(input: BookBankInput) {
   let supplier = input.supplierId ? await Supplier.findById(input.supplierId) : null;
   if (input.supplierId && !supplier) throw new BookingError('SUPPLIER_NOT_FOUND', 'Kreditor nicht gefunden');
 
-  const lines = bankPosting({
-    direction: tx.direction === 'out' ? 'out' : 'in',
-    grossCents: tx.amountCents,
-    account: input.account,
-    vatRate: input.vatRate,
-    mode: input.mode,
-  });
+  const direction = tx.direction === 'out' ? 'out' : 'in';
+  const lines = input.split
+    ? bankPostingSplit({ direction, grossCents: tx.amountCents, parts: input.split })
+    : bankPosting({ direction, grossCents: tx.amountCents, account: input.account, vatRate: input.vatRate, mode: input.mode });
   const entry = await post({
     date: tx.date,
     text: input.text?.trim() || defaultBookingText(tx, supplier?.name),
@@ -77,7 +76,7 @@ export async function bookBankTransaction(input: BookBankInput) {
     createdBy: input.createdBy,
   });
 
-  if (input.rememberRule) supplier = await rememberRule(tx, input, supplier);
+  if (input.rememberRule && !input.split) supplier = await rememberRule(tx, input, supplier);
   if (supplier) tx.supplierId = supplier._id;
   if (input.receipt !== undefined) tx.receipt = input.receipt ?? undefined;
   if (input.receiptMissingReason !== undefined) tx.receiptMissingReason = input.receiptMissingReason ?? undefined;

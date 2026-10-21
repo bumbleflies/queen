@@ -22,6 +22,15 @@ describe('deriveBooking', () => {
   });
 });
 
+describe('deriveBooking split', () => {
+  it('returns null for two expense lines', () => {
+    expect(deriveBooking([l('6640', 3000), l('6805', 1891), l('1401', 210), l('1406', 359), l('1800', 0, 5460)])).toBeNull();
+  });
+  it('returns null for one account with two VAT rates', () => {
+    expect(deriveBooking([l('6640', 4891), l('1401', 210), l('1406', 359), l('1800', 0, 5460)])).toBeNull();
+  });
+});
+
 describe('historyKey', () => {
   it('ignores placeholder names and normalises IBANs', () => {
     expect(historyKey({ counterpartyName: '(unknown destination)' })).toBeNull();

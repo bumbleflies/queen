@@ -26,7 +26,10 @@ export function deriveBooking(lines: PostingLine[]): { account: string; vatRate:
   if (rest.length === 0) return null;
   const reverseCharge = rest.some((l) => REVERSE_CHARGE_ACCOUNTS.includes(l.account));
   const expense = rest.filter((l) => !(l.account in VAT_RATE_BY_ACCOUNT) && !REVERSE_CHARGE_ACCOUNTS.includes(l.account));
-  const vat = rest.find((l) => l.account in VAT_RATE_BY_ACCOUNT);
+  const vatLines = rest.filter((l) => l.account in VAT_RATE_BY_ACCOUNT);
+  // Split bookings (several expense accounts or VAT rates) have no single booking to suggest.
+  if (vatLines.length > 1) return null;
+  const vat = vatLines[0];
   if (reverseCharge) {
     return expense.length === 1 ? { account: expense[0].account, vatRate: 0.19, mode: 'reverseCharge' } : null;
   }

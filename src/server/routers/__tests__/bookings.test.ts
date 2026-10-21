@@ -63,6 +63,45 @@ describe('bookings', () => {
     expect(tb.rows.find((r) => r.account === '1406')?.balanceCents).toBe(1900);
   });
 
+  it('book with split posts one entry', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    const t = await tx({ amountCents: 5460 });
+    await caller.bookings.book({
+      bankTxId: String(t._id),
+      account: '',
+      vatRate: 0,
+      mode: 'normal',
+      rememberRule: true,
+      split: [
+        { account: '6640', vatRate: 0.07, grossCents: 3210, mode: 'normal' },
+        { account: '6837', vatRate: 0.19, grossCents: 2250, mode: 'normal' },
+      ],
+    });
+    const entries = await JournalEntry.find({ 'source.kind': 'bank' });
+    expect(entries).toHaveLength(1);
+    const tb = trialBalance(await JournalEntry.find({}));
+    const bal = (a: string) => tb.rows.find((r) => r.account === a)?.balanceCents;
+    expect(bal('1800')).toBe(-5460);
+    expect(bal('6640')).toBe(3000);
+    expect(bal('6837')).toBe(1891);
+    expect(bal('1401')).toBe(210);
+    expect(bal('1406')).toBe(359);
+    expect(await Supplier.countDocuments({})).toBe(0);
+    await expect(
+      caller.bookings.book({
+        bankTxId: String((await tx({ amountCents: 5460 }))._id),
+        account: '',
+        vatRate: 0,
+        mode: 'normal',
+        split: [
+          { account: '6640', vatRate: 0.07, grossCents: 3000, mode: 'normal' },
+          { account: '6837', vatRate: 0.19, grossCents: 2000, mode: 'normal' },
+        ],
+      }),
+    ).rejects.toThrow(/Aufteilung ergibt/);
+  });
+
   it('book reverseCharge posts 1407/3837 and keeps 1800 at gross', async (ctx) => {
     skipIfNoDb(ctx);
     const caller = adminCaller();

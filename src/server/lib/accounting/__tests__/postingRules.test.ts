@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  bankPostingSplit,
   invoicePosting,
   paymentPosting,
   reversalLines,
@@ -211,5 +212,37 @@ describe('SKR04 §13b accounts', () => {
   it('contains 1407 and 3837', () => {
     expect(SKR04_ACCOUNTS).toContainEqual({ number: '1407', name: 'Abziehbare Vorsteuer nach § 13b UStG 19 %', type: 'asset', vatRate: 0.19 });
     expect(SKR04_ACCOUNTS).toContainEqual({ number: '3837', name: 'Umsatzsteuer nach § 13b UStG 19 %', type: 'liability', vatRate: 0.19 });
+  });
+});
+
+describe('bankPostingSplit', () => {
+  it('split 7 % + 19 % restaurant bill', () => {
+    const lines = bankPostingSplit({
+      direction: 'out',
+      grossCents: 5460,
+      parts: [
+        { account: '6640', vatRate: 0.07, grossCents: 3210, mode: 'normal' },
+        { account: '6640', vatRate: 0.19, grossCents: 2250, mode: 'normal' },
+      ],
+    });
+    expect(lines).toEqual([
+      { account: '1401', debitCents: 210, creditCents: 0 },
+      { account: '1406', debitCents: 359, creditCents: 0 },
+      { account: '1800', debitCents: 0, creditCents: 5460 },
+      { account: '6640', debitCents: 4891, creditCents: 0 },
+    ]);
+    expect(lines.reduce((s, x) => s + x.debitCents - x.creditCents, 0)).toBe(0);
+  });
+  it('rejects parts that don\'t add up', () => {
+    expect(() =>
+      bankPostingSplit({
+        direction: 'out',
+        grossCents: 5460,
+        parts: [
+          { account: '6640', vatRate: 0.07, grossCents: 3000, mode: 'normal' },
+          { account: '6805', vatRate: 0.19, grossCents: 2000, mode: 'normal' },
+        ],
+      }),
+    ).toThrow(/Aufteilung ergibt 50,00.* statt 54,60/);
   });
 });
