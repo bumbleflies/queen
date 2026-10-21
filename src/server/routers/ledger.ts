@@ -101,7 +101,8 @@ export const ledgerRouter = router({
   availableCash: authedProcedure.input(z.object({ year: yearInput })).query(async ({ input }) => {
     // Non-closed years: the current calendar year plus every FiscalYear doc not closed.
     const open = await FiscalYear.find({ status: { $ne: 'closed' } }).select('year');
-    const years = new Set([new Date().getFullYear(), ...open.map((f) => f.year)]);
+    // The requested year is always loaded, so a closed year still yields its profit.
+    const years = new Set([new Date().getFullYear(), input.year, ...open.map((f) => f.year)]);
     const entries = await JournalEntry.find({ fiscalYear: { $in: [...years] } }).select('lines fiscalYear');
     const toMap = (es: typeof entries) =>
       new Map(trialBalance(es).rows.map((r) => [r.account, r.balanceCents]));
@@ -112,18 +113,28 @@ export const ledgerRouter = router({
     const asOf = new Date() < endOfYear ? new Date() : endOfYear;
     let bankCents = balances.get('1800') ?? 0;
     let bankSource: 'firefly' | 'ledger' = 'ledger';
+    let bankError: string | undefined;
+    let env: ReturnType<typeof readFireflyEnv> | null = null;
     try {
-      const { baseUrl, pat, glsAccountId } = readFireflyEnv();
-      bankCents = await new FireflyClient({ baseUrl, pat, glsAccountId }).fetchBalance(asOf);
-      bankSource = 'firefly';
+      env = readFireflyEnv();
     } catch {
-      // Firefly missing or unreachable: the ledger's 1800 is the fallback.
+      // Firefly simply not configured: the ledger's 1800 is the quiet fallback.
+    }
+    if (env) {
+      try {
+        const { baseUrl, pat, glsAccountId } = env;
+        bankCents = await new FireflyClient({ baseUrl, pat, glsAccountId }).fetchBalance(asOf);
+        bankSource = 'firefly';
+      } catch (err) {
+        bankError = (err as Error).message;
+      }
     }
 
     const [taxRate, openTxs] = await Promise.all([getTaxEstimateRate(), openTransactions(input.year)]);
     return {
       ...computeAvailableCash({ bankCents, balances, currentYearBalances, taxRate }),
       bankSource,
+      ...(bankError ? { bankError } : {}),
       asOf,
       openCount: openTxs.length,
     };
