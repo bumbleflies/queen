@@ -1,6 +1,6 @@
 # Booking automation and available money — Design
 
-> Status: decisions 2026-10-22 recorded below. Parts A–D are ready to plan. Part E waits for the model choice.
+> Status: all decisions recorded 2026-10-22. Parts A–D are planned in `2026-10-22-booking-automation-plan.md`; Part E gets its own plan after D.
 
 ## Intent
 
@@ -106,7 +106,7 @@ Kontostand GLS                         from Firefly (fallback: ledger 1800), dat
   - History suggestions and rules without account or VAT never auto-book.
   - Failures don't fail the reconcile run; they're counted and shown.
 
-## Part E — reading receipts (via the opencode server; model choice pending)
+## Part E — reading receipts (via the opencode server, free models)
 
 - **When:** for an open transaction with a clear receipt match but no rule or history suggestion, a "Beleg auslesen" action, or optionally an automatic run during reconcile.
 - **What it does:** sends the receipt's **text** to an LLM through the shared opencode server and asks for:
@@ -125,10 +125,14 @@ Kontostand GLS                         from Firefly (fallback: ledger 1800), dat
   - servyy-test has no `opencode-authgate`, so the integration can only be verified on production. Unit tests mock the HTTP contract.
 - **Input:** text only. The current models are text models, so queen extracts the PDF's text layer server-side and sends that. Receipts without a text layer (scans, photos) get no suggestion and stay manual.
 - **Data minimisation:** IBANs and BICs are masked in the text before sending. The prompt includes only the account numbers and names, not balances or other transactions.
-- **Model choice (pending):** queen pins **one model**, configured in env, and never falls back to the free-model chain. Free tiers may use inputs for training; receipts contain partner names and amounts.
-  - Candidates: the paid `opencode-go:deepseek-v4.1-flash`, or a Claude model if the opencode registry offers one (check `GET /api/model`).
-  - The owner picks before Part E is built.
-- **Privacy:** the owner agreed (2026-10-22) to receipts being read by an LLM. Which provider receives them is the pending model choice above.
+- **Models (decided 2026-10-22):** free models, with the backoff dontforget uses (`dontforget/src/search/opencodeClient.ts`):
+  - An ordered list of free models. Each model gets up to **3 attempts**, waiting `1000 ms × 2^(attempt−1)` (1 s, then 2 s) between them.
+  - Replies are polled every 1 s with a **120 s** timeout.
+  - When a model has used its attempts, the next model is tried; the last error is thrown when all are exhausted.
+  - **The list comes from the live registry** `GET /api/model`: models that are active, enabled and cost 0. Preferred ids come first, configured in env `QUEEN_OPENCODE_MODELS`, comma-separated `provider:id`. dontforget hard-codes its list and broke when `mimo-v2.5-free` was retired.
+  - **No paid fallback.** If every free model fails, the row simply gets no receipt suggestion. It shows "Beleg konnte nicht gelesen werden", and the next attempt happens on the next run or click.
+  - IBAN/BIC masking stays.
+- **Privacy:** the owner agreed (2026-10-22) to receipts being read by an LLM, including free-tier models whose providers may use inputs for training. IBAN/BIC masking reduces what leaves the server.
 
 ## Order and shipping
 
@@ -142,13 +146,9 @@ Each part is its own branch, PR and release; servyy-test first, then production.
 
 ## Decisions (2026-10-22)
 
-1. **Receipt reading:** yes, through the opencode server instead of a direct API key. The model is still open, see Part E.
+1. **Receipt reading:** yes, through the opencode server instead of a direct API key, using free models with dontforget's backoff (Part E).
 2. **Tax rate:** unknown. The default is 33 %, shown as an estimate and editable in Einstellungen; confirm with the tax advisor.
 3. **Auto-booking scope:** only rules matched by IBAN or Verwendungszweck.
-
-## Still open
-
-- **Part E model:** paid `opencode-go:deepseek-v4.1-flash`, or a Claude model if the opencode registry has one. Never the free-model chain.
 
 ## Verification
 
