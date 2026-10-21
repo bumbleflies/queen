@@ -59,4 +59,6 @@ Checked locally with `npm run dev` and made-up data, in DE and EN, light and dar
 
 ## Deployment results
 
-Pending.
+- Merged to `master` (PR #133, after merging `master` to resolve the README, `bookings.ts` and test conflicts with #132) and released in `queen-v0.20.0` (release PR #134), together with the receipt matching (#132).
+- Production: Watchtower (dev scope, 5-minute poll) recreated `finance.queen` from `:latest` at 20:23 UTC. It is healthy, `/health` returns 200, `package.json` reports `0.20.0`, and the served bundle contains the new code. Ofelia ran the daily reconcile normally this morning; the first run on 0.20.0 is at 07:30.
+- servyy-test: `./servyy-test.sh --tags user.docker.shared,user.docker.finance,user.docker.env.finance` finished with 0 failures. It also brought back `shared.mongo` and `shared.redis`, which were not running on test. `finance.queen` is healthy on `0.20.0`, the DB is connected and `getTimezoneOffset()` returns `-120`. Test runs on an empty database, so this check covers startup only.
