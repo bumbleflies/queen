@@ -16,7 +16,7 @@ export interface InboxRowLike {
   counterpartyIban?: string | null;
   description: string;
   suggestion: {
-    supplierId: string;
+    supplierId?: string;
     supplierName: string;
     account?: string;
     vatRate?: number;

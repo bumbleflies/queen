@@ -476,6 +476,7 @@ export const de = {
   'finance.undoReason': 'Rückgängig direkt nach dem Buchen',
   'finance.outcome.noRule': '⚠ Keine Regel',
   'finance.outcome.rule': 'Regel {name}',
+  'finance.outcome.history': 'wie am {date}',
   'finance.outcome.receipt': 'Beleg:',
   'finance.outcome.noReceipt': 'kein Beleg gefunden',
   'finance.outcome.vatOnly': 'nur USt',

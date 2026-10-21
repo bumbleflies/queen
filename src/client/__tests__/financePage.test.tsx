@@ -314,6 +314,32 @@ describe('FinancePage — inbox', () => {
     }]));
   });
 
+  it('history suggestion shows "wie am" and books with one click', async () => {
+    state.rows = [{
+      ...(streamRows[0] as Record<string, unknown>),
+      suggestion: {
+        matchedBy: 'history',
+        account: '6837',
+        vatRate: 0.19,
+        mode: 'normal',
+        supplierName: 'Alex Muster',
+        lastBookedAt: '2026-09-03',
+      },
+    }];
+    renderPage();
+    const row = screen.getByRole('row', { name: /Miete März/ });
+    expect(within(row).getByText('wie am 03.09.2026')).toBeInTheDocument();
+    expect(within(row).queryByText(/Regel/)).not.toBeInTheDocument();
+    fireEvent.click(within(row).getByRole('button', { name: 'Buchen' }));
+    await waitFor(() => expect(calls.book).toEqual([{
+      bankTxId: 'tx1',
+      account: '6837',
+      vatRate: 0.19,
+      mode: 'normal',
+      supplierId: undefined,
+    }]));
+  });
+
   it('Anpassen opens the booking dialog with the suggestion and a preselected receipt', async () => {
     receiptRows.current = [
       { id: 'f1', name: 'Acme_2026-03-01_123456.pdf', link: 'https://drive/f1', score: 8 },

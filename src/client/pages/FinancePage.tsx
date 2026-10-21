@@ -19,7 +19,10 @@ type DirFilter = 'all' | 'in' | 'out';
 const TABS: Tab[] = ['open', 'done', 'ignored', 'rules', 'journal'];
 
 interface StreamSuggestion {
-  supplierId: string;
+  supplierId?: string;
+  kreditorNumber?: number;
+  matchedBy: 'iban' | 'purpose' | 'name' | 'history';
+  lastBookedAt?: string | Date;
   supplierName: string;
   account?: string;
   vatRate?: number;
@@ -315,7 +318,11 @@ export function FinancePage() {
               {s.mode === 'reverseCharge' ? ` · ${t('finance.outcome.reverseCharge')}` : ''}
               {s.vatRate !== undefined ? ` · ${Math.round(s.vatRate * 100)} %` : ''}
             </span>
-            <span className="rc">{t('finance.outcome.rule').replace('{name}', s.supplierName)}</span>
+            <span className="rc">
+              {s.matchedBy === 'history' && s.lastBookedAt
+                ? t('finance.outcome.history').replace('{date}', formatDate(s.lastBookedAt))
+                : t('finance.outcome.rule').replace('{name}', s.supplierName)}
+            </span>
             {receiptLine ?? (receiptMatches.data?.available ? <span className="rc">{t('finance.outcome.noReceipt')}</span> : null)}
           </div>
         ) : (
