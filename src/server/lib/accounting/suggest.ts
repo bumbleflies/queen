@@ -1,4 +1,4 @@
-import type { BankBookingMode } from './postingRules';
+import type { BankBookingMode, SplitPart } from './postingRules';
 
 export interface SuggestTx {
   counterpartyName?: string | null;
@@ -28,8 +28,12 @@ export interface Suggestion {
   account?: string;
   vatRate?: number;
   mode: BankBookingMode;
-  matchedBy: 'iban' | 'purpose' | 'name' | 'history';
+  matchedBy: 'iban' | 'purpose' | 'name' | 'history' | 'receipt';
   lastBookedAt?: Date;
+  /** Receipt readings across several accounts / VAT rates; `account`/`vatRate` are then absent. */
+  split?: SplitPart[];
+  /** The extracted receipt figures, always shown with a receipt suggestion. */
+  reading?: { vendor: string; totalCents: number; lines: { vatRate: number; grossCents: number; account: string }[] };
 }
 
 export function normalizeIban(s: string): string {
@@ -53,7 +57,7 @@ export function suggest(tx: SuggestTx, suppliers: SuggestSupplier[]): Suggestion
   const purpose = norm(tx.description);
   const name = norm(tx.counterpartyName);
 
-  const checks: [Exclude<Suggestion['matchedBy'], 'history'>, (s: SuggestSupplier) => boolean][] = [
+  const checks: [Exclude<Suggestion['matchedBy'], 'history' | 'receipt'>, (s: SuggestSupplier) => boolean][] = [
     ['iban', (s) => iban !== '' && s.ibans.some((i) => normalizeIban(i) === iban)],
     ['purpose', (s) => containsAny(purpose, s.purposePatterns)],
     ['name', (s) => name !== '' && containsAny(name, s.namePatterns)],

@@ -6,6 +6,7 @@ import { computeSyncWindow, syncBankTransactions } from '../lib/bankSync';
 import { isCliEntrypoint, reconcilePendingTransactions } from '../lib/reconcile';
 import { findLastSuccessfulRun, readFireflyEnv } from '../lib/fireflyEnv';
 import { autoBookOpen, type AutoBookResult } from '../lib/accounting/autoBook';
+import { readOpenReceipts } from '../services/receiptReader';
 
 export interface TransactionSource {
   fetchTransactions(start: Date, end: Date): Promise<FireflyTransaction[]>;
@@ -23,7 +24,8 @@ export interface RunReconcileOptions {
 /**
  * One reconcile pass: sync GLS transactions into `BankTransaction` (idempotent),
  * then match every fresh transaction against invoices, then book what rules
- * flagged `autoBook` recognise (failures there only warn). Errors are recorded on
+ * flagged `autoBook` recognise (failures there only warn), then read up to 10
+ * receipts of open rows without a suggestion (never booked; trouble is ignored). Errors are recorded on
  * the `ReconcileRun` and returned; the CLI inspects `run.error` to exit non-zero.
  * Shared by the Ofelia cron entrypoint and `reconcile.runNow`.
  */
@@ -71,6 +73,9 @@ export async function runReconcile(
     run.autoBooked = auto.booked;
     run.autoBookFailed = auto.failed;
     if (auto.warning) run.autoBookWarning = auto.warning;
+
+    // Receipt reading only caches suggestions; it never books and never fails the run.
+    run.receiptsRead = (await readOpenReceipts(now).catch(() => ({ read: 0 }))).read;
     run.finishedAt = new Date();
     await run.save();
     return run;
@@ -93,7 +98,7 @@ async function main(): Promise<void> {
       console.log(
         `Reconcile done: fetched=${run.fetched} matched=${run.matched} ` +
           `partial=${run.partial} unmatched=${run.unmatched} ` +
-          `autoBooked=${run.autoBooked} autoBookFailed=${run.autoBookFailed}`,
+          `autoBooked=${run.autoBooked} autoBookFailed=${run.autoBookFailed} receiptsRead=${run.receiptsRead}`,
       );
       if (run.autoBookWarning) console.warn(`Auto-booking: ${run.autoBookWarning}`);
     }

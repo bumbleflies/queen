@@ -13,6 +13,11 @@ vi.mock('../../jobs/queue', () => ({ enqueueFileInvoice: vi.fn(async () => {}) }
 const listReceiptFiles = vi.hoisted(() => vi.fn(async (): Promise<{ id: string; name: string; link: string }[]> => []));
 vi.mock('../../services/receiptsDrive', () => ({ listReceiptFiles }));
 vi.mock('../../services/driveForUser', () => ({ driveForUser: vi.fn(async () => ({})) }));
+const ask = vi.hoisted(() => vi.fn(async (_prompt: string): Promise<{ text: string; model: { providerID: string; id: string } }> => ({ text: '', model: { providerID: 'free', id: 'm1' } })));
+const opencode = vi.hoisted(() => ({ enabled: true }));
+vi.mock('../../services/OpencodeClient', () => ({ opencodeFromEnv: () => (opencode.enabled ? { ask } : null) }));
+const receiptText = vi.hoisted(() => vi.fn(async (): Promise<string> => ''));
+vi.mock('../../services/receiptText', () => ({ receiptText }));
 
 let seq = 0;
 async function tx(over: Record<string, unknown> = {}) {
@@ -35,6 +40,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   if (mongoose.connection.readyState !== 1) return;
   vi.clearAllMocks();
+  opencode.enabled = true;
   await resetLedgerDb();
   await Supplier.deleteMany({});
   await Counter.deleteMany({ _id: 'supplier' });
@@ -330,9 +336,136 @@ describe('bookings', () => {
     expect(listReceiptFiles).toHaveBeenCalledTimes(1);
 
     listReceiptFiles.mockRejectedValue(new Error('no token'));
-    expect(await caller.bookings.receiptMatches({ year: 2026 })).toEqual({ available: false, matches: {} });
+    expect(await caller.bookings.receiptMatches({ year: 2026 })).toEqual({ available: false, readingAvailable: true, matches: {} });
     delete process.env.QUEEN_RECEIPTS_FOLDER_ID;
-    expect(await caller.bookings.receiptMatches({ year: 2026 })).toEqual({ available: false, matches: {} });
+    expect(await caller.bookings.receiptMatches({ year: 2026 })).toEqual({ available: false, readingAvailable: true, matches: {} });
+    opencode.enabled = false;
+    expect((await caller.bookings.receiptMatches({ year: 2026 })).readingAvailable).toBe(false);
+  });
+
+  describe('receipt reading', () => {
+    const RECEIPT = { driveFileId: 'r1', fileName: 'Cafe_2026-01-30.pdf', link: 'https://drive/r1' };
+    const SPLIT_READING = {
+      vendor: 'Muster Café',
+      country: 'DE',
+      date: '2026-01-30',
+      totalCents: 5460,
+      reverseCharge: false,
+      lines: [
+        { vatRate: 0.07, grossCents: 3210, account: '6640' },
+        { vatRate: 0.19, grossCents: 2250, account: '6837' },
+      ],
+    };
+    const replyWith = (reading: unknown) => ({ text: `Ergebnis:\n${JSON.stringify(reading)}`, model: { providerID: 'free', id: 'm1' } });
+
+    it('readReceipt caches the reading and the stream shows matchedBy receipt', async (ctx) => {
+      skipIfNoDb(ctx);
+      const caller = adminCaller();
+      const t = await tx({ amountCents: 5460, counterpartyName: 'Muster Cafe', receipt: RECEIPT });
+      receiptText.mockResolvedValue('Muster Café\nSumme 54,60 EUR\nIBAN DE89 4306 0967 8221 1054 00');
+      ask.mockResolvedValue(replyWith(SPLIT_READING));
+
+      const res = await caller.bookings.readReceipt({ bankTxId: String(t._id) });
+      expect(res.status).toBe('ok');
+      expect(res.suggestion).toMatchObject({ matchedBy: 'receipt', supplierName: 'Muster Café', reading: { vendor: 'Muster Café', totalCents: 5460 } });
+      expect(res.suggestion?.split).toHaveLength(2);
+      expect(receiptText).toHaveBeenCalledWith(expect.anything(), 'r1');
+      const prompt = ask.mock.calls[0][0];
+      expect(prompt).toContain('[IBAN]');
+      expect(prompt).not.toContain('4306');
+      expect(prompt).toContain('6640');
+
+      const stored = await BankTransaction.findById(t._id);
+      expect(stored?.receiptReading).toMatchObject({ driveFileId: 'r1', status: 'ok', model: 'free:m1' });
+
+      // cached: no second request
+      expect((await caller.bookings.readReceipt({ bankTxId: String(t._id) })).status).toBe('ok');
+      expect(ask).toHaveBeenCalledTimes(1);
+      await caller.bookings.readReceipt({ bankTxId: String(t._id), force: true });
+      expect(ask).toHaveBeenCalledTimes(2);
+
+      const [row] = await caller.bookings.stream({ year: 2026 });
+      expect(row.state === 'open' && row.suggestion).toMatchObject({ matchedBy: 'receipt' });
+      const [inboxRow] = await caller.bookings.inbox({ year: 2026 });
+      expect(inboxRow.suggestion?.matchedBy).toBe('receipt');
+
+      // bookBulk books the split as one entry
+      const [result] = await caller.bookings.bookBulk({ bankTxIds: [String(t._id)] });
+      expect(result.ok).toBe(true);
+      const tb = trialBalance(await JournalEntry.find({}));
+      const bal = (a: string) => tb.rows.find((r) => r.account === a)?.balanceCents;
+      expect(bal('1800')).toBe(-5460);
+      expect(bal('6640')).toBe(3000);
+      expect(bal('6837')).toBe(1891);
+    });
+
+    it('reads the clearly matching Drive receipt when none is attached', async (ctx) => {
+      skipIfNoDb(ctx);
+      process.env.QUEEN_RECEIPTS_FOLDER_ID = 'root';
+      listReceiptFiles.mockResolvedValue([
+        { id: 'h10', name: 'Hoster_2026-10-16_100000123456.pdf', link: 'https://drive/h10' },
+        { id: 'h09', name: 'Hoster_2026-09-16_100000654321.pdf', link: 'https://drive/h09' },
+      ]);
+      const caller = adminCaller();
+      const a = await tx({ counterpartyName: 'Hoster GmbH', description: 'Invoice No. 100000123456', date: new Date(2026, 9, 21), amountCents: 1213 });
+      const vague = await tx({ counterpartyName: 'Jemand', description: 'Irgendwas', date: new Date(2026, 9, 21) });
+      receiptText.mockResolvedValue('Hoster GmbH Rechnung 12,13 EUR');
+      ask.mockResolvedValue(replyWith({ vendor: 'Hoster GmbH', totalCents: 1213, lines: [{ vatRate: 0.19, grossCents: 1213, account: '6837' }] }));
+      const res = await caller.bookings.readReceipt({ bankTxId: String(a._id) });
+      expect(res.suggestion).toMatchObject({ account: '6837', vatRate: 0.19, mode: 'normal', matchedBy: 'receipt' });
+      expect(receiptText).toHaveBeenCalledWith(expect.anything(), 'h10');
+      expect(await caller.bookings.readReceipt({ bankTxId: String(vague._id) })).toEqual({ status: 'noReceipt', suggestion: null });
+      delete process.env.QUEEN_RECEIPTS_FOLDER_ID;
+    });
+
+    it('a failed read sets status failed and no suggestion', async (ctx) => {
+      skipIfNoDb(ctx);
+      const caller = adminCaller();
+      const t = await tx({ amountCents: 5460, receipt: RECEIPT });
+      receiptText.mockResolvedValue('Muster Café Summe 54,60 EUR');
+      ask.mockRejectedValue(new Error('opencode reply timed out after 120s'));
+      expect(await caller.bookings.readReceipt({ bankTxId: String(t._id) })).toEqual({ status: 'failed', suggestion: null });
+      expect((await BankTransaction.findById(t._id))?.receiptReading).toMatchObject({ status: 'failed', error: expect.stringMatching(/timed out/) });
+
+      // an unusable answer fails too
+      ask.mockResolvedValue(replyWith({ ...SPLIT_READING, totalCents: 9999 }));
+      expect((await caller.bookings.readReceipt({ bankTxId: String(t._id), force: true })).status).toBe('failed');
+      const [row] = await caller.bookings.inbox({ year: 2026 });
+      expect(row.suggestion).toBeNull();
+    });
+
+    it('a PDF without text sets noText', async (ctx) => {
+      skipIfNoDb(ctx);
+      const caller = adminCaller();
+      const t = await tx({ amountCents: 5460, receipt: RECEIPT });
+      receiptText.mockResolvedValue('  \n ');
+      expect(await caller.bookings.readReceipt({ bankTxId: String(t._id) })).toEqual({ status: 'noText', suggestion: null });
+      expect(ask).not.toHaveBeenCalled();
+      expect((await BankTransaction.findById(t._id))?.receiptReading?.status).toBe('noText');
+    });
+
+    it('without OPENCODE_API_KEY reading is unavailable, not an error', async (ctx) => {
+      skipIfNoDb(ctx);
+      opencode.enabled = false;
+      const t = await tx({ amountCents: 5460, receipt: RECEIPT });
+      expect(await adminCaller().bookings.readReceipt({ bankTxId: String(t._id) })).toEqual({ status: 'unavailable', suggestion: null });
+      expect(receiptText).not.toHaveBeenCalled();
+    });
+
+    it('rules win over a receipt reading', async (ctx) => {
+      skipIfNoDb(ctx);
+      const caller = adminCaller();
+      await caller.suppliers.create({ name: 'Software', namePatterns: ['Software Ltd'], defaultAccount: '6820', defaultVatRate: 0.19 });
+      const t = await tx({ amountCents: 5460, receipt: RECEIPT });
+      receiptText.mockResolvedValue('Muster Café Summe 54,60 EUR');
+      ask.mockResolvedValue(replyWith(SPLIT_READING));
+      const res = await caller.bookings.readReceipt({ bankTxId: String(t._id) });
+      expect(res.suggestion?.matchedBy).toBe('receipt');
+      const [row] = await caller.bookings.inbox({ year: 2026 });
+      expect(row.suggestion).toMatchObject({ matchedBy: 'name', account: '6820' });
+      const [streamRow] = await caller.bookings.stream({ year: 2026 });
+      expect(streamRow.state === 'open' && streamRow.suggestion?.matchedBy).toBe('name');
+    });
   });
 
   it('unbook reverses the entry and returns the tx to the inbox; setReceipt stores metadata', async (ctx) => {

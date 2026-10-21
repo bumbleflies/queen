@@ -48,7 +48,7 @@ async function reversedRefs(refIds: string[]): Promise<Set<string>> {
 }
 
 /** The current calendar year plus every fiscal year that isn't closed. */
-async function bookableYears(now: Date): Promise<number[]> {
+export async function bookableYears(now: Date): Promise<number[]> {
   const years = await FiscalYear.find({}).select('year status').lean();
   const closed = new Set(years.filter((y) => y.status === 'closed').map((y) => y.year));
   const all = new Set([now.getFullYear(), ...years.map((y) => y.year)]);

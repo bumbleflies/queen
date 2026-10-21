@@ -18,6 +18,11 @@ import { initLedgerModels, resetLedgerDb } from './helpers/ledgerFixtures';
 const listReceiptFiles = vi.hoisted(() => vi.fn(async (): Promise<{ id: string; name: string; link: string }[]> => []));
 vi.mock('../../services/receiptsDrive', () => ({ listReceiptFiles }));
 vi.mock('../../services/driveForUser', () => ({ driveForUser: vi.fn(async () => ({})), driveForCron: vi.fn(async () => ({})) }));
+const ask = vi.hoisted(() => vi.fn(async (_prompt: string): Promise<{ text: string; model: { providerID: string; id: string } }> => ({ text: '', model: { providerID: 'free', id: 'm1' } })));
+const opencode = vi.hoisted(() => ({ enabled: false }));
+vi.mock('../../services/OpencodeClient', () => ({ opencodeFromEnv: () => (opencode.enabled ? { ask } : null) }));
+const receiptText = vi.hoisted(() => vi.fn(async (): Promise<string> => 'Laden KG Rechnung 11,90 EUR'));
+vi.mock('../../services/receiptText', () => ({ receiptText }));
 
 function dbAvailable(): boolean {
   return mongoose.connection.readyState === 1;
@@ -359,5 +364,85 @@ describe('auto-booking in the daily reconcile (DB)', () => {
     expect(run.error ?? null).toBeNull();
     expect(run.autoBooked).toBe(0);
     expect(run.autoBookFailed).toBe(1);
+  });
+});
+
+describe('receipt reading in the daily reconcile (DB)', () => {
+  const NOW = new Date(2026, 9, 22, 7, 30);
+
+  beforeEach(() => {
+    receiptText.mockClear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    opencode.enabled = false;
+    ask.mockReset();
+  });
+
+  async function openWithReceipt(n: number, overrides: Record<string, unknown> = {}) {
+    const number = String(100000000 + n);
+    await BankTransaction.create({
+      fireflyJournalId: `${800 + n}:0`,
+      date: new Date(2026, 9, 16),
+      amountCents: 1190,
+      currency: 'EUR',
+      direction: 'out',
+      description: `Rechnung ${number}`,
+      counterpartyName: 'Laden KG',
+      ignored: false,
+      ...overrides,
+    });
+    return { id: `f${n}`, name: `Laden_2026-10-16_${number}.pdf`, link: `https://drive/f${n}` };
+  }
+
+  it('reconcile reads at most 10 receipts and never books them', async (ctx) => {
+    skipIfNoDb(ctx);
+    vi.stubEnv('QUEEN_RECEIPTS_FOLDER_ID', 'root');
+    opencode.enabled = true;
+    ask.mockResolvedValue({
+      text: JSON.stringify({ vendor: 'Laden KG', totalCents: 1190, lines: [{ vatRate: 0.19, grossCents: 1190, account: '6837' }] }),
+      model: { providerID: 'free', id: 'm1' },
+    });
+    const files = [];
+    for (let n = 1; n <= 12; n++) files.push(await openWithReceipt(n));
+    // a rule suggestion means no reading is needed
+    await Supplier.create({ kreditorNumber: 70001, name: 'Regel', namePatterns: ['Regel AG'], defaultAccount: '6820', defaultVatRate: 0.19 });
+    files.push(await openWithReceipt(13, { counterpartyName: 'Regel AG' }));
+    listReceiptFiles.mockResolvedValue(files);
+
+    const run = await runReconcile({ skipSync: true, now: NOW });
+    expect(run.error ?? null).toBeNull();
+    expect(run.receiptsRead).toBe(10);
+    expect(ask).toHaveBeenCalledTimes(10);
+    expect(await JournalEntry.countDocuments({ 'source.kind': 'bank' })).toBe(0);
+    expect(await BankTransaction.countDocuments({ 'receiptReading.status': 'ok' })).toBe(10);
+    expect((await BankTransaction.findOne({ counterpartyName: 'Regel AG' }))?.receiptReading).toBeUndefined();
+
+    const second = await runReconcile({ skipSync: true, now: NOW });
+    expect(second.receiptsRead).toBe(2);
+    expect(ask).toHaveBeenCalledTimes(12);
+    expect(await JournalEntry.countDocuments({ 'source.kind': 'bank' })).toBe(0);
+    const stream = await adminCaller().bookings.stream({ year: 2026 });
+    expect(stream.filter((r) => r.state === 'open' && r.suggestion?.matchedBy === 'receipt')).toHaveLength(12);
+  });
+
+  it('reading trouble never fails the run, and without a key nothing is read', async (ctx) => {
+    skipIfNoDb(ctx);
+    vi.stubEnv('QUEEN_RECEIPTS_FOLDER_ID', 'root');
+    listReceiptFiles.mockResolvedValue([await openWithReceipt(1)]);
+    const off = await runReconcile({ skipSync: true, now: NOW });
+    expect(off.receiptsRead).toBe(0);
+    expect(receiptText).not.toHaveBeenCalled();
+
+    opencode.enabled = true;
+    ask.mockRejectedValue(new Error('all models failed'));
+    const run = await runReconcile({ skipSync: true, now: NOW });
+    expect(run.error ?? null).toBeNull();
+    expect(run.receiptsRead).toBe(1);
+    expect((await BankTransaction.findOne({}))?.receiptReading?.status).toBe('failed');
+
+    listReceiptFiles.mockRejectedValue(new Error('invalid_grant'));
+    expect((await runReconcile({ skipSync: true, now: NOW })).error ?? null).toBeNull();
   });
 });

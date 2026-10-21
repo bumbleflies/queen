@@ -1,0 +1,167 @@
+import { BANK, BANK_VAT_RATES, REVERSE_CHARGE_RATE, type SplitPart } from './postingRules';
+import { suggestWithHistory, type BookingHistory } from './history';
+import type { SuggestSupplier, SuggestTx, Suggestion } from './suggest';
+
+export interface ReceiptLine {
+  vatRate: number;
+  grossCents: number;
+  account: string;
+}
+
+export interface ReceiptReading {
+  vendor: string;
+  country: string | null;
+  date: string | null;
+  totalCents: number;
+  reverseCharge: boolean;
+  lines: ReceiptLine[];
+}
+
+const IBAN = /\b[A-Z]{2}\d{2}(?:\s?[A-Z0-9]{4}){2,7}(?:\s?[A-Z0-9]{1,4})?\b/g;
+const BIC = /(\bBIC\b\s*[:.]?\s*)[A-Z]{6}[A-Z0-9]{2}(?:[A-Z0-9]{3})?\b/gi;
+
+/** Bank details never leave queen: IBANs → `[IBAN]`, BICs after "BIC" → `[BIC]`. */
+export function maskBankData(text: string): string {
+  return text.replace(BIC, '$1[BIC]').replace(IBAN, '[IBAN]');
+}
+
+/** Bank and VAT accounts are posted by the booking itself, never chosen for a receipt line. */
+const NOT_FOR_RECEIPT_LINES = new Set([BANK, '1401', '1406', '1407', '3801', '3806', '3837']);
+
+export function receiptAccounts<T extends { number: string }>(accounts: T[]): T[] {
+  return accounts.filter((a) => !NOT_FOR_RECEIPT_LINES.has(a.number));
+}
+
+const MAX_TEXT = 12_000;
+
+/** The receipt text (masked, truncated) plus queen's chart of accounts; asks for one strict JSON object. */
+export function buildReceiptPrompt(text: string, accounts: { number: string; name: string }[]): string {
+  const masked = maskBankData(text).slice(0, MAX_TEXT);
+  return [
+    'Du liest einen Beleg (Rechnung/Quittung) für die Buchhaltung einer deutschen GmbH (SKR04).',
+    'Antworte NUR mit einem JSON-Objekt, ohne weiteren Text, in genau dieser Form:',
+    '{ "vendor": string, "country": string | null, "date": "YYYY-MM-DD" | null, "totalCents": number, "reverseCharge": boolean,',
+    '  "lines": [{ "vatRate": number, "grossCents": number, "account": string }] }',
+    'Regeln:',
+    '- Beträge in ganzen Cent (54,60 € → 5460). totalCents ist der Rechnungsbetrag brutto.',
+    '- Eine Zeile pro Steuersatz und Konto; die grossCents aller Zeilen ergeben zusammen totalCents.',
+    '- vatRate ist 0, 0.07 oder 0.19.',
+    '- reverseCharge ist true, wenn die Rechnung auf die Steuerschuldnerschaft des Leistungsempfängers (§ 13b UStG, "reverse charge") verweist; dann vatRate 0.',
+    '- country als ISO-Code des Rechnungsstellers (z. B. "DE", "IE"), sonst null.',
+    '- account muss eine dieser Kontonummern sein:',
+    ...accounts.map((a) => `  ${a.number} ${a.name}`),
+    '',
+    'Beleg:',
+    '"""',
+    masked,
+    '"""',
+  ].join('\n');
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+const isCents = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v > 0;
+
+/** The one JSON object in a reply (prose and code fences around it allowed), validated against queen's accounts. */
+export function parseReceiptReply(reply: string, accounts: Set<string>): ReceiptReading | null {
+  const start = reply.indexOf('{');
+  const end = reply.lastIndexOf('}');
+  if (start < 0 || end <= start) return null;
+  let json: unknown;
+  try {
+    json = JSON.parse(reply.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+  if (!isRecord(json) || !isCents(json.totalCents) || !Array.isArray(json.lines) || json.lines.length === 0) return null;
+  const lines: ReceiptLine[] = [];
+  for (const l of json.lines) {
+    if (!isRecord(l) || !isCents(l.grossCents) || typeof l.vatRate !== 'number') return null;
+    if (!(BANK_VAT_RATES as readonly number[]).includes(l.vatRate)) return null;
+    const account = typeof l.account === 'string' ? l.account.trim() : String(l.account ?? '');
+    if (!accounts.has(account)) return null;
+    lines.push({ vatRate: l.vatRate, grossCents: l.grossCents, account });
+  }
+  if (lines.reduce((s, l) => s + l.grossCents, 0) !== json.totalCents) return null;
+  const str = (v: unknown) => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null);
+  return {
+    vendor: str(json.vendor) ?? '',
+    country: str(json.country),
+    date: str(json.date),
+    totalCents: json.totalCents,
+    reverseCharge: json.reverseCharge === true,
+    lines,
+  };
+}
+
+/**
+ * A reading as a booking suggestion: one account/rate → plain suggestion,
+ * several → `split`. §13b always books 19 % and only outgoing. Null when the
+ * receipt total is not the bank amount.
+ */
+export function readingToSuggestion(
+  reading: ReceiptReading,
+  tx: { amountCents: number; direction?: string | null; counterpartyName?: string | null },
+): Suggestion | null {
+  if (reading.totalCents !== tx.amountCents) return null;
+  if (reading.reverseCharge && tx.direction === 'in') return null;
+  const mode: SplitPart['mode'] = reading.reverseCharge ? 'reverseCharge' : 'normal';
+  const parts: SplitPart[] = [];
+  for (const l of reading.lines) {
+    const vatRate = reading.reverseCharge ? REVERSE_CHARGE_RATE : l.vatRate;
+    const same = parts.find((p) => p.account === l.account && p.vatRate === vatRate);
+    if (same) same.grossCents += l.grossCents;
+    else parts.push({ account: l.account, vatRate, grossCents: l.grossCents, mode });
+  }
+  const base = {
+    supplierName: reading.vendor || (tx.counterpartyName ?? '').trim(),
+    mode,
+    matchedBy: 'receipt' as const,
+    reading: { vendor: reading.vendor, totalCents: reading.totalCents, lines: reading.lines },
+  };
+  if (parts.length === 1) return { ...base, account: parts[0].account, vatRate: parts[0].vatRate };
+  return { ...base, split: parts };
+}
+
+/** What `BankTransaction.receiptReading` holds (Mongoose arrays included). */
+export interface CachedReceiptReading {
+  status?: string | null;
+  reading?: {
+    vendor?: string | null;
+    country?: string | null;
+    date?: string | null;
+    totalCents?: number | null;
+    reverseCharge?: boolean | null;
+    lines?: Iterable<{ vatRate?: number | null; grossCents?: number | null; account?: string | null }> | null;
+  } | null;
+}
+
+/** The cached reading of a transaction, when it was read successfully. */
+export function cachedReading(cache: CachedReceiptReading | null | undefined): ReceiptReading | null {
+  const r = cache?.status === 'ok' ? cache.reading : null;
+  if (!r || typeof r.totalCents !== 'number') return null;
+  return {
+    vendor: r.vendor ?? '',
+    country: r.country ?? null,
+    date: r.date ?? null,
+    totalCents: r.totalCents,
+    reverseCharge: !!r.reverseCharge,
+    lines: [...(r.lines ?? [])].map((l) => ({ vatRate: l.vatRate ?? 0, grossCents: l.grossCents ?? 0, account: l.account ?? '' })),
+  };
+}
+
+export type ReadableTx = SuggestTx & {
+  amountCents: number;
+  direction?: string | null;
+  receiptReading?: CachedReceiptReading | null;
+};
+
+/** Suggestion order: rule → history → cached receipt reading. */
+export function suggestForTx(tx: ReadableTx, suppliers: SuggestSupplier[], history: BookingHistory): Suggestion | null {
+  const fromRules = suggestWithHistory(tx, suppliers, history);
+  if (fromRules) return fromRules;
+  const reading = cachedReading(tx.receiptReading);
+  return reading ? readingToSuggestion(reading, tx) : null;
+}

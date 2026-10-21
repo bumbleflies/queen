@@ -24,6 +24,10 @@ describe('isAutoBookable', () => {
     expect(isAutoBookable({ ...iban, matchedBy: 'history' }, flagged)).toBe(false);
   });
 
+  it('is false for a receipt reading, even with a flagged supplier', () => {
+    expect(isAutoBookable({ ...iban, matchedBy: 'receipt' }, flagged)).toBe(false);
+  });
+
   it('is false without the flag', () => {
     expect(isAutoBookable(iban, { autoBook: false })).toBe(false);
     expect(isAutoBookable(iban, {})).toBe(false);

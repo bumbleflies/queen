@@ -9,13 +9,17 @@ import { Supplier } from '../models/Supplier';
 import { BookingError, bookBankTransaction, unbookBankTransaction } from '../lib/accounting/bankBooking';
 import { BANK_VAT_RATES, PostingError } from '../lib/accounting/postingRules';
 import { LedgerError } from '../lib/accounting/ledger';
-import { loadHistory, suggestWithHistory } from '../lib/accounting/history';
+import { loadHistory } from '../lib/accounting/history';
+import { readingToSuggestion, suggestForTx } from '../lib/accounting/receiptReading';
+import type { Suggestion } from '../lib/accounting/suggest';
 import { loadYear, openTransactions } from '../lib/accounting/bankCoverage';
 import { AUTO_BOOK_USER } from '../lib/accounting/autoBook';
 import { rankReceipts, strongReceipt, type ReceiptFile } from '../lib/accounting/receipts';
-import { listReceiptFiles } from '../services/receiptsDrive';
+import { listReceiptFiles, type DriveFilesLike } from '../services/receiptsDrive';
 import { driveForUser } from '../services/driveForUser';
 import { getReceiptsFolder } from '../services/appSettings';
+import { opencodeFromEnv } from '../services/OpencodeClient';
+import { readTxReceipt, receiptFileFor, receiptPromptAccounts, type ReadStatus } from '../services/receiptReader';
 import { FireflyClient } from '../services/FireflyClient';
 import { readFireflyEnv } from '../lib/fireflyEnv';
 
@@ -106,7 +110,7 @@ export const bookingsRouter = router({
             supplierName: t.supplierId ? (names.get(String(t.supplierId)) ?? null) : null,
           };
         }
-        return { ...row(t), state: 'open' as const, suggestion: suggestWithHistory(t, suppliers, history) };
+        return { ...row(t), state: 'open' as const, suggestion: suggestForTx(t, suppliers, history) };
       })
       .reverse();
   }),
@@ -115,12 +119,13 @@ export const bookingsRouter = router({
     const [{ txs, coverage }, suppliers, history] = await Promise.all([loadYear(input.year), Supplier.find({ archived: false }), loadHistory()]);
     return txs
       .filter((t) => !t.matchedInvoiceId && !coverage.has(t.fireflyJournalId))
-      .map((t) => ({ ...row(t), suggestion: suggestWithHistory(t, suppliers, history) }));
+      .map((t) => ({ ...row(t), suggestion: suggestForTx(t, suppliers, history) }));
   }),
 
   /** Clear receipt match per open row (inbox hint). Drive trouble → `available: false`, never an error. */
   receiptMatches: authedProcedure.input(yearInput).query(async ({ input, ctx }) => {
-    const none = { available: false, matches: {} as Record<string, ReceiptFile> };
+    const readingAvailable = opencodeFromEnv() !== null;
+    const none = { available: false, readingAvailable, matches: {} as Record<string, ReceiptFile> };
     const folder = await getReceiptsFolder();
     if (!folder) return none;
     let files: ReceiptFile[];
@@ -132,11 +137,44 @@ export const bookingsRouter = router({
     const [open, suppliers, history] = await Promise.all([openTransactions(input.year), Supplier.find({ archived: false }), loadHistory()]);
     const matches: Record<string, ReceiptFile> = {};
     for (const tx of open) {
-      const best = strongReceipt(rankReceipts(files, tx, suggestWithHistory(tx, suppliers, history)?.supplierName));
+      const best = strongReceipt(rankReceipts(files, tx, suggestForTx(tx, suppliers, history)?.supplierName));
       if (best) matches[String(tx._id)] = { id: best.id, name: best.name, link: best.link };
     }
-    return { available: true, matches };
+    return { available: true, readingAvailable, matches };
   }),
+
+  /**
+   * Reads the row's receipt (attached, else the clearly matching Drive file)
+   * with opencode and caches the result; `force` re-reads. Never books.
+   * Without OPENCODE_API_KEY or Drive: 'unavailable'; no receipt: 'noReceipt'.
+   */
+  readReceipt: authedProcedure
+    .input(z.object({ bankTxId: z.string().min(1), force: z.boolean().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      const result = (status: ReadStatus | 'unavailable' | 'noReceipt', suggestion: Suggestion | null = null) => ({ status, suggestion });
+      const client = opencodeFromEnv();
+      if (!client) return result('unavailable');
+      const tx = await BankTransaction.findById(input.bankTxId);
+      if (!tx) throw new TRPCError({ code: 'NOT_FOUND', message: 'Banktransaktion nicht gefunden' });
+      let drive: DriveFilesLike;
+      let files: ReceiptFile[] = [];
+      try {
+        drive = await driveForUser(ctx.user.sub);
+        const folder = tx.receipt?.driveFileId ? null : await getReceiptsFolder();
+        if (folder) files = await listReceiptFiles(drive, folder.id, new Date(tx.date).getFullYear());
+      } catch {
+        return result('unavailable');
+      }
+      let supplierName: string | undefined;
+      if (!tx.receipt?.driveFileId) {
+        const [suppliers, history] = await Promise.all([Supplier.find({ archived: false }), loadHistory()]);
+        supplierName = suggestForTx(tx, suppliers, history)?.supplierName;
+      }
+      const fileId = receiptFileFor(tx, files, supplierName);
+      if (!fileId) return result('noReceipt');
+      const { status, reading } = await readTxReceipt(tx, fileId, { drive, client, accounts: await receiptPromptAccounts() }, input.force);
+      return result(status, reading ? readingToSuggestion(reading, tx) : null);
+    }),
 
   booked: authedProcedure.input(yearInput).query(async ({ input }) => {
     const { txs, coverage } = await loadYear(input.year);
@@ -195,8 +233,8 @@ export const bookingsRouter = router({
       const results: { bankTxId: string; ok: boolean; entryNumber?: string; receipt?: boolean; error?: string }[] = [];
       for (const bankTxId of input.bankTxIds) {
         const tx = await BankTransaction.findById(bankTxId);
-        const s = tx ? suggestWithHistory(tx, suppliers, history) : null;
-        if (!tx || !s || (s.mode === 'normal' && !s.account) || s.vatRate === undefined) {
+        const s = tx ? suggestForTx(tx, suppliers, history) : null;
+        if (!tx || !s || (!s.split && ((s.mode === 'normal' && !s.account) || s.vatRate === undefined))) {
           results.push({ bankTxId, ok: false, error: 'Kein Vorschlag — bitte einzeln buchen' });
           continue;
         }
@@ -207,8 +245,9 @@ export const bookingsRouter = router({
           const { entry } = await bookBankTransaction({
             bankTxId,
             account: s.account ?? '',
-            vatRate: s.vatRate,
+            vatRate: s.vatRate ?? 0,
             mode: s.mode,
+            split: s.split,
             supplierId: s.supplierId,
             receipt: file ? { driveFileId: file.id, fileName: file.name, link: file.link } : undefined,
             createdBy: ctx.user.sub,
