@@ -8,6 +8,7 @@ import { BookingDialog, type InboxRowLike } from '../components/BookingDialog';
 import { EntryForm } from '../components/EntryForm';
 import { BackfillSection } from '../components/BackfillSection';
 import { LedgerViews } from '../components/LedgerViews';
+import { RuleDialog, RulesSection, draftFromTransaction, type RuleDraft } from '../components/RulesSection';
 import { suggestionsFor, type OpenItem, type Suggestion } from '../lib/paymentSuggest';
 
 type StateFilter = 'open' | 'done' | 'ignored';
@@ -77,6 +78,10 @@ export function FinancePage() {
   const [active, setActive] = useState<InboxRowLike | null>(null);
   const [showEntry, setShowEntry] = useState(false);
   const [showLedger, setShowLedger] = useState(false);
+  const [showRules, setShowRules] = useState(false);
+  const [ruleDraft, setRuleDraft] = useState<RuleDraft | null>(null);
+  const me = trpc.me.useQuery();
+  const isAdmin = me.data?.user?.role === 'admin';
   const [resyncOpen, setResyncOpen] = useState(false);
 
   const fiscalYears = trpc.ledger.fiscalYears.useQuery();
@@ -308,7 +313,13 @@ export function FinancePage() {
         <button type="button" className={showLedger ? 'chip on' : 'chip'} onClick={() => setShowLedger(!showLedger)}>
           {t('finance.journalToggle')}
         </button>
+        <button type="button" className={showRules ? 'chip on' : 'chip'} onClick={() => setShowRules(!showRules)}>
+          {t('finance.rulesToggle')}
+        </button>
       </nav>
+
+      {showRules ? <RulesSection year={year} /> : null}
+      {ruleDraft ? <RuleDialog draft={ruleDraft} onDone={() => setRuleDraft(null)} /> : null}
 
       {stateF === 'open' ? (
         <section className="card flush">
@@ -378,7 +389,14 @@ export function FinancePage() {
                             {r.suggestion ? (
                               <div className="muted" style={{ fontSize: 13 }}>{suggestionLabel(r.suggestion)}</div>
                             ) : (
-                              <div className="muted" style={{ fontSize: 13 }}>{t('bookings.noSuggestion')}</div>
+                              <div className="row muted" style={{ fontSize: 13, gap: 8 }}>
+                                {t('bookings.noSuggestion')}
+                                {isAdmin ? (
+                                  <button type="button" className="btn ghost sm" onClick={() => setRuleDraft(draftFromTransaction(r))}>
+                                    {t('rules.new')}
+                                  </button>
+                                ) : null}
+                              </div>
                             )}
                           </>
                         )}
