@@ -9,6 +9,9 @@ import { defaultBookingText } from '../../lib/accounting/bankBooking';
 import { adminCaller, initLedgerModels, resetLedgerDb, sentInvoice, skipIfNoDb } from './helpers/ledgerFixtures';
 
 vi.mock('../../jobs/queue', () => ({ enqueueFileInvoice: vi.fn(async () => {}) }));
+const listReceiptFiles = vi.hoisted(() => vi.fn(async (): Promise<{ id: string; name: string; link: string }[]> => []));
+vi.mock('../../services/receiptsDrive', () => ({ listReceiptFiles }));
+vi.mock('../../services/driveForUser', () => ({ driveForUser: vi.fn(async () => ({})) }));
 
 let seq = 0;
 async function tx(over: Record<string, unknown> = {}) {
@@ -111,6 +114,35 @@ describe('bookings', () => {
     expect(results.map((r) => r.ok)).toEqual([true, false, true]);
     expect(results[1].error).toMatch(/Kein Vorschlag/);
     expect((await caller.bookings.inbox({ year: 2026 })).map((r) => r.id)).toEqual([String(c._id)]);
+  });
+
+  it('bookBulk attaches a clearly matching receipt and books without one otherwise', async (ctx) => {
+    skipIfNoDb(ctx);
+    process.env.QUEEN_RECEIPTS_FOLDER_ID = 'root';
+    listReceiptFiles.mockResolvedValue([
+      { id: 'h10', name: 'Hoster_2026-10-16_100000123456.pdf', link: 'https://drive/h10' },
+      { id: 'h09', name: 'Hoster_2026-09-16_100000654321.pdf', link: 'https://drive/h09' },
+    ]);
+    const caller = adminCaller();
+    await caller.suppliers.create({ name: 'Hoster', namePatterns: ['Hoster'], defaultAccount: '6837', defaultVatRate: 0.19 });
+    const a = await tx({ counterpartyName: 'Hoster GmbH', description: 'Invoice No. 100000123456', date: new Date(2026, 9, 21), amountCents: 1213 });
+    const b = await tx({ counterpartyName: 'Hoster GmbH', description: 'Invoice No. 100000999999', date: new Date(2026, 10, 21), amountCents: 1213 });
+    const results = await caller.bookings.bookBulk({ bankTxIds: [String(a._id), String(b._id)] });
+    expect(results.map((r) => r.error ?? 'ok')).toEqual(['ok', 'ok']);
+    expect((await BankTransaction.findById(a._id))?.receipt).toMatchObject({ driveFileId: 'h10', fileName: 'Hoster_2026-10-16_100000123456.pdf' });
+    expect((await BankTransaction.findById(b._id))?.receipt?.driveFileId).toBeUndefined();
+    delete process.env.QUEEN_RECEIPTS_FOLDER_ID;
+  });
+
+  it('bookBulk still books when Drive is unavailable', async (ctx) => {
+    skipIfNoDb(ctx);
+    process.env.QUEEN_RECEIPTS_FOLDER_ID = 'root';
+    listReceiptFiles.mockRejectedValue(new Error('no token'));
+    const caller = adminCaller();
+    await caller.suppliers.create({ name: 'Hoster', namePatterns: ['Hoster'], defaultAccount: '6837', defaultVatRate: 0.19 });
+    const a = await tx({ counterpartyName: 'Hoster GmbH', description: 'Invoice No. 100000123456' });
+    expect((await caller.bookings.bookBulk({ bankTxIds: [String(a._id)] }))[0].ok).toBe(true);
+    delete process.env.QUEEN_RECEIPTS_FOLDER_ID;
   });
 
   it('unbook reverses the entry and returns the tx to the inbox; setReceipt stores metadata', async (ctx) => {

@@ -5,6 +5,7 @@ import { useToast } from '../components/Toast';
 import { previewBankPosting } from '../lib/bookingPreview';
 import { useLanguage } from '../i18n/LanguageContext';
 import type { BankBookingMode } from '../../server/lib/accounting/postingRules';
+import { strongReceipt } from '../../server/lib/accounting/receipts';
 
 export interface InboxRowLike {
   id: string;
@@ -35,9 +36,10 @@ interface AccountRow {
 }
 
 interface ReceiptFile {
-  driveFileId: string;
-  fileName: string;
+  id: string;
+  name: string;
   link: string;
+  score: number;
 }
 
 export function BookingDialog({ year, tx, onDone }: { year: number; tx: InboxRowLike; onDone: () => void }) {
@@ -64,8 +66,14 @@ export function BookingDialog({ year, tx, onDone }: { year: number; tx: InboxRow
     [tx.direction, tx.amountCents, account, vatRate, mode],
   );
 
-  const files = (receipts.data ?? []) as unknown as ReceiptFile[];
-  const chosen = files.find((f) => f.driveFileId === receiptId);
+  const files = (receipts.data ?? []) as ReceiptFile[];
+  const chosen = files.find((f) => f.id === receiptId);
+
+  // Preselect a clear match once the ranked list arrives.
+  useEffect(() => {
+    const best = strongReceipt((receipts.data ?? []) as ReceiptFile[]);
+    if (best) setReceiptId((current) => current || best.id);
+  }, [receipts.data]);
 
   async function submit() {
     try {
@@ -77,7 +85,7 @@ export function BookingDialog({ year, tx, onDone }: { year: number; tx: InboxRow
         supplierId: supplierId || undefined,
         text: text || undefined,
         rememberRule: remember,
-        receipt: chosen ? { driveFileId: chosen.driveFileId, fileName: chosen.fileName, link: chosen.link } : undefined,
+        receipt: chosen ? { driveFileId: chosen.id, fileName: chosen.name, link: chosen.link } : undefined,
         receiptMissingReason: missing ? missingReason || null : undefined,
       });
       await utils.bookings.invalidate();
@@ -167,7 +175,7 @@ export function BookingDialog({ year, tx, onDone }: { year: number; tx: InboxRow
             <select className="field" value={receiptId} onChange={(e) => setReceiptId(e.target.value)}>
               <option value="">{t('bookings.receipt.choose')}</option>
               {files.slice(0, 30).map((f) => (
-                <option key={f.driveFileId} value={f.driveFileId}>{f.fileName}</option>
+                <option key={f.id} value={f.id}>{f.name}</option>
               ))}
             </select>
           )}
