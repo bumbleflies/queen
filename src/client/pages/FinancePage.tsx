@@ -312,6 +312,7 @@ export function FinancePage() {
           <div className="outcome ok">
             <span className="what">
               ✓ {s.mode === 'vatOnly' ? t('finance.outcome.vatOnly') : `${s.account ?? '—'} ${accountNames.get(s.account ?? '') ?? ''}`.trim()}
+              {s.mode === 'reverseCharge' ? ` · ${t('finance.outcome.reverseCharge')}` : ''}
               {s.vatRate !== undefined ? ` · ${Math.round(s.vatRate * 100)} %` : ''}
             </span>
             <span className="rc">{t('finance.outcome.rule').replace('{name}', s.supplierName)}</span>

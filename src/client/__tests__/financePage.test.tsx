@@ -296,6 +296,24 @@ describe('FinancePage — inbox', () => {
     await waitFor(() => expect(calls.unbook).toEqual([{ bankTxId: 'tx1', reason: 'Rückgängig direkt nach dem Buchen' }]));
   });
 
+  it('books a §13b suggestion in one click and labels the outcome', async () => {
+    state.rows = [{
+      ...(streamRows[0] as Record<string, unknown>),
+      suggestion: { supplierId: 's1', supplierName: 'Acme GmbH', account: '6837', vatRate: 0.19, mode: 'reverseCharge' },
+    }];
+    renderPage();
+    const row = screen.getByRole('row', { name: /Miete März/ });
+    expect(within(row).getByText(/✓ 6837 Lizenzen · §13b/)).toBeInTheDocument();
+    fireEvent.click(within(row).getByRole('button', { name: 'Buchen' }));
+    await waitFor(() => expect(calls.book).toEqual([{
+      bankTxId: 'tx1',
+      account: '6837',
+      vatRate: 0.19,
+      mode: 'reverseCharge',
+      supplierId: 's1',
+    }]));
+  });
+
   it('Anpassen opens the booking dialog with the suggestion and a preselected receipt', async () => {
     receiptRows.current = [
       { id: 'f1', name: 'Acme_2026-03-01_123456.pdf', link: 'https://drive/f1', score: 8 },

@@ -62,6 +62,27 @@ describe('bookings', () => {
     expect(tb.rows.find((r) => r.account === '1406')?.balanceCents).toBe(1900);
   });
 
+  it('book reverseCharge posts 1407/3837 and keeps 1800 at gross', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    const t = await tx({ amountCents: 16842 });
+    await caller.bookings.book({ bankTxId: String(t._id), account: '6837', vatRate: 0.19, mode: 'reverseCharge' });
+    const tb = trialBalance(await JournalEntry.find({}));
+    const bal = (a: string) => tb.rows.find((r) => r.account === a)?.balanceCents;
+    expect(bal('1800')).toBe(-16842);
+    expect(bal('1407')).toBe(3200);
+    expect(bal('3837')).toBe(-3200);
+    expect(bal('6837')).toBe(16842);
+  });
+
+  it('reverseCharge on an incoming tx is a BAD_REQUEST', async (ctx) => {
+    skipIfNoDb(ctx);
+    const t = await tx({ direction: 'in' });
+    await expect(
+      adminCaller().bookings.book({ bankTxId: String(t._id), account: '8400', vatRate: 0.19, mode: 'reverseCharge' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
   it('refuses double booking, booking an invoice-matched tx, and assigning a booked tx to an invoice', async (ctx) => {
     skipIfNoDb(ctx);
     const caller = adminCaller();

@@ -64,7 +64,7 @@ export function suggest(tx: SuggestTx, suppliers: SuggestSupplier[]): Suggestion
         supplierName: hit.name,
         account: hit.defaultAccount ?? undefined,
         vatRate: hit.defaultVatRate ?? undefined,
-        mode: hit.defaultMode === 'vatOnly' ? 'vatOnly' : 'normal',
+        mode: hit.defaultMode === 'vatOnly' || hit.defaultMode === 'reverseCharge' ? hit.defaultMode : 'normal',
         matchedBy,
       };
     }

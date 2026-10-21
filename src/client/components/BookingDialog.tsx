@@ -4,7 +4,7 @@ import { formatDate, formatEUR } from '../lib/format';
 import { useToast } from '../components/Toast';
 import { previewBankPosting } from '../lib/bookingPreview';
 import { useLanguage } from '../i18n/LanguageContext';
-import type { BankBookingMode } from '../../server/lib/accounting/postingRules';
+import { REVERSE_CHARGE_RATE, type BankBookingMode } from '../../server/lib/accounting/postingRules';
 import { strongReceipt } from '../../server/lib/accounting/receipts';
 
 export interface InboxRowLike {
@@ -138,7 +138,12 @@ export function BookingDialog({ year, tx, onDone }: { year: number; tx: InboxRow
         </label>
         <label className="lab">
           {t('bookings.dialog.vat')}
-          <select className="field" value={vatRate} onChange={(e) => setVatRate(Number(e.target.value))}>
+          <select
+            className="field"
+            value={mode === 'reverseCharge' ? REVERSE_CHARGE_RATE : vatRate}
+            disabled={mode === 'reverseCharge'}
+            onChange={(e) => setVatRate(Number(e.target.value))}
+          >
             <option value={0}>0 %</option>
             <option value={0.07}>7 %</option>
             <option value={0.19}>19 %</option>
@@ -146,9 +151,18 @@ export function BookingDialog({ year, tx, onDone }: { year: number; tx: InboxRow
         </label>
         <label className="lab">
           {t('bookings.dialog.mode')}
-          <select className="field" value={mode} onChange={(e) => setMode(e.target.value as BankBookingMode)}>
+          <select
+            className="field"
+            value={mode}
+            onChange={(e) => {
+              const next = e.target.value as BankBookingMode;
+              setMode(next);
+              if (next === 'reverseCharge') setVatRate(REVERSE_CHARGE_RATE);
+            }}
+          >
             <option value="normal">{t('bookings.dialog.mode.normal')}</option>
             <option value="vatOnly">{t('bookings.dialog.mode.vatOnly')}</option>
+            <option value="reverseCharge">{t('bookings.dialog.mode.reverseCharge')}</option>
           </select>
         </label>
         <label className="lab">

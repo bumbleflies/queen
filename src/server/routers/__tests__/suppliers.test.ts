@@ -175,6 +175,17 @@ describe('suppliers.importJson', () => {
     expect(res).toMatchObject({ created: 0, updated: 0, unchanged: 2 });
   });
 
+  it('importJson round-trips defaultMode reverseCharge', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    const rev = [{ name: 'Ausland Ltd', defaultAccount: '6837', defaultVatRate: 0.19, defaultMode: 'reverseCharge' }];
+    await caller.suppliers.importJson({ json: JSON.stringify(rev), dryRun: false });
+    const exported = await caller.suppliers.exportJson();
+    expect(exported[0]).toMatchObject({ defaultMode: 'reverseCharge', defaultAccount: '6837' });
+    const res = await caller.suppliers.importJson({ json: JSON.stringify(exported), dryRun: false });
+    expect(res).toMatchObject({ created: 0, updated: 0, unchanged: 1 });
+  });
+
   it('any error writes nothing', async (ctx) => {
     skipIfNoDb(ctx);
     const caller = adminCaller();

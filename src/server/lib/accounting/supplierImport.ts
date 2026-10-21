@@ -74,7 +74,7 @@ export function toExport(s: {
     purposePatterns: [...s.purposePatterns],
     defaultAccount: s.defaultAccount ?? null,
     defaultVatRate: s.defaultVatRate ?? null,
-    defaultMode: s.defaultMode === 'vatOnly' ? 'vatOnly' : 'normal',
+    defaultMode: s.defaultMode === 'vatOnly' || s.defaultMode === 'reverseCharge' ? s.defaultMode : 'normal',
     archived: !!s.archived,
   };
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { trpc } from '../lib/trpc';
 import { useToast } from './Toast';
 import { useLanguage } from '../i18n/LanguageContext';
-import type { BankBookingMode } from '../../server/lib/accounting/postingRules';
+import { REVERSE_CHARGE_RATE, type BankBookingMode } from '../../server/lib/accounting/postingRules';
 import { suggest, type SuggestTx } from '../../server/lib/accounting/suggest';
 
 export interface RuleRow {
@@ -125,7 +125,7 @@ export function RuleDialog({ draft, openRows, onDone }: { draft: RuleDraft; open
       purposePatterns: lines(purposePatterns),
       namePatterns: lines(namePatterns),
       defaultAccount: mode === 'vatOnly' ? null : account.trim() || null,
-      defaultVatRate: vatRate,
+      defaultVatRate: mode === 'reverseCharge' ? REVERSE_CHARGE_RATE : vatRate,
       defaultMode: mode,
     };
     try {
@@ -188,7 +188,12 @@ export function RuleDialog({ draft, openRows, onDone }: { draft: RuleDraft; open
           </label>
           <label className="lab">
             {t('bookings.dialog.vat')}
-            <select className="field" value={vatRate} onChange={(e) => setVatRate(Number(e.target.value))}>
+            <select
+              className="field"
+              value={mode === 'reverseCharge' ? REVERSE_CHARGE_RATE : vatRate}
+              disabled={mode === 'reverseCharge'}
+              onChange={(e) => setVatRate(Number(e.target.value))}
+            >
               <option value={0}>0 %</option>
               <option value={0.07}>7 %</option>
               <option value={0.19}>19 %</option>
@@ -196,9 +201,18 @@ export function RuleDialog({ draft, openRows, onDone }: { draft: RuleDraft; open
           </label>
           <label className="lab">
             {t('bookings.dialog.mode')}
-            <select className="field" value={mode} onChange={(e) => setMode(e.target.value as BankBookingMode)}>
+            <select
+              className="field"
+              value={mode}
+              onChange={(e) => {
+                const next = e.target.value as BankBookingMode;
+                setMode(next);
+                if (next === 'reverseCharge') setVatRate(REVERSE_CHARGE_RATE);
+              }}
+            >
               <option value="normal">{t('bookings.dialog.mode.normal')}</option>
               <option value="vatOnly">{t('bookings.dialog.mode.vatOnly')}</option>
+              <option value="reverseCharge">{t('bookings.dialog.mode.reverseCharge')}</option>
             </select>
           </label>
         </div>

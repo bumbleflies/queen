@@ -106,7 +106,7 @@ async function rememberRule(
     const pattern = tx.description.slice(0, 40).trim();
     if (pattern && !s.purposePatterns.includes(pattern)) s.purposePatterns.push(pattern);
   }
-  if (input.mode === 'normal') s.defaultAccount = input.account;
+  if (input.mode === 'normal' || input.mode === 'reverseCharge') s.defaultAccount = input.account;
   s.defaultVatRate = input.vatRate;
   s.defaultMode = input.mode;
   await s.save();
