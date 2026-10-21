@@ -10,6 +10,7 @@ import { BookingError, bookBankTransaction, unbookBankTransaction } from '../lib
 import { BANK_VAT_RATES, PostingError } from '../lib/accounting/postingRules';
 import { LedgerError } from '../lib/accounting/ledger';
 import { suggest } from '../lib/accounting/suggest';
+import { loadYear } from '../lib/accounting/bankCoverage';
 import { rankReceipts, strongReceipt, type ReceiptFile } from '../lib/accounting/receipts';
 import { listReceiptFiles } from '../services/receiptsDrive';
 import { driveForUser } from '../services/driveForUser';
@@ -19,10 +20,6 @@ import { readFireflyEnv } from '../lib/fireflyEnv';
 
 const yearInput = z.object({ year: z.number().int().min(2000).max(2100) });
 const receiptInput = z.object({ driveFileId: z.string().min(1), fileName: z.string().min(1), link: z.string().min(1) });
-
-function yearRange(year: number) {
-  return { $gte: new Date(year, 0, 1), $lt: new Date(year + 1, 0, 1) };
-}
 
 /** BookingError / LedgerError / PostingError → TRPCError with a German message. */
 function toTrpc(err: unknown): never {
@@ -35,23 +32,6 @@ function toTrpc(err: unknown): never {
     throw new TRPCError({ code: 'BAD_REQUEST', message: err.message });
   }
   throw err;
-}
-
-/** Active coverage per fireflyJournalId: 'payment' | 'bank' (+ entry). */
-async function coverageMap(refIds: string[]) {
-  const entries = await JournalEntry.find({
-    active: true,
-    $or: [
-      { 'source.kind': 'bank', 'source.refId': { $in: refIds } },
-      { 'source.kind': 'payment', 'source.refId': { $in: refIds.map((r) => `bank:${r}`) } },
-    ],
-  });
-  const entryMap = new Map<string, (typeof entries)[number]>();
-  for (const e of entries) {
-    const ref = e.source?.kind === 'payment' ? String(e.source.refId).slice('bank:'.length) : String(e.source?.refId);
-    entryMap.set(ref, e);
-  }
-  return entryMap;
 }
 
 function row(tx: HydratedDocument<BankTransactionDoc>) {
@@ -68,12 +48,6 @@ function row(tx: HydratedDocument<BankTransactionDoc>) {
     receipt: tx.receipt ?? null,
     receiptMissingReason: tx.receiptMissingReason ?? null,
   };
-}
-
-async function loadYear(year: number) {
-  const txs = await BankTransaction.find({ date: yearRange(year) }).sort({ date: 1, fireflyJournalId: 1 });
-  const coverage = await coverageMap(txs.map((t) => t.fireflyJournalId));
-  return { txs, coverage };
 }
 
 const bookFields = {

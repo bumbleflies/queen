@@ -24,8 +24,8 @@ TypeScript throughout:
 
 | Path | Holds |
 |------|-------|
-| `src/server/routers/` | `clients`, `invoices`, `bank`, `reconcile`, `reports`, `accounts`, `ledger`, `admin` (`importSheet`, `linkDriveFiles`, `ledgerBackfill`) |
-| `src/server/lib/` | Pure domain logic: `money`, `numbering`, `invoiceStateMachine`, `reconcile`, `bankSync`, `sheetImport`, `accounting/` (`skr04`, `postingRules`, `ledger`, `balances`, `ledgerHooks`, `backfill`) |
+| `src/server/routers/` | `clients`, `invoices`, `bank`, `bookings`, `suppliers`, `reconcile`, `reports`, `accounts`, `ledger`, `admin` (`importSheet`, `linkDriveFiles`, `ledgerBackfill`) |
+| `src/server/lib/` | Pure domain logic: `money`, `numbering`, `invoiceStateMachine`, `reconcile`, `bankSync`, `sheetImport`, `accounting/` (`skr04`, `postingRules`, `ledger`, `balances`, `ledgerHooks`, `backfill`, `suggest`, `bankCoverage`, `supplierImport`) |
 | `src/server/services/` | `PdfService`, `DriveService`, `FireflyClient`, `AuthService` |
 | `src/server/jobs/`, `src/server/cron/reconcile.ts` | Filing queue, and the daily reconcile entrypoint |
 | `src/client/` | `pages/`, `components/`, `lib/`, `i18n/` (`de.ts` is the source of `DictKey`; `en.ts` must have the same keys), `theme/` |
@@ -48,6 +48,7 @@ TypeScript throughout:
 - **Standalone:** no dependency on LeagueSphere MySQL. League origins attach as optional `source` metadata, never required FKs.
 - **Ledger (SKR04, double-entry):** `lib/accounting/ledger.ts` (`post`/`postOnce`/`reverse`) is the only write path for `JournalEntry`. Entries are never updated or deleted (query/document operations on the model are guarded; never use collection/`bulkWrite`/`insertMany` APIs on `JournalEntry`); corrections are reversals. `source.refId` conventions: `bank:<fireflyJournalId>`, `markPaid:<invoiceId>`, `opening:<year>`; a reversal entry references the original entry's `_id`. Σ Soll = Σ Haben per entry, gapless `YYYY-NNNNN` numbers per fiscal year, no postings into a `closed` FiscalYear.
 - **Automatic postings** (invoice/credit note on `markSent`/`cancel`, payment on assign/`markPaid`, reversal on unassign) go through `ledgerHooks.ts` wrapped in `safeLedger` — they never fail invoice/bank CRUD; `admin.ledgerBackfill` repairs gaps. Credit notes post from the ORIGINAL invoice's lines with `negate`.
+- **Booking rules** (suppliers with IBAN / Verwendungszweck / name patterns) feed the inbox suggestion via `suggest.ts` (IBAN → purpose → name, lowest Kreditornummer wins). Only admins create, edit, archive or import them (`suppliers.importJson` matches by Kreditornummer, then name, and writes nothing on any error); suppliers are archived, never deleted.
 - **No company figures in git** — opening balances and real amounts are entered in the UI only.
 - **Server timezone:** the container runs with TZ=Europe/Berlin (Dockerfile); fiscal years, invoice numbers and entry dates are local German dates.
 

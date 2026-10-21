@@ -97,6 +97,7 @@ vi.mock('../lib/trpc', () => ({
     useUtils: () => ({
       bookings: { invalidate: async () => {} },
       ledger: { invalidate: async () => {} },
+      suppliers: { invalidate: async () => {} },
       invalidate: async () => {},
     }),
     ledger: {
@@ -108,7 +109,15 @@ vi.mock('../lib/trpc', () => ({
       reverse: { useMutation: () => ({ mutateAsync: async () => {} }) },
     },
     accounts: { list: q([{ number: '6837', name: 'Lizenzen' }]) },
-    suppliers: { list: q([{ _id: 's1', kreditorNumber: 70001, name: 'Acme GmbH' }]) },
+    me: q({ user: { sub: 'u', email: 'u@example.de', role: 'admin' } }),
+    suppliers: {
+      list: q([{ _id: 's1', kreditorNumber: 70001, name: 'Acme GmbH' }]),
+      overview: q([]),
+      create: mut('createRule', async () => ({})),
+      update: mut('updateRule', async () => ({})),
+      setArchived: mut('setArchived', async () => ({})),
+      importJson: mut('importJson', async () => ({})),
+    },
     receipts: { list: { useQuery: () => ({ data: receiptRows.current, isError: false }) } },
     reports: { openItems: q({ items: [] }) },
     reconcile: {
@@ -191,6 +200,7 @@ beforeEach(() => {
   localStorage.setItem('queen-lang', 'de');
   Object.keys(calls).forEach((k) => delete calls[k]);
   calls.book = [];
+  calls.createRule = [];
   calls.bulk = [];
   calls.unbook = [];
   calls.assign = [];
@@ -243,6 +253,25 @@ describe('FinancePage — stream', () => {
       expect.objectContaining({ bankTxId: 'tx1', account: '6837', vatRate: 0.19, mode: 'normal', supplierId: 's1' }),
     ]));
     expect(shown).toEqual(['Gebucht 2026-00011']);
+  });
+
+  it('rows without a suggestion offer a prefilled rule', async () => {
+    renderPage();
+    const row = screen.getByRole('row', { name: /10009-20260809-01/ });
+    expect(within(screen.getByRole('row', { name: /Miete März/ })).queryByRole('button', { name: 'Regel anlegen' })).not.toBeInTheDocument();
+    fireEvent.click(within(row).getByRole('button', { name: 'Regel anlegen' }));
+    const dialog = screen.getByRole('dialog', { name: 'Regel anlegen' });
+    expect(within(dialog).getByLabelText('Name')).toHaveValue('Kunde AG');
+    expect(within(dialog).getByLabelText(/Name enthält/)).toHaveValue('Kunde AG');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Speichern' }));
+    await waitFor(() => expect(calls.createRule).toEqual([expect.objectContaining({ name: 'Kunde AG', namePatterns: ['Kunde AG'] })]));
+  });
+
+  it('the Regeln chip opens the rules overview', () => {
+    renderPage();
+    expect(screen.queryByRole('region', { name: 'Buchungsregeln' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Regeln' }));
+    expect(screen.getByRole('region', { name: 'Buchungsregeln' })).toBeInTheDocument();
   });
 
   it('preselects a clearly matching receipt and sends it with the booking', async () => {
