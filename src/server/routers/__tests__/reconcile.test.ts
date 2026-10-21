@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, beforeAll, vi, type TaskContext } from 'vitest';
+import { describe, it, expect, beforeEach, beforeAll, afterEach, vi, type TaskContext } from 'vitest';
 import mongoose from 'mongoose';
 import { appRouter } from '../../trpc';
 import { Invoice } from '../../models/Invoice';
@@ -238,6 +238,10 @@ describe('auto-booking in the daily reconcile (DB)', () => {
     });
   }
 
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   const bankEntries = () => JournalEntry.find({ 'source.kind': 'bank', active: true });
 
   it('auto-books flagged IBAN rules and records the count', async (ctx) => {
@@ -268,6 +272,27 @@ describe('auto-booking in the daily reconcile (DB)', () => {
     const again = await runReconcile({ skipSync: true, now: NOW });
     expect(again.autoBooked).toBe(0);
     expect(await bankEntries()).toHaveLength(2);
+  });
+
+  it('never re-books a transaction whose booking was reversed', async (ctx) => {
+    skipIfNoDb(ctx);
+    await flaggedRule();
+    const t = await outTx();
+    expect((await runReconcile({ skipSync: true, now: NOW })).autoBooked).toBe(1);
+    await adminCaller().bookings.unbook({ bankTxId: String(t._id), reason: 'falsch' });
+    const again = await runReconcile({ skipSync: true, now: NOW });
+    expect(again.autoBooked).toBe(0);
+    expect(again.autoBookFailed).toBe(0);
+    expect((await openTransactions(2026)).map((x) => String(x._id))).toEqual([String(t._id)]);
+  });
+
+  it('never books incoming transactions', async (ctx) => {
+    skipIfNoDb(ctx);
+    await flaggedRule();
+    const incoming = await outTx({ direction: 'in' });
+    const run = await runReconcile({ skipSync: true, now: NOW });
+    expect(run.autoBooked).toBe(0);
+    expect((await openTransactions(2026)).map((x) => String(x._id))).toEqual([String(incoming._id)]);
   });
 
   it('leaves rules without the flag alone', async (ctx) => {
@@ -301,12 +326,11 @@ describe('auto-booking in the daily reconcile (DB)', () => {
 
   it('attaches a clearly matching receipt', async (ctx) => {
     skipIfNoDb(ctx);
-    process.env.QUEEN_RECEIPTS_FOLDER_ID = 'root';
+    vi.stubEnv('QUEEN_RECEIPTS_FOLDER_ID', 'root');
     listReceiptFiles.mockResolvedValue([{ id: 'h1', name: 'Hoster_2026-10-16_100000123456.pdf', link: 'https://drive/h1' }]);
     await flaggedRule();
     const t = await outTx({ description: 'Invoice No. 100000123456' });
     const run = await runReconcile({ skipSync: true, now: NOW });
-    delete process.env.QUEEN_RECEIPTS_FOLDER_ID;
     expect(run.autoBooked).toBe(1);
     expect(run.autoBookWarning ?? null).toBeNull();
     expect((await BankTransaction.findById(t._id))?.receipt?.driveFileId).toBe('h1');
@@ -314,12 +338,11 @@ describe('auto-booking in the daily reconcile (DB)', () => {
 
   it('Drive failure books without receipt and warns', async (ctx) => {
     skipIfNoDb(ctx);
-    process.env.QUEEN_RECEIPTS_FOLDER_ID = 'root';
+    vi.stubEnv('QUEEN_RECEIPTS_FOLDER_ID', 'root');
     listReceiptFiles.mockRejectedValue(new Error('invalid_grant'));
     await flaggedRule();
     const t = await outTx();
     const run = await runReconcile({ skipSync: true, now: NOW });
-    delete process.env.QUEEN_RECEIPTS_FOLDER_ID;
     expect(run.error ?? null).toBeNull();
     expect(run.autoBooked).toBe(1);
     expect(run.autoBookWarning).toMatch(/invalid_grant/);

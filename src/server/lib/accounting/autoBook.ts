@@ -1,10 +1,12 @@
 import { Supplier } from '../../models/Supplier';
+import { JournalEntry } from '../../models/JournalEntry';
 import { FiscalYear } from '../../models/FiscalYear';
 import { listReceiptFiles } from '../../services/receiptsDrive';
 import { driveForCron } from '../../services/driveForUser';
 import { getReceiptsFolder } from '../../services/appSettings';
 import { BookingError, bookBankTransaction } from './bankBooking';
 import { openTransactions } from './bankCoverage';
+import { LedgerError } from './ledger';
 import { loadHistory, suggestWithHistory } from './history';
 import { rankReceipts, strongReceipt, type ReceiptFile } from './receipts';
 import type { Suggestion } from './suggest';
@@ -27,6 +29,24 @@ export function isAutoBookable(
   return suggestion.mode === 'vatOnly' || !!suggestion.account;
 }
 
+/**
+ * Errors that mean "someone else got there first" (booked, matched to an
+ * invoice, or a concurrent run posted the same source): skipped, not a failure.
+ */
+export function isConcurrentBookingError(err: unknown): boolean {
+  if (err instanceof BookingError) return err.code === 'ALREADY_BOOKED' || err.code === 'MATCHED';
+  return err instanceof LedgerError && err.code === 'DUPLICATE';
+}
+
+/** Bank refs that already have a reversed (inactive) booking: a person undid it, so never re-book automatically. */
+async function reversedRefs(refIds: string[]): Promise<Set<string>> {
+  if (refIds.length === 0) return new Set();
+  const entries = await JournalEntry.find({ 'source.kind': 'bank', 'source.refId': { $in: refIds }, active: false })
+    .select('source.refId')
+    .lean();
+  return new Set(entries.flatMap((e) => (e.source?.refId ? [e.source.refId] : [])));
+}
+
 /** The current calendar year plus every fiscal year that isn't closed. */
 async function bookableYears(now: Date): Promise<number[]> {
   const years = await FiscalYear.find({}).select('year status').lean();
@@ -42,8 +62,8 @@ export interface AutoBookResult {
 }
 
 /**
- * Books every open bank transaction of the non-closed fiscal years whose
- * suggestion is auto-bookable, attaching a clearly matching receipt from Drive.
+ * Books every open outgoing bank transaction of the non-closed fiscal years
+ * whose suggestion is auto-bookable (never one whose earlier booking was reversed), attaching a clearly matching receipt from Drive.
  * Drive trouble books without a receipt and sets `warning`; a failing row is
  * counted, never thrown.
  */
@@ -79,7 +99,11 @@ export async function autoBookOpen(now: Date): Promise<AutoBookResult> {
   };
 
   for (const year of await bookableYears(now)) {
-    for (const tx of await openTransactions(year)) {
+    // Outgoing only: an unmatched incoming payment may still belong to an invoice.
+    const candidates = (await openTransactions(year)).filter((t) => t.direction === 'out');
+    const reversed = await reversedRefs(candidates.map((t) => t.fireflyJournalId));
+    for (const tx of candidates) {
+      if (reversed.has(tx.fireflyJournalId)) continue;
       const s = suggestWithHistory(tx, suppliers, history);
       const supplier = s?.supplierId ? (flagged.get(s.supplierId) ?? null) : null;
       if (!s || s.vatRate === undefined || !isAutoBookable(s, supplier)) continue;
@@ -98,8 +122,7 @@ export async function autoBookOpen(now: Date): Promise<AutoBookResult> {
         });
         result.booked += 1;
       } catch (err) {
-        // booked or matched in the meantime: nothing left to do, not a failure
-        if (err instanceof BookingError && (err.code === 'ALREADY_BOOKED' || err.code === 'MATCHED')) continue;
+        if (isConcurrentBookingError(err)) continue;
         result.failed += 1;
       }
     }
