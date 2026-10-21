@@ -10,7 +10,7 @@ import { BookingError, bookBankTransaction, unbookBankTransaction } from '../lib
 import { BANK_VAT_RATES, PostingError } from '../lib/accounting/postingRules';
 import { LedgerError } from '../lib/accounting/ledger';
 import { loadHistory } from '../lib/accounting/history';
-import { readingToSuggestion, suggestForTx } from '../lib/accounting/receiptReading';
+import { suggestForTx, type ReceiptReading } from '../lib/accounting/receiptReading';
 import type { Suggestion } from '../lib/accounting/suggest';
 import { loadYear, openTransactions } from '../lib/accounting/bankCoverage';
 import { AUTO_BOOK_USER } from '../lib/accounting/autoBook';
@@ -145,17 +145,24 @@ export const bookingsRouter = router({
 
   /**
    * Reads the row's receipt (attached, else the clearly matching Drive file)
-   * with opencode and caches the result; `force` re-reads. Never books.
+   * with opencode and stores the result; `force` re-reads, 'failed' is always
+   * re-read. Never books. Returns the row's effective suggestion (rule →
+   * history → reading) and the reading itself.
    * Without OPENCODE_API_KEY or Drive: 'unavailable'; no receipt: 'noReceipt'.
    */
   readReceipt: authedProcedure
     .input(z.object({ bankTxId: z.string().min(1), force: z.boolean().optional() }))
     .mutation(async ({ input, ctx }) => {
-      const result = (status: ReadStatus | 'unavailable' | 'noReceipt', suggestion: Suggestion | null = null) => ({ status, suggestion });
+      const result = (
+        status: ReadStatus | 'unavailable' | 'noReceipt',
+        suggestion: Suggestion | null = null,
+        reading: ReceiptReading | null = null,
+      ) => ({ status, suggestion, reading });
       const client = opencodeFromEnv();
       if (!client) return result('unavailable');
       const tx = await BankTransaction.findById(input.bankTxId);
       if (!tx) throw new TRPCError({ code: 'NOT_FOUND', message: 'Banktransaktion nicht gefunden' });
+      const [suppliers, history] = await Promise.all([Supplier.find({ archived: false }), loadHistory()]);
       let drive: DriveFilesLike;
       let files: ReceiptFile[] = [];
       try {
@@ -163,17 +170,13 @@ export const bookingsRouter = router({
         const folder = tx.receipt?.driveFileId ? null : await getReceiptsFolder();
         if (folder) files = await listReceiptFiles(drive, folder.id, new Date(tx.date).getFullYear());
       } catch {
-        return result('unavailable');
+        return result('unavailable', suggestForTx(tx, suppliers, history));
       }
-      let supplierName: string | undefined;
-      if (!tx.receipt?.driveFileId) {
-        const [suppliers, history] = await Promise.all([Supplier.find({ archived: false }), loadHistory()]);
-        supplierName = suggestForTx(tx, suppliers, history)?.supplierName;
-      }
-      const fileId = receiptFileFor(tx, files, supplierName);
-      if (!fileId) return result('noReceipt');
-      const { status, reading } = await readTxReceipt(tx, fileId, { drive, client, accounts: await receiptPromptAccounts() }, input.force);
-      return result(status, reading ? readingToSuggestion(reading, tx) : null);
+      const file = receiptFileFor(tx, files, suggestForTx(tx, suppliers, history)?.supplierName);
+      if (!file) return result('noReceipt', suggestForTx(tx, suppliers, history));
+      const { status, reading } = await readTxReceipt(tx, file, { drive, client, accounts: await receiptPromptAccounts() }, input.force);
+      // readTxReceipt updated tx.receiptReading, so this is rule → history → the new reading
+      return result(status, suggestForTx(tx, suppliers, history), reading);
     }),
 
   booked: authedProcedure.input(yearInput).query(async ({ input }) => {

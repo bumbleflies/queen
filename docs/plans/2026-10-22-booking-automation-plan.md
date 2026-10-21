@@ -419,7 +419,7 @@ In `bankPosting`, handle `mode === 'reverseCharge'` before the normal path. Use 
   - Suggestion order: rule → history → cached receipt reading.
 
 - [ ] **Step 1: Failing pure tests:**
-  - `masks IBANs and BICs` (`DE89 4306 0967 8221 1054 00` → `[IBAN]`)
+  - `masks IBANs and BICs` (`DE89 3704 0044 0532 0130 00` → `[IBAN]`)
   - `parses JSON inside prose`
   - `rejects unknown account`
   - `rejects lines not summing to total`

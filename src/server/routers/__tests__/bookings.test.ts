@@ -362,17 +362,18 @@ describe('bookings', () => {
       skipIfNoDb(ctx);
       const caller = adminCaller();
       const t = await tx({ amountCents: 5460, counterpartyName: 'Muster Cafe', receipt: RECEIPT });
-      receiptText.mockResolvedValue('Muster Café\nSumme 54,60 EUR\nIBAN DE89 4306 0967 8221 1054 00');
+      receiptText.mockResolvedValue('Muster Café\nSumme 54,60 EUR\nIBAN DE89 3704 0044 0532 0130 00');
       ask.mockResolvedValue(replyWith(SPLIT_READING));
 
       const res = await caller.bookings.readReceipt({ bankTxId: String(t._id) });
       expect(res.status).toBe('ok');
       expect(res.suggestion).toMatchObject({ matchedBy: 'receipt', supplierName: 'Muster Café', reading: { vendor: 'Muster Café', totalCents: 5460 } });
       expect(res.suggestion?.split).toHaveLength(2);
+      expect(res.reading).toMatchObject({ vendor: 'Muster Café', totalCents: 5460, reverseCharge: false });
       expect(receiptText).toHaveBeenCalledWith(expect.anything(), 'r1');
       const prompt = ask.mock.calls[0][0];
       expect(prompt).toContain('[IBAN]');
-      expect(prompt).not.toContain('4306');
+      expect(prompt).not.toContain('3704');
       expect(prompt).toContain('6640');
 
       const stored = await BankTransaction.findById(t._id);
@@ -414,7 +415,7 @@ describe('bookings', () => {
       const res = await caller.bookings.readReceipt({ bankTxId: String(a._id) });
       expect(res.suggestion).toMatchObject({ account: '6837', vatRate: 0.19, mode: 'normal', matchedBy: 'receipt' });
       expect(receiptText).toHaveBeenCalledWith(expect.anything(), 'h10');
-      expect(await caller.bookings.readReceipt({ bankTxId: String(vague._id) })).toEqual({ status: 'noReceipt', suggestion: null });
+      expect(await caller.bookings.readReceipt({ bankTxId: String(vague._id) })).toEqual({ status: 'noReceipt', suggestion: null, reading: null });
       delete process.env.QUEEN_RECEIPTS_FOLDER_ID;
     });
 
@@ -424,14 +425,19 @@ describe('bookings', () => {
       const t = await tx({ amountCents: 5460, receipt: RECEIPT });
       receiptText.mockResolvedValue('Muster Café Summe 54,60 EUR');
       ask.mockRejectedValue(new Error('opencode reply timed out after 120s'));
-      expect(await caller.bookings.readReceipt({ bankTxId: String(t._id) })).toEqual({ status: 'failed', suggestion: null });
+      expect(await caller.bookings.readReceipt({ bankTxId: String(t._id) })).toEqual({ status: 'failed', suggestion: null, reading: null });
       expect((await BankTransaction.findById(t._id))?.receiptReading).toMatchObject({ status: 'failed', error: expect.stringMatching(/timed out/) });
 
-      // an unusable answer fails too
+      // a failed reading is not cached: the next click reads again; an unusable answer fails too
       ask.mockResolvedValue(replyWith({ ...SPLIT_READING, totalCents: 9999 }));
-      expect((await caller.bookings.readReceipt({ bankTxId: String(t._id), force: true })).status).toBe('failed');
+      expect((await caller.bookings.readReceipt({ bankTxId: String(t._id) })).status).toBe('failed');
+      expect(ask).toHaveBeenCalledTimes(2);
       const [row] = await caller.bookings.inbox({ year: 2026 });
       expect(row.suggestion).toBeNull();
+
+      ask.mockResolvedValue(replyWith(SPLIT_READING));
+      expect((await caller.bookings.readReceipt({ bankTxId: String(t._id) })).status).toBe('ok');
+      expect(ask).toHaveBeenCalledTimes(3);
     });
 
     it('a PDF without text sets noText', async (ctx) => {
@@ -439,16 +445,28 @@ describe('bookings', () => {
       const caller = adminCaller();
       const t = await tx({ amountCents: 5460, receipt: RECEIPT });
       receiptText.mockResolvedValue('  \n ');
-      expect(await caller.bookings.readReceipt({ bankTxId: String(t._id) })).toEqual({ status: 'noText', suggestion: null });
+      expect(await caller.bookings.readReceipt({ bankTxId: String(t._id) })).toEqual({ status: 'noText', suggestion: null, reading: null });
       expect(ask).not.toHaveBeenCalled();
       expect((await BankTransaction.findById(t._id))?.receiptReading?.status).toBe('noText');
+      // noText is cached
+      await caller.bookings.readReceipt({ bankTxId: String(t._id) });
+      expect(receiptText).toHaveBeenCalledTimes(1);
+    });
+
+    it('a non-PDF receipt (photo) is noText without downloading it', async (ctx) => {
+      skipIfNoDb(ctx);
+      const t = await tx({ amountCents: 5460, receipt: { driveFileId: 'img1', fileName: 'Kassenbon.JPG', link: 'https://drive/img1' } });
+      expect(await adminCaller().bookings.readReceipt({ bankTxId: String(t._id) })).toEqual({ status: 'noText', suggestion: null, reading: null });
+      expect(receiptText).not.toHaveBeenCalled();
+      expect(ask).not.toHaveBeenCalled();
+      expect((await BankTransaction.findById(t._id))?.receiptReading).toMatchObject({ driveFileId: 'img1', status: 'noText' });
     });
 
     it('without OPENCODE_API_KEY reading is unavailable, not an error', async (ctx) => {
       skipIfNoDb(ctx);
       opencode.enabled = false;
       const t = await tx({ amountCents: 5460, receipt: RECEIPT });
-      expect(await adminCaller().bookings.readReceipt({ bankTxId: String(t._id) })).toEqual({ status: 'unavailable', suggestion: null });
+      expect(await adminCaller().bookings.readReceipt({ bankTxId: String(t._id) })).toEqual({ status: 'unavailable', suggestion: null, reading: null });
       expect(receiptText).not.toHaveBeenCalled();
     });
 
@@ -460,7 +478,9 @@ describe('bookings', () => {
       receiptText.mockResolvedValue('Muster Café Summe 54,60 EUR');
       ask.mockResolvedValue(replyWith(SPLIT_READING));
       const res = await caller.bookings.readReceipt({ bankTxId: String(t._id) });
-      expect(res.suggestion?.matchedBy).toBe('receipt');
+      expect(res.status).toBe('ok');
+      expect(res.suggestion).toMatchObject({ matchedBy: 'name', account: '6820' });
+      expect(res.reading).toMatchObject({ vendor: 'Muster Café', totalCents: 5460 });
       const [row] = await caller.bookings.inbox({ year: 2026 });
       expect(row.suggestion).toMatchObject({ matchedBy: 'name', account: '6820' });
       const [streamRow] = await caller.bookings.stream({ year: 2026 });

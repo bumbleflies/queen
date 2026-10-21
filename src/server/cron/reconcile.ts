@@ -75,7 +75,12 @@ export async function runReconcile(
     if (auto.warning) run.autoBookWarning = auto.warning;
 
     // Receipt reading only caches suggestions; it never books and never fails the run.
-    run.receiptsRead = (await readOpenReceipts(now).catch(() => ({ read: 0 }))).read;
+    const receipts = await readOpenReceipts(now).catch((err: unknown) => ({
+      read: 0,
+      warning: `Belege lesen abgebrochen: ${(err as Error).message}`,
+    }));
+    run.receiptsRead = receipts.read;
+    if ('warning' in receipts) run.receiptReadWarning = receipts.warning;
     run.finishedAt = new Date();
     await run.save();
     return run;
@@ -101,6 +106,7 @@ async function main(): Promise<void> {
           `autoBooked=${run.autoBooked} autoBookFailed=${run.autoBookFailed} receiptsRead=${run.receiptsRead}`,
       );
       if (run.autoBookWarning) console.warn(`Auto-booking: ${run.autoBookWarning}`);
+      if (run.receiptReadWarning) console.warn(`Receipt reading: ${run.receiptReadWarning}`);
     }
   } finally {
     await disconnectMongo();

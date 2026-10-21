@@ -17,7 +17,8 @@ import { initLedgerModels, resetLedgerDb } from './helpers/ledgerFixtures';
 
 const listReceiptFiles = vi.hoisted(() => vi.fn(async (): Promise<{ id: string; name: string; link: string }[]> => []));
 vi.mock('../../services/receiptsDrive', () => ({ listReceiptFiles }));
-vi.mock('../../services/driveForUser', () => ({ driveForUser: vi.fn(async () => ({})), driveForCron: vi.fn(async () => ({})) }));
+const driveForCron = vi.hoisted(() => vi.fn(async () => ({})));
+vi.mock('../../services/driveForUser', () => ({ driveForUser: vi.fn(async () => ({})), driveForCron }));
 const ask = vi.hoisted(() => vi.fn(async (_prompt: string): Promise<{ text: string; model: { providerID: string; id: string } }> => ({ text: '', model: { providerID: 'free', id: 'm1' } })));
 const opencode = vi.hoisted(() => ({ enabled: false }));
 vi.mock('../../services/OpencodeClient', () => ({ opencodeFromEnv: () => (opencode.enabled ? { ask } : null) }));
@@ -442,7 +443,52 @@ describe('receipt reading in the daily reconcile (DB)', () => {
     expect(run.receiptsRead).toBe(1);
     expect((await BankTransaction.findOne({}))?.receiptReading?.status).toBe('failed');
 
+    // a failed reading is retried on the next run
+    ask.mockResolvedValue({
+      text: JSON.stringify({ vendor: 'Laden KG', totalCents: 1190, lines: [{ vatRate: 0.19, grossCents: 1190, account: '6837' }] }),
+      model: { providerID: 'free', id: 'm1' },
+    });
+    const retry = await runReconcile({ skipSync: true, now: NOW });
+    expect(retry.receiptsRead).toBe(1);
+    expect((await BankTransaction.findOne({}))?.receiptReading?.status).toBe('ok');
+    expect((await runReconcile({ skipSync: true, now: NOW })).receiptsRead).toBe(0);
+
     listReceiptFiles.mockRejectedValue(new Error('invalid_grant'));
     expect((await runReconcile({ skipSync: true, now: NOW })).error ?? null).toBeNull();
+  });
+
+  it('reads never-read receipts first, then retries failed ones oldest first', async (ctx) => {
+    skipIfNoDb(ctx);
+    vi.stubEnv('QUEEN_RECEIPTS_FOLDER_ID', 'root');
+    opencode.enabled = true;
+    ask.mockResolvedValue({
+      text: JSON.stringify({ vendor: 'Laden KG', totalCents: 1190, lines: [{ vatRate: 0.19, grossCents: 1190, account: '6837' }] }),
+      model: { providerID: 'free', id: 'm1' },
+    });
+    const files = [];
+    const failedAt = (n: number, readAt: Date) => ({ receiptReading: { driveFileId: `f${n}`, status: 'failed', readAt, error: 'timeout' } });
+    files.push(await openWithReceipt(1, failedAt(1, new Date(2026, 9, 10))));
+    files.push(await openWithReceipt(2, failedAt(2, new Date(2026, 8, 1))));
+    files.push(await openWithReceipt(3, failedAt(3, new Date(2026, 9, 1))));
+    for (let n = 4; n <= 12; n++) files.push(await openWithReceipt(n));
+    listReceiptFiles.mockResolvedValue(files);
+
+    const run = await runReconcile({ skipSync: true, now: NOW });
+    expect(run.receiptsRead).toBe(10);
+    const status = async (n: number) => (await BankTransaction.findOne({ fireflyJournalId: `${800 + n}:0` }))?.receiptReading?.status;
+    expect(await status(2)).toBe('ok');
+    expect(await status(1)).toBe('failed');
+    expect(await status(3)).toBe('failed');
+    for (let n = 4; n <= 12; n++) expect(await status(n)).toBe('ok');
+  });
+
+  it('a total failure of the reading step is recorded as a warning, not an error', async (ctx) => {
+    skipIfNoDb(ctx);
+    opencode.enabled = true;
+    driveForCron.mockRejectedValueOnce(new Error('boom'));
+    const run = await runReconcile({ skipSync: true, now: NOW });
+    expect(run.error ?? null).toBeNull();
+    expect(run.receiptsRead).toBe(0);
+    expect(run.receiptReadWarning).toMatch(/boom/);
   });
 });

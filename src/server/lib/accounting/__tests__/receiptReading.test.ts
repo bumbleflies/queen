@@ -27,16 +27,41 @@ function reading(over: Partial<ReceiptReading> = {}): ReceiptReading {
 
 describe('maskBankData', () => {
   it('masks IBANs and BICs', () => {
-    const text = 'Bitte überweisen an DE89 4306 0967 8221 1054 00, BIC: GENODEM1GLS. Alt: DE02120300000000202051 danke';
+    const text = 'Bitte überweisen an DE89 3704 0044 0532 0130 00, BIC: TESTDEFFXXX. Alt: DE89370400440532013000 danke';
     const masked = maskBankData(text);
     expect(masked).toBe('Bitte überweisen an [IBAN], BIC: [BIC]. Alt: [IBAN] danke');
-    expect(masked).not.toMatch(/4306|GENODEM1GLS|202051/);
+    expect(masked).not.toMatch(/3704|TESTDEFF|013000/);
+  });
+
+  it.each([
+    ['double spaces after a label', 'IBAN: DE89  3704 0044 0532 0130 00 Danke', 'IBAN: [IBAN] Danke'],
+    ['hyphens and lowercase', 'Konto de89-3704-0044-0532-0130-00 bitte', 'Konto [IBAN] bitte'],
+    ['odd grouping after a label', 'IBAN DE 89 37040044 0532013000\nSumme', 'IBAN [IBAN]\nSumme'],
+    ['letter groups after a label, stops at BIC', 'IBAN: GB29 NWBK 6016 1331 9268 19 BIC TESTGB2L', 'IBAN: [IBAN] BIC [BIC]'],
+    ['lowercase label', 'iban de89370400440532013000.', 'iban [IBAN].'],
+  ])('masks IBANs: %s', (_case, text, expected) => {
+    expect(maskBankData(text)).toBe(expected);
+  });
+
+  it.each([
+    ['BIC', 'BIC TESTDEFFXXX', 'BIC [BIC]'],
+    ['BIC:', 'BIC: TESTDEFF', 'BIC: [BIC]'],
+    ['BIC/SWIFT', 'BIC/SWIFT: TESTDEFFXXX', 'BIC/SWIFT: [BIC]'],
+    ['SWIFT', 'SWIFT TESTDEFFXXX', 'SWIFT [BIC]'],
+    ['SWIFT-Code', 'SWIFT-Code: testdeffxxx', 'SWIFT-Code: [BIC]'],
+  ])('masks BICs after %s', (_label, text, expected) => {
+    expect(maskBankData(text)).toBe(expected);
+  });
+
+  it('leaves amounts, dates and invoice numbers alone', () => {
+    const text = 'Rechnung 2026-10-01 Nr. 100000123456 Summe 54,60 EUR';
+    expect(maskBankData(text)).toBe(text);
   });
 });
 
 describe('buildReceiptPrompt', () => {
   it('lists only the given accounts, asks for strict JSON and masks the text', () => {
-    const prompt = buildReceiptPrompt('Summe 54,60 EUR IBAN DE89 4306 0967 8221 1054 00', [
+    const prompt = buildReceiptPrompt('Summe 54,60 EUR IBAN DE89 3704 0044 0532 0130 00', [
       { number: '6640', name: 'Bewirtungskosten' },
       { number: '6837', name: 'Lizenzen' },
     ]);
@@ -44,7 +69,7 @@ describe('buildReceiptPrompt', () => {
     expect(prompt).toContain('6837 Lizenzen');
     expect(prompt).toContain('totalCents');
     expect(prompt).toContain('[IBAN]');
-    expect(prompt).not.toContain('4306');
+    expect(prompt).not.toContain('3704');
   });
 });
 

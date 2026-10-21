@@ -9,8 +9,15 @@ function toBytes(data: unknown): Uint8Array {
   throw new Error('Drive lieferte keine Dateidaten');
 }
 
-/** The PDF's text layer, pages joined; '' for scans without one. */
+/** PDF header `%PDF-` within the first 1024 bytes (where readers accept it). */
+function isPdf(bytes: Uint8Array): boolean {
+  const head = String.fromCharCode(...bytes.subarray(0, 1024));
+  return head.includes('%PDF-');
+}
+
+/** The PDF's text layer, pages joined; '' for scans without one and for anything that is not a PDF (photos). */
 export async function extractPdfText(bytes: Uint8Array): Promise<string> {
+  if (!isPdf(bytes)) return '';
   const { text } = await extractText(bytes, { mergePages: true });
   return text;
 }

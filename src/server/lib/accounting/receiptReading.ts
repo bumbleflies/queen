@@ -17,12 +17,18 @@ export interface ReceiptReading {
   lines: ReceiptLine[];
 }
 
-const IBAN = /\b[A-Z]{2}\d{2}(?:\s?[A-Z0-9]{4}){2,7}(?:\s?[A-Z0-9]{1,4})?\b/g;
-const BIC = /(\bBIC\b\s*[:.]?\s*)[A-Z]{6}[A-Z0-9]{2}(?:[A-Z0-9]{3})?\b/gi;
+/** IBAN token after an "IBAN" label: any grouping, spaces or hyphens; chunks carry a digit or are ≤ 4 capitals (not BIC/SWIFT). */
+const LABELLED_IBAN =
+  /(\b(?:IBAN|Iban|iban)\b[ \t]*[:.]?[ \t]*)[A-Za-z]{2}[ \t-]?\d{2}(?:[ \t-]{0,2}(?!(?:BIC|SWIFT)\b)(?:[A-Za-z0-9]*\d[A-Za-z0-9]*|[A-Z]{1,4}\b))*/g;
+/** Unlabelled IBANs: the constraint's pattern widened to lowercase and single/double spaces or hyphens. */
+const IBAN = /\b[A-Za-z]{2}\d{2}(?:[ \t-]{0,2}[A-Za-z0-9]{4}){2,7}(?:[ \t-]{0,2}[A-Za-z0-9]{1,4})?\b/g;
+/** BICs after "BIC", "BIC:", "BIC/SWIFT", "SWIFT", "SWIFT-BIC", "BIC (SWIFT)", "SWIFT-Code". */
+const BIC =
+  /(\b(?:BIC|SWIFT)(?:[ \t]*[/-][ \t]*(?:BIC|SWIFT))?(?:[ \t]*\((?:BIC|SWIFT)\))?(?:-Code)?[ \t]*[:.]?[ \t]*)[A-Za-z]{6}[A-Za-z0-9]{2}(?:[A-Za-z0-9]{3})?\b/gi;
 
-/** Bank details never leave queen: IBANs → `[IBAN]`, BICs after "BIC" → `[BIC]`. */
+/** Bank details never leave queen: IBANs → `[IBAN]`, BICs after "BIC"/"SWIFT" → `[BIC]`. */
 export function maskBankData(text: string): string {
-  return text.replace(BIC, '$1[BIC]').replace(IBAN, '[IBAN]');
+  return text.replace(LABELLED_IBAN, '$1[IBAN]').replace(BIC, '$1[BIC]').replace(IBAN, '[IBAN]');
 }
 
 /** Bank and VAT accounts are posted by the booking itself, never chosen for a receipt line. */
