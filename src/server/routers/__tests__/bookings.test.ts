@@ -137,6 +137,55 @@ describe('bookings', () => {
     expect((await caller.bookings.inbox({ year: 2026 })).map((r) => r.id)).toEqual([String(c._id)]);
   });
 
+  describe('history suggestions', () => {
+    const IBAN = 'DE02120300000000202051';
+
+    it('stream suggests from history when no rule matches', async (ctx) => {
+      skipIfNoDb(ctx);
+      const caller = adminCaller();
+      const a = await tx({ counterpartyIban: IBAN });
+      const b = await tx({ counterpartyIban: IBAN });
+      await caller.bookings.book({ bankTxId: String(a._id), account: '6837', vatRate: 0.19, mode: 'normal' });
+      const row = (await caller.bookings.stream({ year: 2026 })).find((r) => r.id === String(b._id));
+      expect(row).toMatchObject({ state: 'open', suggestion: { matchedBy: 'history', account: '6837', vatRate: 0.19, mode: 'normal' } });
+    });
+
+    it('skips reversed entries', async (ctx) => {
+      skipIfNoDb(ctx);
+      const caller = adminCaller();
+      const a = await tx({ counterpartyIban: IBAN });
+      const b = await tx({ counterpartyIban: IBAN });
+      await caller.bookings.book({ bankTxId: String(a._id), account: '6837', vatRate: 0.19, mode: 'normal' });
+      await caller.bookings.unbook({ bankTxId: String(a._id), reason: 'falsch' });
+      const inbox = await caller.bookings.inbox({ year: 2026 });
+      expect(inbox.find((r) => r.id === String(b._id))?.suggestion).toBeNull();
+    });
+
+    it('rules win over history', async (ctx) => {
+      skipIfNoDb(ctx);
+      const caller = adminCaller();
+      const a = await tx({ counterpartyIban: IBAN });
+      const b = await tx({ counterpartyIban: IBAN });
+      await caller.bookings.book({ bankTxId: String(a._id), account: '6640', vatRate: 0.19, mode: 'normal' });
+      await caller.suppliers.create({ name: 'Hoster', ibans: [IBAN], defaultAccount: '6837', defaultVatRate: 0.19 });
+      const inbox = await caller.bookings.inbox({ year: 2026 });
+      expect(inbox.find((r) => r.id === String(b._id))?.suggestion).toMatchObject({ matchedBy: 'iban', account: '6837' });
+    });
+
+    it('bookBulk books history suggestions without supplierId', async (ctx) => {
+      skipIfNoDb(ctx);
+      const caller = adminCaller();
+      const a = await tx({ counterpartyIban: IBAN });
+      const b = await tx({ counterpartyIban: IBAN });
+      await caller.bookings.book({ bankTxId: String(a._id), account: '6837', vatRate: 0.19, mode: 'normal' });
+      const [res] = await caller.bookings.bookBulk({ bankTxIds: [String(b._id)] });
+      expect(res.ok).toBe(true);
+      expect((await BankTransaction.findById(b._id))?.supplierId).toBeUndefined();
+      const booked = (await caller.bookings.booked({ year: 2026 })).find((r) => r.id === String(b._id));
+      expect(booked?.lines.map((x) => x.account).sort()).toEqual(['1406', '1800', '6837']);
+    });
+  });
+
   it('bookBulk attaches a clearly matching receipt and books without one otherwise', async (ctx) => {
     skipIfNoDb(ctx);
     process.env.QUEEN_RECEIPTS_FOLDER_ID = 'root';

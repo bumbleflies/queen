@@ -1,4 +1,5 @@
 import type { BankBookingMode } from './postingRules';
+import { historySuggestion, type BookingHistory } from './history';
 
 export interface SuggestTx {
   counterpartyName?: string | null;
@@ -20,13 +21,16 @@ export interface SuggestSupplier {
 }
 
 export interface Suggestion {
-  supplierId: string;
-  kreditorNumber: number;
+  /** Absent for history suggestions (no supplier behind them). */
+  supplierId?: string;
+  kreditorNumber?: number;
+  /** The counterparty name for history suggestions. */
   supplierName: string;
   account?: string;
   vatRate?: number;
   mode: BankBookingMode;
-  matchedBy: 'iban' | 'purpose' | 'name';
+  matchedBy: 'iban' | 'purpose' | 'name' | 'history';
+  lastBookedAt?: Date;
 }
 
 export function normalizeIban(s: string): string {
@@ -50,7 +54,7 @@ export function suggest(tx: SuggestTx, suppliers: SuggestSupplier[]): Suggestion
   const purpose = norm(tx.description);
   const name = norm(tx.counterpartyName);
 
-  const checks: [Suggestion['matchedBy'], (s: SuggestSupplier) => boolean][] = [
+  const checks: [Exclude<Suggestion['matchedBy'], 'history'>, (s: SuggestSupplier) => boolean][] = [
     ['iban', (s) => iban !== '' && s.ibans.some((i) => normalizeIban(i) === iban)],
     ['purpose', (s) => containsAny(purpose, s.purposePatterns)],
     ['name', (s) => name !== '' && containsAny(name, s.namePatterns)],
@@ -70,4 +74,13 @@ export function suggest(tx: SuggestTx, suppliers: SuggestSupplier[]): Suggestion
     }
   }
   return null;
+}
+
+/** Rules first; otherwise what the same counterparty was booked to before. */
+export function suggestWithHistory(
+  tx: SuggestTx,
+  suppliers: SuggestSupplier[],
+  history: BookingHistory,
+): Suggestion | null {
+  return suggest(tx, suppliers) ?? historySuggestion(tx, history);
 }

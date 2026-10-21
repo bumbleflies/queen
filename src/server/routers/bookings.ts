@@ -9,7 +9,8 @@ import { Supplier } from '../models/Supplier';
 import { BookingError, bookBankTransaction, unbookBankTransaction } from '../lib/accounting/bankBooking';
 import { BANK_VAT_RATES, PostingError } from '../lib/accounting/postingRules';
 import { LedgerError } from '../lib/accounting/ledger';
-import { suggest } from '../lib/accounting/suggest';
+import { suggestWithHistory } from '../lib/accounting/suggest';
+import { loadHistory } from '../lib/accounting/history';
 import { loadYear, openTransactions } from '../lib/accounting/bankCoverage';
 import { rankReceipts, strongReceipt, type ReceiptFile } from '../lib/accounting/receipts';
 import { listReceiptFiles } from '../services/receiptsDrive';
@@ -64,7 +65,7 @@ const bookFields = {
 export const bookingsRouter = router({
   /** Every bank tx of a year once, with its merged Finance view state. */
   stream: authedProcedure.input(yearInput).query(async ({ input }) => {
-    const [{ txs, coverage }, suppliers] = await Promise.all([loadYear(input.year), Supplier.find({ archived: false })]);
+    const [{ txs, coverage }, suppliers, history] = await Promise.all([loadYear(input.year), Supplier.find({ archived: false }), loadHistory()]);
     const matchedIds = txs.flatMap((t) => (t.matchedInvoiceId ? [t.matchedInvoiceId] : []));
     const invoiceMap = new Map(
       (await Invoice.find({ _id: { $in: matchedIds } }).select('invoiceNumber status').lean() as unknown as { _id: unknown; invoiceNumber: string; status: string }[]).map(
@@ -96,16 +97,16 @@ export const bookingsRouter = router({
             supplierName: t.supplierId ? (names.get(String(t.supplierId)) ?? null) : null,
           };
         }
-        return { ...row(t), state: 'open' as const, suggestion: suggest(t, suppliers) };
+        return { ...row(t), state: 'open' as const, suggestion: suggestWithHistory(t, suppliers, history) };
       })
       .reverse();
   }),
 
   inbox: authedProcedure.input(yearInput).query(async ({ input }) => {
-    const [{ txs, coverage }, suppliers] = await Promise.all([loadYear(input.year), Supplier.find({ archived: false })]);
+    const [{ txs, coverage }, suppliers, history] = await Promise.all([loadYear(input.year), Supplier.find({ archived: false }), loadHistory()]);
     return txs
       .filter((t) => !t.matchedInvoiceId && !coverage.has(t.fireflyJournalId))
-      .map((t) => ({ ...row(t), suggestion: suggest(t, suppliers) }));
+      .map((t) => ({ ...row(t), suggestion: suggestWithHistory(t, suppliers, history) }));
   }),
 
   /** Clear receipt match per open row (inbox hint). Drive trouble → `available: false`, never an error. */
@@ -119,10 +120,10 @@ export const bookingsRouter = router({
     } catch {
       return none;
     }
-    const [open, suppliers] = await Promise.all([openTransactions(input.year), Supplier.find({ archived: false })]);
+    const [open, suppliers, history] = await Promise.all([openTransactions(input.year), Supplier.find({ archived: false }), loadHistory()]);
     const matches: Record<string, ReceiptFile> = {};
     for (const tx of open) {
-      const best = strongReceipt(rankReceipts(files, tx, suggest(tx, suppliers)?.supplierName));
+      const best = strongReceipt(rankReceipts(files, tx, suggestWithHistory(tx, suppliers, history)?.supplierName));
       if (best) matches[String(tx._id)] = { id: best.id, name: best.name, link: best.link };
     }
     return { available: true, matches };
@@ -171,7 +172,7 @@ export const bookingsRouter = router({
   bookBulk: authedProcedure
     .input(z.object({ bankTxIds: z.array(z.string().min(1)).min(1).max(200) }))
     .mutation(async ({ input, ctx }) => {
-      const suppliers = await Supplier.find({ archived: false });
+      const [suppliers, history] = await Promise.all([Supplier.find({ archived: false }), loadHistory()]);
       const folder = await getReceiptsFolder();
       // Receipt files per year; Drive trouble only means no automatic receipt.
       const filesByYear = new Map<number, Promise<ReceiptFile[]>>();
@@ -185,7 +186,7 @@ export const bookingsRouter = router({
       const results: { bankTxId: string; ok: boolean; entryNumber?: string; receipt?: boolean; error?: string }[] = [];
       for (const bankTxId of input.bankTxIds) {
         const tx = await BankTransaction.findById(bankTxId);
-        const s = tx ? suggest(tx, suppliers) : null;
+        const s = tx ? suggestWithHistory(tx, suppliers, history) : null;
         if (!tx || !s || (s.mode === 'normal' && !s.account) || s.vatRate === undefined) {
           results.push({ bankTxId, ok: false, error: 'Kein Vorschlag — bitte einzeln buchen' });
           continue;

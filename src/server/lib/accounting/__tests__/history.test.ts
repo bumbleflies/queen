@@ -1,0 +1,52 @@
+import { describe, it, expect } from 'vitest';
+import { deriveBooking, historyKey, historySuggestion, type BookingHistory } from '../history';
+
+const l = (account: string, debitCents: number, creditCents = 0) => ({ account, debitCents, creditCents });
+
+describe('deriveBooking', () => {
+  it('normal 19 %', () => {
+    expect(deriveBooking([l('6837', 10000), l('1406', 1900), l('1800', 0, 11900)])).toEqual({ account: '6837', vatRate: 0.19, mode: 'normal' });
+  });
+  it('vatOnly', () => {
+    expect(deriveBooking([l('1406', 824), l('1800', 0, 824)])).toEqual({ account: '', vatRate: 0.19, mode: 'vatOnly' });
+  });
+  it('reverseCharge', () => {
+    expect(deriveBooking([l('6837', 10000), l('1407', 1900), l('1800', 0, 10000), l('3837', 0, 1900)])).toEqual({
+      account: '6837',
+      vatRate: 0.19,
+      mode: 'reverseCharge',
+    });
+  });
+  it('0 %', () => {
+    expect(deriveBooking([l('7610', 500), l('1800', 0, 500)])).toEqual({ account: '7610', vatRate: 0, mode: 'normal' });
+  });
+});
+
+describe('historyKey', () => {
+  it('ignores placeholder names and normalises IBANs', () => {
+    expect(historyKey({ counterpartyName: '(unknown destination)' })).toBeNull();
+    expect(historyKey({ counterpartyName: '  ' })).toBeNull();
+    expect(historyKey({ counterpartyIban: 'de02 1203 0000 0000 2020 51' })).toBe('iban:DE02120300000000202051');
+    expect(historyKey({ counterpartyName: ' Hoster  GmbH ' })).toBe('name:hoster gmbh');
+  });
+});
+
+describe('historySuggestion', () => {
+  const tx = { counterpartyName: 'Hoster', counterpartyIban: null, description: 'x' };
+  const e = (account: string, day: number) => ({ account, vatRate: 0.19, mode: 'normal' as const, date: new Date(2026, 0, day) });
+
+  it('requires agreement', () => {
+    const disagree: BookingHistory = new Map([['name:hoster', [e('6837', 3), e('6837', 2), e('6640', 1)]]]);
+    expect(historySuggestion(tx, disagree)).toBeNull();
+    const agree: BookingHistory = new Map([['name:hoster', [e('6837', 3), e('6837', 2), e('6837', 1)]]]);
+    expect(historySuggestion(tx, agree)).toMatchObject({
+      matchedBy: 'history',
+      account: '6837',
+      supplierName: 'Hoster',
+      lastBookedAt: new Date(2026, 0, 3),
+    });
+  });
+  it('returns null without history', () => {
+    expect(historySuggestion(tx, new Map())).toBeNull();
+  });
+});
