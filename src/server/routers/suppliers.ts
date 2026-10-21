@@ -16,7 +16,7 @@ const fields = z.object({
   purposePatterns: z.array(z.string()).optional(),
   defaultAccount: z.string().regex(/^\d{4,5}$/).nullable().optional(),
   defaultVatRate: z.number().refine((r) => (BANK_VAT_RATES as readonly number[]).includes(r)).nullable().optional(),
-  defaultMode: z.enum(['normal', 'vatOnly']).optional(),
+  defaultMode: z.enum(['normal', 'vatOnly', 'reverseCharge']).optional(),
 });
 
 function clean(list: string[] | undefined, fn: (s: string) => string = (s) => s.trim()): string[] | undefined {

@@ -11,6 +11,7 @@ import { LedgerViews } from '../components/LedgerViews';
 import { RuleDialog, RulesSection, draftFromTransaction, type RuleDraft } from '../components/RulesSection';
 import { FullSyncDialog, ReceiptPickDialog, StornoDialog, type StornoTarget } from '../components/FinanceDialogs';
 import { suggestionsFor, type OpenItem, type Suggestion } from '../lib/paymentSuggest';
+import type { BankBookingMode } from '../../server/lib/accounting/postingRules';
 
 type Tab = 'open' | 'done' | 'ignored' | 'rules' | 'journal';
 type DirFilter = 'all' | 'in' | 'out';
@@ -22,7 +23,7 @@ interface StreamSuggestion {
   supplierName: string;
   account?: string;
   vatRate?: number;
-  mode: 'normal' | 'vatOnly';
+  mode: BankBookingMode;
 }
 
 interface StreamRow {

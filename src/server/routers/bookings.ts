@@ -53,7 +53,7 @@ function row(tx: HydratedDocument<BankTransactionDoc>) {
 const bookFields = {
   account: z.string(),
   vatRate: z.number().refine((r) => (BANK_VAT_RATES as readonly number[]).includes(r)),
-  mode: z.enum(['normal', 'vatOnly']),
+  mode: z.enum(['normal', 'vatOnly', 'reverseCharge']),
   supplierId: z.string().optional(),
   text: z.string().max(200).optional(),
   rememberRule: z.boolean().optional(),

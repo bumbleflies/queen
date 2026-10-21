@@ -89,7 +89,9 @@ export function reversalLines(lines: PostingLine[]): PostingLine[] {
   }));
 }
 
-export type BankBookingMode = 'normal' | 'vatOnly';
+export type BankBookingMode = 'normal' | 'vatOnly' | 'reverseCharge';
+/** §13b UStG reverse charge is always 19 %. */
+export const REVERSE_CHARGE_RATE = 0.19;
 export const BANK_VAT_RATES = [0, 0.07, 0.19] as const;
 
 const INPUT_VAT: Record<string, string> = { '0.19': '1406', '0.07': '1401' };
@@ -113,6 +115,8 @@ export interface BankPostingInput {
  * Book one bank transaction. Outgoing: account (net) + Vorsteuer an Bank.
  * Incoming: Bank an account (net) + Umsatzsteuer. `vatOnly` books the whole
  * amount to the VAT account (e.g. a bank's separate "Mehrwertsteuerbelast").
+ * `reverseCharge` (§13b, outgoing only): expense gross, Vorsteuer 1407 and
+ * Umsatzsteuer 3837 at 19 % of gross, bank gross.
  */
 export function bankPosting(input: BankPostingInput): PostingLine[] {
   const { direction, grossCents, account, vatRate, mode } = input;
@@ -121,6 +125,19 @@ export function bankPosting(input: BankPostingInput): PostingLine[] {
   }
   if (!(BANK_VAT_RATES as readonly number[]).includes(vatRate)) {
     throw new PostingError(`Unsupported VAT rate ${vatRate}`);
+  }
+  if (mode === 'reverseCharge') {
+    if (direction !== 'out') throw new PostingError('§13b nur für Ausgänge');
+    if (vatRate !== REVERSE_CHARGE_RATE) throw new PostingError('§13b immer mit 19 %');
+    if (!account) throw new PostingError('Booking account is required');
+    if (account === BANK) throw new PostingError('Cannot book a bank transaction to the bank account');
+    const vatCents = Math.round(grossCents * REVERSE_CHARGE_RATE);
+    const signed = new Map<string, number>();
+    add(signed, BANK, -grossCents);
+    add(signed, account, grossCents);
+    add(signed, '1407', vatCents);
+    add(signed, '3837', -vatCents);
+    return toLines(signed);
   }
   const sign = direction === 'out' ? 1 : -1; // debit side of the counter account
   const vatAccount = (direction === 'out' ? INPUT_VAT : OUTPUT_VAT)[String(vatRate)];

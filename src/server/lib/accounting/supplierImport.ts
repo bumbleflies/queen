@@ -3,7 +3,7 @@ import { Supplier } from '../../models/Supplier';
 import { Account } from '../../models/Account';
 import { allocateSupplierNumber, raiseSupplierCounter } from '../numbering';
 import { normalizeIban } from './suggest';
-import { BANK_VAT_RATES } from './postingRules';
+import { BANK_VAT_RATES, type BankBookingMode } from './postingRules';
 
 /** One rule as exported/imported. Missing fields leave an existing supplier's value alone. */
 export const supplierRuleSchema = z
@@ -19,7 +19,7 @@ export const supplierRuleSchema = z
       .refine((r) => (BANK_VAT_RATES as readonly number[]).includes(r), 'USt-Satz nicht erlaubt')
       .nullable()
       .optional(),
-    defaultMode: z.enum(['normal', 'vatOnly']).optional(),
+    defaultMode: z.enum(['normal', 'vatOnly', 'reverseCharge']).optional(),
     archived: z.boolean().optional(),
   })
   .strict();
@@ -34,7 +34,7 @@ export interface SupplierExport {
   purposePatterns: string[];
   defaultAccount: string | null;
   defaultVatRate: number | null;
-  defaultMode: 'normal' | 'vatOnly';
+  defaultMode: BankBookingMode;
   archived: boolean;
 }
 

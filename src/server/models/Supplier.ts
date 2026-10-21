@@ -9,7 +9,7 @@ const supplierSchema = new Schema(
     purposePatterns: { type: [String], required: true, default: [] },
     defaultAccount: { type: String },
     defaultVatRate: { type: Number },
-    defaultMode: { type: String, enum: ['normal', 'vatOnly'], required: true, default: 'normal' },
+    defaultMode: { type: String, enum: ['normal', 'vatOnly', 'reverseCharge'], required: true, default: 'normal' },
     archived: { type: Boolean, required: true, default: false },
   },
   { timestamps: true },
