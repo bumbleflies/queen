@@ -5,6 +5,7 @@ import { JournalEntry } from '../../models/JournalEntry';
 import { Supplier } from '../../models/Supplier';
 import { Counter } from '../../models/Counter';
 import { trialBalance } from '../../lib/accounting/balances';
+import { loadHistory } from '../../lib/accounting/history';
 import { defaultBookingText } from '../../lib/accounting/bankBooking';
 import { adminCaller, initLedgerModels, resetLedgerDb, sentInvoice, skipIfNoDb } from './helpers/ledgerFixtures';
 
@@ -170,6 +171,58 @@ describe('bookings', () => {
       await caller.suppliers.create({ name: 'Hoster', ibans: [IBAN], defaultAccount: '6837', defaultVatRate: 0.19 });
       const inbox = await caller.bookings.inbox({ year: 2026 });
       expect(inbox.find((r) => r.id === String(b._id))?.suggestion).toMatchObject({ matchedBy: 'iban', account: '6837' });
+    });
+
+    const bookTo = (caller: ReturnType<typeof adminCaller>, id: unknown, account: string) =>
+      caller.bookings.book({ bankTxId: String(id), account, vatRate: 0.19, mode: 'normal' });
+    const suggestionOf = async (caller: ReturnType<typeof adminCaller>, id: unknown) =>
+      (await caller.bookings.inbox({ year: 2026 })).find((r) => r.id === String(id))?.suggestion;
+
+    it('uses only the newest three bookings (older disagreement ignored)', async (ctx) => {
+      skipIfNoDb(ctx);
+      const caller = adminCaller();
+      const accounts = ['6640', '6837', '6837', '6837'];
+      for (const [i, account] of accounts.entries()) {
+        await bookTo(caller, (await tx({ counterpartyIban: IBAN, date: new Date(2026, i, 10) })).id, account);
+      }
+      const b = await tx({ counterpartyIban: IBAN, date: new Date(2026, 6, 1) });
+      expect(await suggestionOf(caller, b._id)).toMatchObject({ matchedBy: 'history', account: '6837' });
+    });
+
+    it('gives no suggestion when one of the newest three disagrees', async (ctx) => {
+      skipIfNoDb(ctx);
+      const caller = adminCaller();
+      const accounts = ['6837', '6837', '6640', '6837'];
+      for (const [i, account] of accounts.entries()) {
+        await bookTo(caller, (await tx({ counterpartyIban: IBAN, date: new Date(2026, i, 10) })).id, account);
+      }
+      const b = await tx({ counterpartyIban: IBAN, date: new Date(2026, 6, 1) });
+      expect(await suggestionOf(caller, b._id)).toBeNull();
+    });
+
+    it('never suggests from placeholder counterparty names', async (ctx) => {
+      skipIfNoDb(ctx);
+      const caller = adminCaller();
+      const a = await tx({ counterpartyName: '(unknown destination)' });
+      await bookTo(caller, a._id, '6837');
+      const b = await tx({ counterpartyName: '(unknown destination)' });
+      expect(await suggestionOf(caller, b._id)).toBeNull();
+    });
+
+    it('falls back to the counterparty name (case-insensitive) without an IBAN', async (ctx) => {
+      skipIfNoDb(ctx);
+      const caller = adminCaller();
+      await bookTo(caller, (await tx({ counterpartyName: 'Cafe Beispiel' })).id, '6640');
+      const b = await tx({ counterpartyName: 'CAFE beispiel' });
+      expect(await suggestionOf(caller, b._id)).toMatchObject({ matchedBy: 'history', account: '6640', supplierName: 'CAFE beispiel' });
+    });
+
+    it('ignores bookings older than three years', async (ctx) => {
+      skipIfNoDb(ctx);
+      const caller = adminCaller();
+      await bookTo(caller, (await tx({ counterpartyIban: IBAN })).id, '6837');
+      expect((await loadHistory(new Date(2026, 5, 1))).size).toBe(1);
+      expect((await loadHistory(new Date(2029, 5, 1))).size).toBe(0);
     });
 
     it('bookBulk books history suggestions without supplierId', async (ctx) => {

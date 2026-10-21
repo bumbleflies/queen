@@ -1,5 +1,4 @@
 import type { BankBookingMode } from './postingRules';
-import { historySuggestion, type BookingHistory } from './history';
 
 export interface SuggestTx {
   counterpartyName?: string | null;
@@ -74,13 +73,4 @@ export function suggest(tx: SuggestTx, suppliers: SuggestSupplier[]): Suggestion
     }
   }
   return null;
-}
-
-/** Rules first; otherwise what the same counterparty was booked to before. */
-export function suggestWithHistory(
-  tx: SuggestTx,
-  suppliers: SuggestSupplier[],
-  history: BookingHistory,
-): Suggestion | null {
-  return suggest(tx, suppliers) ?? historySuggestion(tx, history);
 }

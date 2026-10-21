@@ -1,7 +1,7 @@
 import { BankTransaction } from '../../models/BankTransaction';
 import { JournalEntry } from '../../models/JournalEntry';
 import { BANK, type BankBookingMode, type PostingLine } from './postingRules';
-import { normalizeIban, type SuggestTx, type Suggestion } from './suggest';
+import { normalizeIban, suggest, type SuggestSupplier, type SuggestTx, type Suggestion } from './suggest';
 
 export interface HistoryEntry {
   account: string;
@@ -46,9 +46,13 @@ export function historyKey(tx: Pick<SuggestTx, 'counterpartyIban' | 'counterpart
   return `name:${name}`;
 }
 
-/** The newest 3 active bank bookings per counterparty key. */
-export async function loadHistory(): Promise<BookingHistory> {
-  const entries = await JournalEntry.find({ 'source.kind': 'bank', active: true })
+const HISTORY_YEARS = 3;
+
+/** The newest 3 active bank bookings per counterparty key, looking back at most 3 years from `now`. */
+export async function loadHistory(now: Date = new Date()): Promise<BookingHistory> {
+  const since = new Date(now);
+  since.setFullYear(since.getFullYear() - HISTORY_YEARS);
+  const entries = await JournalEntry.find({ 'source.kind': 'bank', active: true, date: { $gte: since } })
     .select('date lines source.refId')
     .sort({ date: -1, _id: -1 })
     .lean();
@@ -89,4 +93,13 @@ export function historySuggestion(tx: SuggestTx, history: BookingHistory): Sugge
     matchedBy: 'history',
     lastBookedAt: newest,
   };
+}
+
+/** Rules first; otherwise what the same counterparty was booked to before. */
+export function suggestWithHistory(
+  tx: SuggestTx,
+  suppliers: SuggestSupplier[],
+  history: BookingHistory,
+): Suggestion | null {
+  return suggest(tx, suppliers) ?? historySuggestion(tx, history);
 }
