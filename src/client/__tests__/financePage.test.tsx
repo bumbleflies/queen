@@ -6,8 +6,10 @@ import { MemoryRouter } from 'react-router-dom';
 
 const q = vi.hoisted(() => (data: unknown) => ({ useQuery: () => ({ data, isError: false }) }));
 const receiptRows = vi.hoisted(() => ({ current: [] as { id: string; name: string; link: string; score: number }[] }));
+const state = vi.hoisted(() => ({ role: 'admin', rows: null as unknown[] | null, matches: {} as Record<string, unknown> }));
 const calls: Record<string, unknown[]> = {};
 const shown: string[] = [];
+const actions: { label: string; onClick: () => void }[] = [];
 
 const streamRows = vi.hoisted(() => [
   {
@@ -109,7 +111,7 @@ vi.mock('../lib/trpc', () => ({
       reverse: { useMutation: () => ({ mutateAsync: async () => {} }) },
     },
     accounts: { list: q([{ number: '6837', name: 'Lizenzen' }]) },
-    me: q({ user: { sub: 'u', email: 'u@example.de', role: 'admin' } }),
+    me: { useQuery: () => ({ data: { user: { sub: 'u', email: 'u@example.de', role: state.role } } }) },
     suppliers: {
       list: q([{ _id: 's1', kreditorNumber: 70001, name: 'Acme GmbH' }]),
       overview: q([]),
@@ -129,10 +131,12 @@ vi.mock('../lib/trpc', () => ({
       unassign: mut('unassign', async () => ({})),
       ignore: mut('ignore', async () => ({})),
       unignore: mut('unignore', async () => ({})),
-      syncNow: { useMutation: () => ({ mutateAsync: async () => ({ ok: true, fetched: 0 }), isPending: false }) },
+      syncNow: mut('syncNow', async () => ({ ok: true, fetched: 0 })),
     },
     bookings: {
-      stream: q(streamRows),
+      stream: { useQuery: () => ({ data: state.rows ?? streamRows, isError: false }) },
+      receiptMatches: { useQuery: () => ({ data: { available: true, matches: state.matches } }) },
+      setReceipt: mut('setReceipt', async () => ({})),
       stats: q({ open: 2, booked: 1, missingReceipts: 1 }),
       balanceCheck: q({ ledgerCents: 0, bankCents: 0, diffCents: null }),
       book: {
@@ -148,7 +152,7 @@ vi.mock('../lib/trpc', () => ({
         useMutation: () => ({
           mutateAsync: async (input: unknown) => {
             calls.bulk?.push(input);
-            return [{ bankTxId: 'tx1', ok: true, entryNumber: '2026-00011' }];
+            return [{ bankTxId: 'tx1', ok: true, entryNumber: '2026-00011', receipt: true }];
           },
           isPending: false,
         }),
@@ -190,7 +194,13 @@ function mut(name: string, impl: (i: unknown) => Promise<unknown>) {
 }
 
 vi.mock('../components/Toast', () => ({
-  useToast: () => ({ show: (m: string) => { shown.push(m); }, error: () => {} }),
+  useToast: () => ({
+    show: (m: string, a?: { label: string; onClick: () => void }) => {
+      shown.push(m);
+      if (a) actions.push(a);
+    },
+    error: (m: string) => { shown.push(`error: ${m}`); },
+  }),
 }));
 
 import { FinancePage } from '../pages/FinancePage';
@@ -207,13 +217,19 @@ beforeEach(() => {
   calls.unassign = [];
   calls.ignore = [];
   calls.unignore = [];
+  calls.syncNow = [];
+  calls.setReceipt = [];
   shown.length = 0;
+  actions.length = 0;
   receiptRows.current = [];
+  state.role = 'admin';
+  state.rows = null;
+  state.matches = {};
 });
 
-function renderPage() {
+function renderPage(url = '/finance') {
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[url]}>
       <LanguageProvider>
         <FinancePage />
       </LanguageProvider>
@@ -221,41 +237,85 @@ function renderPage() {
   );
 }
 
-describe('FinancePage — stream', () => {
-  it('shows the finance heading and the open stream with signed amounts', () => {
+describe('FinancePage — inbox', () => {
+  it('summarises the year and lists open rows with their outcome', () => {
     renderPage();
     expect(screen.getByRole('heading', { name: 'Finanzen' })).toBeInTheDocument();
-    expect(screen.getByRole('row', { name: /Miete März/ })).toBeInTheDocument();
-    expect(screen.getByText('-119,00 €')).toBeInTheDocument();
+    const summary = screen.getByRole('region', { name: 'offen' });
+    expect(within(summary).getByText('2')).toBeInTheDocument();
+    expect(within(summary).getByText('1 mit Vorschlag · 1 ohne Regel · 0 Rechnung zuordnen')).toBeInTheDocument();
+    expect(within(summary).getByText('1 gebucht ohne Beleg')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Offen/ })).toHaveAttribute('aria-selected', 'true');
+
+    const row = screen.getByRole('row', { name: /Miete März/ });
+    expect(within(row).getByText('-119,00 €')).toBeInTheDocument();
+    expect(within(row).getByText('✓ 6837 Lizenzen · 19 %')).toBeInTheDocument();
+    expect(within(row).getByText('Regel Acme GmbH')).toBeInTheDocument();
+    expect(within(row).getByText('kein Beleg gefunden')).toBeInTheDocument();
     expect(screen.queryByRole('row', { name: /Miete Februar/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('row', { name: /Steuererstattung/ })).not.toBeInTheDocument();
   });
 
-  it('direction filter hides incoming', () => {
+  it('direction switch filters rows and the tab comes from the URL', () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: 'Ausgänge' }));
     expect(screen.getByRole('row', { name: /Miete März/ })).toBeInTheDocument();
     expect(screen.queryByRole('row', { name: /10009-20260809-01/ })).not.toBeInTheDocument();
   });
 
-  it('open rows with parsed references show invoice suggestions and assign', async () => {
+  it('opens the tab named in the URL', () => {
+    renderPage('/finance?tab=ignored');
+    expect(screen.getByRole('tab', { name: /Ignoriert/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('row', { name: /Steuererstattung/ })).toBeInTheDocument();
+  });
+
+  it('incoming rows explain the missing invoice reference', () => {
     renderPage();
     const row = screen.getByRole('row', { name: /10009-20260809-01/ });
     expect(within(row).getByText(/Kein Verwendungszweck im Format/)).toBeInTheDocument();
+    expect(within(row).getByText('⚠ Keine Regel')).toBeInTheDocument();
   });
 
-  it('books via dialog with suggestion defaults', async () => {
+  it('books a complete suggestion in one click with the matched receipt, and can undo it', async () => {
+    state.matches = { tx1: { id: 'f1', name: 'Acme_2026-03-01_123456.pdf', link: 'https://drive/f1' } };
     renderPage();
     const row = screen.getByRole('row', { name: /Miete März/ });
+    expect(within(row).getByRole('link', { name: 'Acme_2026-03-01_123456.pdf' })).toBeInTheDocument();
     fireEvent.click(within(row).getByRole('button', { name: 'Buchen' }));
-    expect(screen.getByRole('heading', { name: 'Transaktion buchen' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Jetzt buchen' }));
-    await waitFor(() => expect(calls.book).toEqual([
-      expect.objectContaining({ bankTxId: 'tx1', account: '6837', vatRate: 0.19, mode: 'normal', supplierId: 's1' }),
-    ]));
-    expect(shown).toEqual(['Gebucht 2026-00011']);
+    await waitFor(() => expect(calls.book).toEqual([{
+      bankTxId: 'tx1',
+      account: '6837',
+      vatRate: 0.19,
+      mode: 'normal',
+      supplierId: 's1',
+      receipt: { driveFileId: 'f1', fileName: 'Acme_2026-03-01_123456.pdf', link: 'https://drive/f1' },
+    }]));
+    expect(shown).toEqual(['Gebucht 2026-00011.']);
+    expect(actions.map((a) => a.label)).toEqual(['Rückgängig']);
+    actions[0].onClick();
+    await waitFor(() => expect(calls.unbook).toEqual([{ bankTxId: 'tx1', reason: 'Rückgängig direkt nach dem Buchen' }]));
   });
 
-  it('rows without a suggestion offer a prefilled rule', async () => {
+  it('Anpassen opens the booking dialog with the suggestion and a preselected receipt', async () => {
+    receiptRows.current = [
+      { id: 'f1', name: 'Acme_2026-03-01_123456.pdf', link: 'https://drive/f1', score: 8 },
+      { id: 'f2', name: 'Acme_2026-02-01_654321.pdf', link: 'https://drive/f2', score: 1 },
+    ];
+    renderPage();
+    fireEvent.click(within(screen.getByRole('row', { name: /Miete März/ })).getByRole('button', { name: 'Anpassen' }));
+    expect(screen.getByRole('heading', { name: 'Transaktion buchen' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Als Regel merken' })).not.toBeChecked();
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Beleg wählen' })).toHaveValue('f1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Jetzt buchen' }));
+    await waitFor(() => expect(calls.book).toEqual([
+      expect.objectContaining({
+        bankTxId: 'tx1', account: '6837', vatRate: 0.19, mode: 'normal', supplierId: 's1', rememberRule: false,
+        receipt: { driveFileId: 'f1', fileName: 'Acme_2026-03-01_123456.pdf', link: 'https://drive/f1' },
+      }),
+    ]));
+  });
+
+  it('rows without a rule offer a prefilled rule with a live match count', async () => {
     renderPage();
     const row = screen.getByRole('row', { name: /10009-20260809-01/ });
     expect(within(screen.getByRole('row', { name: /Miete März/ })).queryByRole('button', { name: 'Regel anlegen' })).not.toBeInTheDocument();
@@ -263,70 +323,95 @@ describe('FinancePage — stream', () => {
     const dialog = screen.getByRole('dialog', { name: 'Regel anlegen' });
     expect(within(dialog).getByLabelText('Name')).toHaveValue('Kunde AG');
     expect(within(dialog).getByLabelText(/Name enthält/)).toHaveValue('Kunde AG');
+    expect(within(dialog).getByText('Treffer in offenen Umsätzen: 1')).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText(/Name enthält/), { target: { value: 'niemand' } });
+    expect(within(dialog).getByText('Passt auf keinen offenen Umsatz.')).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText(/Name enthält/), { target: { value: 'Kunde AG' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Speichern' }));
     await waitFor(() => expect(calls.createRule).toEqual([expect.objectContaining({ name: 'Kunde AG', namePatterns: ['Kunde AG'] })]));
+    expect(shown).toEqual(['Regel gespeichert. Offene Umsätze mit Vorschlag: 1']);
   });
 
-  it('the Regeln chip opens the rules overview', () => {
+  it('non-admins can still book manually but not create rules', () => {
+    state.role = 'user';
     renderPage();
-    expect(screen.queryByRole('region', { name: 'Buchungsregeln' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Regeln' }));
-    expect(screen.getByRole('region', { name: 'Buchungsregeln' })).toBeInTheDocument();
+    const row = screen.getByRole('row', { name: /10009-20260809-01/ });
+    expect(within(row).queryByRole('button', { name: 'Regel anlegen' })).not.toBeInTheDocument();
+    fireEvent.click(within(row).getByRole('button', { name: 'Manuell buchen' }));
+    expect(screen.getByRole('heading', { name: 'Transaktion buchen' })).toBeInTheDocument();
   });
 
-  it('preselects a clearly matching receipt and sends it with the booking', async () => {
-    receiptRows.current = [
-      { id: 'f1', name: 'Acme_2026-03-01_123456.pdf', link: 'https://drive/f1', score: 8 },
-      { id: 'f2', name: 'Acme_2026-02-01_654321.pdf', link: 'https://drive/f2', score: 1 },
-    ];
+  it('bulk books all suggestions, or only the selected ones, with undo', async () => {
     renderPage();
-    fireEvent.click(within(screen.getByRole('row', { name: /Miete März/ })).getByRole('button', { name: 'Buchen' }));
-    expect(screen.getByRole('option', { name: 'Acme_2026-03-01_123456.pdf' })).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Beleg wählen' })).toHaveValue('f1'));
-    fireEvent.click(screen.getByRole('button', { name: 'Jetzt buchen' }));
-    await waitFor(() => expect(calls.book).toEqual([
-      expect.objectContaining({ receipt: { driveFileId: 'f1', fileName: 'Acme_2026-03-01_123456.pdf', link: 'https://drive/f1' } }),
-    ]));
-  });
-
-  it('bulk books selected rows with suggestions', async () => {
-    renderPage();
-    const boxes = screen.getAllByRole('checkbox');
-    fireEvent.click(boxes[1]);
-    fireEvent.click(screen.getByRole('button', { name: /Ausgewählte mit Vorschlag buchen/ }));
+    fireEvent.click(screen.getByRole('button', { name: '1 Vorschlag buchen' }));
     await waitFor(() => expect(calls.bulk).toEqual([{ bankTxIds: ['tx1'] }]));
-    expect(shown).toEqual(['1 gebucht']);
+    expect(shown).toEqual(['1 gebucht, 1 mit Beleg.']);
+    expect(actions).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Miete März' }));
+    fireEvent.click(screen.getByRole('button', { name: '1 ausgewählte buchen' }));
+    await waitFor(() => expect(calls.bulk).toHaveLength(2));
+  });
+
+  it('shows a done state when nothing is open', () => {
+    state.rows = streamRows.filter((r) => r.state !== 'open');
+    renderPage();
+    expect(screen.getByText('Alles gebucht ✓')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Erledigt ansehen' }));
+    expect(screen.getByRole('tab', { name: /Erledigt/ })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('bank maintenance lives in the overflow menu; full reimport asks first', async () => {
+    renderPage();
+    expect(screen.queryByRole('menuitem', { name: 'Jetzt synchronisieren' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Bank und Abgleich' }));
+    expect(screen.getByRole('menuitem', { name: 'Jetzt synchronisieren' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('menuitem', { name: /Bank vollständig neu einlesen/ }));
+    const dialog = screen.getByRole('dialog', { name: 'Bank neu einlesen' });
+    expect(calls.syncNow).toEqual([]);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Bank vollständig neu einlesen' }));
+    await waitFor(() => expect(calls.syncNow).toEqual([{ full: true }]));
   });
 });
 
 describe('FinancePage — done', () => {
-  it('Erledigt lists invoice payments and bank bookings with reversals', async () => {
-    const prompt = vi.spyOn(window, 'prompt').mockReturnValue('falsch');
-    try {
-      renderPage();
-      fireEvent.click(screen.getByRole('button', { name: 'Erledigt' }));
-      const invRow = screen.getByRole('row', { name: /Verwendungszweck 10009-20260910-01/ });
-      expect(within(invRow).getByRole('link', { name: '20260910-01' })).toBeInTheDocument();
-      expect(within(invRow).getByText('bezahlt')).toBeInTheDocument();
-      fireEvent.click(within(invRow).getByRole('button', { name: 'Aufheben' }));
-      await waitFor(() => expect(calls.unassign).toEqual([{ bankTxId: 'tx4' }]));
+  it('Erledigt lists invoice payments and bank bookings; Stornieren asks for a reason', async () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('tab', { name: /Erledigt/ }));
+    const invRow = screen.getByRole('row', { name: /Verwendungszweck 10009-20260910-01/ });
+    expect(within(invRow).getByRole('link', { name: '20260910-01' })).toBeInTheDocument();
+    expect(within(invRow).getByText('bezahlt')).toBeInTheDocument();
+    fireEvent.click(within(invRow).getByRole('button', { name: 'Aufheben' }));
+    await waitFor(() => expect(calls.unassign).toEqual([{ bankTxId: 'tx4' }]));
 
-      const bookedRow = screen.getByRole('row', { name: /Miete Februar/ });
-      expect(within(bookedRow).getByText('2026-00010')).toBeInTheDocument();
-      expect(within(bookedRow).getByText('S 6837 100,00 €')).toBeInTheDocument();
-      fireEvent.click(within(bookedRow).getByRole('button', { name: 'Stornieren' }));
-      await waitFor(() => expect(calls.unbook).toEqual([{ bankTxId: 'tx3', reason: 'falsch' }]));
-    } finally {
-      prompt.mockRestore();
-    }
+    const bookedRow = screen.getByRole('row', { name: /Miete Februar/ });
+    expect(within(bookedRow).getByText('2026-00010')).toBeInTheDocument();
+    expect(within(bookedRow).getByText('S 6837 100,00 €')).toBeInTheDocument();
+    fireEvent.click(within(bookedRow).getByRole('button', { name: 'Stornieren' }));
+    const dialog = screen.getByRole('dialog', { name: 'Buchung 2026-00010 stornieren' });
+    const confirm = within(dialog).getByRole('button', { name: 'Stornieren' });
+    expect(confirm).toBeDisabled();
+    fireEvent.change(within(dialog).getByLabelText('Grund'), { target: { value: 'falsch' } });
+    fireEvent.click(confirm);
+    await waitFor(() => expect(calls.unbook).toEqual([{ bankTxId: 'tx3', reason: 'falsch' }]));
   });
-});
 
-describe('FinancePage — ignored', () => {
+  it('a booking without receipt can get one attached', async () => {
+    receiptRows.current = [{ id: 'f9', name: 'Miete_2026-02.pdf', link: 'https://drive/f9', score: 3 }];
+    renderPage('/finance?tab=done');
+    const bookedRow = screen.getByRole('row', { name: /Miete Februar/ });
+    fireEvent.click(within(bookedRow).getByRole('button', { name: 'Beleg wählen' }));
+    const dialog = screen.getByRole('dialog', { name: 'Beleg zuordnen' });
+    fireEvent.change(within(dialog).getByRole('combobox'), { target: { value: 'f9' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Beleg speichern' }));
+    await waitFor(() => expect(calls.setReceipt).toEqual([
+      { bankTxId: 'tx3', receipt: { driveFileId: 'f9', fileName: 'Miete_2026-02.pdf', link: 'https://drive/f9' } },
+    ]));
+  });
+
   it('Ignoriert lists only ignored open rows with restore', async () => {
     renderPage();
-    fireEvent.click(screen.getByRole('button', { name: 'Ignoriert' }));
-    expect(screen.getByRole('row', { name: /Steuererstattung/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /Ignoriert/ }));
     expect(screen.queryByRole('row', { name: /Miete März/ })).not.toBeInTheDocument();
     const row = screen.getByRole('row', { name: /Steuererstattung/ });
     fireEvent.click(within(row).getByRole('button', { name: 'Wiederherstellen' }));
@@ -334,20 +419,24 @@ describe('FinancePage — ignored', () => {
   });
 });
 
-describe('FinancePage — journal', () => {
-  it('journal toggle reveals backfill and ledger views', async () => {
+describe('FinancePage — rules and journal tabs', () => {
+  it('the Regeln tab shows the rules overview', () => {
     renderPage();
-    expect(screen.queryByRole('button', { name: 'Prüfen' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Journal (SKR04)' }));
-    expect(screen.getByRole('button', { name: 'Prüfen' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Journal' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Saldenliste' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Konto' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Buchungsregeln' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /Regeln/ }));
+    expect(screen.getByRole('region', { name: 'Buchungsregeln' })).toBeInTheDocument();
   });
 
-  it('ledger entry form can be opened', () => {
+  it('the Journal tab shows backfill and ledger views', () => {
     renderPage();
-    fireEvent.click(screen.getByRole('button', { name: 'Journal (SKR04)' }));
+    expect(screen.queryByRole('button', { name: 'Prüfen' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /Journal \(SKR04\)/ }));
+    expect(screen.getByRole('button', { name: 'Prüfen' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Saldenliste' })).toBeInTheDocument();
+  });
+
+  it('ledger entry form can be opened from the header', () => {
+    renderPage();
     fireEvent.click(screen.getByRole('button', { name: 'Buchung erfassen' }));
     expect(screen.getByRole('heading', { name: 'Buchung erfassen' })).toBeInTheDocument();
   });

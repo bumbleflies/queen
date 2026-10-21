@@ -56,7 +56,7 @@ export function BookingDialog({ year, tx, onDone }: { year: number; tx: InboxRow
   const [mode, setMode] = useState<BankBookingMode>(tx.suggestion?.mode ?? 'normal');
   const [supplierId, setSupplierId] = useState(tx.suggestion?.supplierId ?? '');
   const [text, setText] = useState('');
-  const [remember, setRemember] = useState(!tx.suggestion);
+  const [remember, setRemember] = useState(false);
   const [receiptId, setReceiptId] = useState('');
   const [missing, setMissing] = useState(false);
   const [missingReason, setMissingReason] = useState('');
