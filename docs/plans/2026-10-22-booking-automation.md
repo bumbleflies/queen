@@ -130,7 +130,8 @@ Kontostand GLS                         from Firefly (fallback: ledger 1800), dat
   - Replies are polled every 1 s with a **120 s** timeout.
   - When a model has used its attempts, the next model is tried; the last error is thrown when all are exhausted.
   - **The list comes from the live registry** `GET /api/model`: models that are active, enabled and cost 0. Preferred ids come first, configured in env `QUEEN_OPENCODE_MODELS`, comma-separated `provider:id`. dontforget hard-codes its list and broke when `mimo-v2.5-free` was retired.
-  - **No paid fallback.** If every free model fails, the row simply gets no receipt suggestion. It shows "Beleg konnte nicht gelesen werden", and the next attempt happens on the next run or click.
+  - **One paid model as last resort** (decided 2026-10-22): when every free model has failed, one paid model is tried with the same backoff. It's set in env `QUEEN_OPENCODE_PAID_MODEL` (`provider:id`); the default is `opencode-go:deepseek-v4.1-flash`, as in job-search.
+  - Only if that fails too does the row get no receipt suggestion. It shows "Beleg konnte nicht gelesen werden", and the next attempt happens on the next run or click.
   - IBAN/BIC masking stays.
 - **Privacy:** the owner agreed (2026-10-22) to receipts being read by an LLM, including free-tier models whose providers may use inputs for training. IBAN/BIC masking reduces what leaves the server.
 
@@ -146,7 +147,7 @@ Each part is its own branch, PR and release; servyy-test first, then production.
 
 ## Decisions (2026-10-22)
 
-1. **Receipt reading:** yes, through the opencode server instead of a direct API key, using free models with dontforget's backoff (Part E).
+1. **Receipt reading:** yes, through the opencode server instead of a direct API key, using free models with dontforget's backoff and one paid model as last resort (Part E).
 2. **Tax rate:** unknown. The default is 33 %, shown as an estimate and editable in Einstellungen; confirm with the tax advisor.
 3. **Auto-booking scope:** only rules matched by IBAN or Verwendungszweck.
 
