@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.20.0](https://github.com/bumbleflies/queen/compare/queen-v0.19.27...queen-v0.20.0) (2026-10-21)
+
+
+### Features
+
+* **bookings:** match receipts from the Verwendungszweck and fix the receipt picker ([c513f11](https://github.com/bumbleflies/queen/commit/c513f1197a4550a32aa36f9b778072fa45b1616d))
+* **bookings:** match receipts from the Verwendungszweck and fix the receipt picker ([658881b](https://github.com/bumbleflies/queen/commit/658881bc826db0185fb58372f473aa727ac168ee))
+* **suppliers:** booking rules overview with JSON import/export ([4c778ae](https://github.com/bumbleflies/queen/commit/4c778aec14a27cd6d06848ac04b0e3b61047b246))
+* **suppliers:** booking rules overview with JSON import/export ([74774c7](https://github.com/bumbleflies/queen/commit/74774c77024f0f9186c55b0d8697eb207635207c))
+
+
+### Bug Fixes
+
+* **deps:** update dependency nodemailer to v10.2.0 ([#135](https://github.com/bumbleflies/queen/issues/135)) ([e79acfb](https://github.com/bumbleflies/queen/commit/e79acfbf023b63dc6bbd6976da2b377eba8a3833))
+
 ## [0.19.27](https://github.com/bumbleflies/queen/compare/queen-v0.19.26...queen-v0.19.27) (2026-10-21)
 
 
