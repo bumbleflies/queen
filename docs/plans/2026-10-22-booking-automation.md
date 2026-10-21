@@ -1,6 +1,6 @@
 # Booking automation and available money — Design
 
-> Status: draft 2026-10-22, waiting for approval. A task-level plan follows once this is approved.
+> Status: decisions 2026-10-22 recorded below. Parts A–D are ready to plan. Part E waits for the model choice.
 
 ## Intent
 
@@ -12,7 +12,7 @@ The Finanzen inbox works, but every transaction that no rule covers still has to
 2. A transaction with no rule still gets a one-click suggestion from **how the same counterparty was booked before**.
 3. Selected rules book **automatically** during the daily reconcile run, with no click.
 4. A **"frei verfügbar"** figure: bank balance minus open VAT, tax provisions, estimated tax on this year's profit and open liabilities. Every part can be traced to its accounts.
-5. *(Pending decision, see "Open decisions")* A transaction with a matched receipt but no other suggestion gets one **read from the receipt**, including mixed VAT rates and §13b detection.
+5. A transaction with a matched receipt but no other suggestion gets one **read from the receipt**, including mixed VAT rates and §13b detection. It goes through the shared opencode server (Part E).
 
 ## Non-goals
 
@@ -86,7 +86,7 @@ Kontostand GLS                         from Firefly (fallback: ledger 1800), dat
 
 - **Period:** account balances are cumulative over every fiscal year that isn't closed, up to today, because opening entries carry closed years forward. The profit estimate covers the current fiscal year only.
 - **Profit before income taxes:** revenue accounts (4xxx) minus expense accounts (6xxx, 7xxx), **excluding** 7600, 7608, 7610 and 7641. Non-deductible shares (e.g. 30 % of Bewirtung) are ignored; it's an estimate and labelled as such.
-- **Rate:** set in Einstellungen (admin), stored as a `Setting`. Suggested default **33 %**: KöSt 15 % + Soli 5.5 % of that (15.825 %) + GewSt 3.5 % × Munich's Hebesatz 490 % (17.15 %) = 32.975 %.
+- **Rate:** set in Einstellungen (admin), stored as a `Setting`. The default is **33 %** (KöSt 15 % + Soli 5.5 % of that = 15.825 %, plus GewSt 3.5 % × Munich's Hebesatz 490 % = 17.15 %; total 32.975 %). The owner doesn't know the right figure yet, so the card labels it "Schätzung (33 %)", and the settings field links a note to confirm it with the tax advisor.
 - **Traceability:** each line links to its Kontoblatt (account ledger) or to the ledger filtered to its accounts. A tooltip states the formula.
 - **Honesty about gaps:** if the inbox still has open transactions, the card says "n Umsätze noch nicht gebucht — Betrag vorläufig". If the bank balance is unavailable, the card shows the ledger figure and says so.
 - **Server:** a new `ledger.availableCash({ year })` returns every component in cents plus the inputs (rate, profit, open count). The pure computation lives in `lib/accounting/availableCash.ts` with unit tests.
@@ -95,7 +95,7 @@ Kontostand GLS                         from Firefly (fallback: ledger 1800), dat
 
 - **Rule flag:** suppliers get `autoBook: boolean`, default `false`, editable by admins in the rule dialog and via JSON import/export.
 - **When:** at the end of `runReconcile` (the Ofelia cron at 07:30 and `reconcile.runNow`), after sync and invoice matching.
-- **What:** open transactions of non-closed fiscal years whose **rule** suggestion is complete and whose rule has `autoBook`. They are booked exactly like bulk booking, including attaching a clear receipt match.
+- **What:** open transactions of non-closed fiscal years whose **rule** suggestion is complete, whose rule has `autoBook`, and which the rule matched **by IBAN or Verwendungszweck**. Name-pattern matches never auto-book (decided 2026-10-22). The rule dialog explains this next to the checkbox. They are booked exactly like bulk booking, including attaching a clear receipt match.
 - **Drive access in the cron:** the user who last saved the Drive folder setting (`Setting.updatedBy`). If that fails, the row is booked without a receipt and the run records a warning.
 - **Traceability:**
   - `createdBy: 'auto:reconcile'` on the entry.
@@ -106,10 +106,10 @@ Kontostand GLS                         from Firefly (fallback: ledger 1800), dat
   - History suggestions and rules without account or VAT never auto-book.
   - Failures don't fail the reconcile run; they're counted and shown.
 
-## Part E — reading receipts *(pending decision)*
+## Part E — reading receipts (via the opencode server; model choice pending)
 
 - **When:** for an open transaction with a clear receipt match but no rule or history suggestion, a "Beleg auslesen" action, or optionally an automatic run during reconcile.
-- **What it does:** sends the PDF to the Claude API and asks for:
+- **What it does:** sends the receipt's **text** to an LLM through the shared opencode server and asks for:
   - vendor and country
   - invoice date and total
   - VAT lines by rate
@@ -117,8 +117,18 @@ Kontostand GLS                         from Firefly (fallback: ledger 1800), dat
   - the best-fitting account from queen's account list
 - **What the owner sees:** the result becomes a suggestion with `matchedBy: 'receipt'`. It is never auto-booked, and the extracted figures are shown next to the suggestion so they can be checked.
 - **Mixed VAT rates** (e.g. a 2026 restaurant bill with 7 % food and 19 % drinks) need **split bookings**: one bank transaction posted to several account/VAT lines. That's a new posting shape (`bankPosting` with several lines) and a sub-feature of this part.
-- **Model choice:** made at implementation time following the current Claude API guidance. The API key lives in the container env (git-crypt in servyy-container), never in git.
-- **Privacy:** receipts (supplier invoices, reimbursement documents) leave the server to Anthropic's API. This needs the owner's explicit OK.
+- **Transport:** there is no Anthropic API key. queen uses the opencode server (`opencode.web`, code.lehel.xyz) like job-search and devhub do:
+  - A new `X-Api-Key` for queen goes through the `opencode-authgate` forwardAuth route.
+  - The flow is `POST /api/session` → `POST /api/session/:id/prompt` → poll `GET /api/session/:id/message`, plus `GET /api/model` for the registry.
+  - Reuse the contract of `job-search/packages/api/src/ai/opencode.ts`: polling, unavailable retries, model registry.
+  - The key is provisioned through Ansible in servyy-container (`templates/finance/queen.env.j2` plus the authgate key list), git-crypt only.
+  - servyy-test has no `opencode-authgate`, so the integration can only be verified on production. Unit tests mock the HTTP contract.
+- **Input:** text only. The current models are text models, so queen extracts the PDF's text layer server-side and sends that. Receipts without a text layer (scans, photos) get no suggestion and stay manual.
+- **Data minimisation:** IBANs and BICs are masked in the text before sending. The prompt includes only the account numbers and names, not balances or other transactions.
+- **Model choice (pending):** queen pins **one model**, configured in env, and never falls back to the free-model chain. Free tiers may use inputs for training; receipts contain partner names and amounts.
+  - Candidates: the paid `opencode-go:deepseek-v4.1-flash`, or a Claude model if the opencode registry offers one (check `GET /api/model`).
+  - The owner picks before Part E is built.
+- **Privacy:** the owner agreed (2026-10-22) to receipts being read by an LLM. Which provider receives them is the pending model choice above.
 
 ## Order and shipping
 
@@ -130,11 +140,15 @@ Each part is its own branch, PR and release; servyy-test first, then production.
 4. **D auto-booking:** small to medium. Changes the invariant, so it ships with the docs update.
 5. **E receipt reading plus split bookings:** largest; only after the decision below.
 
-## Open decisions (the owner's)
+## Decisions (2026-10-22)
 
-1. **Part E:** may receipts be sent to the Claude API? If not, E is dropped and mixed-rate receipts stay manual multi-line entries.
-2. **Tax rate default:** 33 % as estimated above, or a figure from the tax advisor?
-3. **Auto-booking scope:** should name-pattern rules be allowed to auto-book, or only IBAN and Verwendungszweck rules (stronger signals)? Suggested: IBAN and purpose only.
+1. **Receipt reading:** yes, through the opencode server instead of a direct API key. The model is still open, see Part E.
+2. **Tax rate:** unknown. The default is 33 %, shown as an estimate and editable in Einstellungen; confirm with the tax advisor.
+3. **Auto-booking scope:** only rules matched by IBAN or Verwendungszweck.
+
+## Still open
+
+- **Part E model:** paid `opencode-go:deepseek-v4.1-flash`, or a Claude model if the opencode registry has one. Never the free-model chain.
 
 ## Verification
 
