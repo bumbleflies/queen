@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest';
+import { appRouter } from '../../trpc';
+import { Setting } from '../../models/Setting';
 import { Invoice } from '../../models/Invoice';
 import { InvoiceLine } from '../../models/InvoiceLine';
 import { BankTransaction } from '../../models/BankTransaction';
@@ -21,6 +23,7 @@ beforeAll(initLedgerModels);
 beforeEach(async () => {
   vi.clearAllMocks();
   await resetLedgerDb();
+  await Setting.deleteMany({});
 });
 
 const opening = {
@@ -299,5 +302,52 @@ describe('admin.ledgerBackfill', () => {
       expect(again).toMatchObject({ invoices: 0, payments: 0 });
       expect(again.skipped).toEqual(report.skipped);
     });
+  });
+});
+
+describe('ledger.availableCash', () => {
+  const year = new Date().getFullYear();
+
+  it('falls back to ledger 1800 when Firefly env is missing', async (ctx) => {
+    skipIfNoDb(ctx);
+    vi.stubEnv('FIREFLY_URL', '');
+    vi.stubEnv('FIREFLY_PAT', '');
+    vi.stubEnv('FIREFLY_GLS_ACCOUNT_ID', '');
+    vi.stubEnv('QUEEN_BANK_START', '');
+    const caller = adminCaller();
+    await caller.ledger.postManual({
+      kind: 'manual',
+      date: new Date(year, 0, 5),
+      year,
+      text: 'Einlage',
+      lines: [
+        { account: '1800', debitCents: 50000, creditCents: 0 },
+        { account: '2900', debitCents: 0, creditCents: 50000 },
+      ],
+    });
+    const r = await caller.ledger.availableCash({ year });
+    vi.unstubAllEnvs();
+    expect(r.bankSource).toBe('ledger');
+    expect(r.bankCents).toBe(50000);
+    expect(r.availableCents).toBe(50000);
+    expect(r.openCount).toBe(0);
+  });
+
+  it('uses the tax rate setting', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    expect((await caller.settings.getTaxRate()).rate).toBe(0.33);
+    await caller.settings.setTaxRate({ rate: 0.3 });
+    const r = await caller.ledger.availableCash({ year });
+    expect(r.taxRate).toBe(0.3);
+  });
+
+  it('setTaxRate is admin-only', async (ctx) => {
+    skipIfNoDb(ctx);
+    const user = appRouter.createCaller({
+      user: { sub: 'u1', email: 'u@example.de', role: 'user' },
+      serviceAuth: false,
+    });
+    await expect(user.settings.setTaxRate({ rate: 0.3 })).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 });

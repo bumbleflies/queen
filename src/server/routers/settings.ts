@@ -5,6 +5,8 @@ import {
   getInvoicesFolder,
   getReceiptsFolder,
   setDriveFolders,
+  getTaxEstimateRate,
+  setTaxEstimateRate,
   type FolderRef,
 } from '../services/appSettings';
 import { driveForUser } from '../services/driveForUser';
@@ -62,5 +64,14 @@ export const settingsRouter = router({
       );
       const [invoices, receipts] = await Promise.all([getInvoicesFolder(), getReceiptsFolder()]);
       return { invoices, receipts };
+    }),
+
+  getTaxRate: authedProcedure.query(async () => ({ rate: await getTaxEstimateRate() })),
+
+  setTaxRate: adminProcedure
+    .input(z.object({ rate: z.number().min(0).max(0.6) }))
+    .mutation(async ({ input, ctx }) => {
+      await setTaxEstimateRate(input.rate, ctx.user.sub);
+      return { rate: await getTaxEstimateRate() };
     }),
 });

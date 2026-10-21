@@ -6,6 +6,11 @@ import { FiscalYear } from '../models/FiscalYear';
 import { JournalEntry } from '../models/JournalEntry';
 import { LedgerError, post, reverse } from '../lib/accounting/ledger';
 import { accountLedger, trialBalance } from '../lib/accounting/balances';
+import { computeAvailableCash } from '../lib/accounting/availableCash';
+import { openTransactions } from '../lib/accounting/bankCoverage';
+import { getTaxEstimateRate } from '../services/appSettings';
+import { FireflyClient } from '../services/FireflyClient';
+import { readFireflyEnv } from '../lib/fireflyEnv';
 
 const REVERSIBLE_KINDS = new Set(['manual', 'opening']);
 
@@ -92,6 +97,37 @@ export const ledgerRouter = router({
       });
       return accountLedger(input.account, entries);
     }),
+
+  availableCash: authedProcedure.input(z.object({ year: yearInput })).query(async ({ input }) => {
+    // Non-closed years: the current calendar year plus every FiscalYear doc not closed.
+    const open = await FiscalYear.find({ status: { $ne: 'closed' } }).select('year');
+    const years = new Set([new Date().getFullYear(), ...open.map((f) => f.year)]);
+    const entries = await JournalEntry.find({ fiscalYear: { $in: [...years] } }).select('lines fiscalYear');
+    const toMap = (es: typeof entries) =>
+      new Map(trialBalance(es).rows.map((r) => [r.account, r.balanceCents]));
+    const balances = toMap(entries);
+    const currentYearBalances = toMap(entries.filter((e) => e.fiscalYear === input.year));
+
+    const endOfYear = new Date(input.year, 11, 31);
+    const asOf = new Date() < endOfYear ? new Date() : endOfYear;
+    let bankCents = balances.get('1800') ?? 0;
+    let bankSource: 'firefly' | 'ledger' = 'ledger';
+    try {
+      const { baseUrl, pat, glsAccountId } = readFireflyEnv();
+      bankCents = await new FireflyClient({ baseUrl, pat, glsAccountId }).fetchBalance(asOf);
+      bankSource = 'firefly';
+    } catch {
+      // Firefly missing or unreachable: the ledger's 1800 is the fallback.
+    }
+
+    const [taxRate, openTxs] = await Promise.all([getTaxEstimateRate(), openTransactions(input.year)]);
+    return {
+      ...computeAvailableCash({ bankCents, balances, currentYearBalances, taxRate }),
+      bankSource,
+      asOf,
+      openCount: openTxs.length,
+    };
+  }),
 
   postManual: authedProcedure
     .input(
