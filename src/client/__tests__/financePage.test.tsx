@@ -107,6 +107,7 @@ vi.mock('../lib/trpc', () => ({
       list: q([]),
       trialBalance: q({ rows: [], debitCents: 0, creditCents: 0 }),
       accountLedger: q([]),
+      availableCash: q({ bankCents: 0, vatCents: 0, provisionsCents: 0, estimatedTaxCents: 0, liabilitiesCents: 0, availableCents: 0, profitCents: 0, taxRate: 0.33, bankSource: 'firefly', asOf: '2026-03-04T00:00:00.000Z', openCount: 0 }),
       postManual: { useMutation: () => ({ mutateAsync: async () => {}, isPending: false }) },
       reverse: { useMutation: () => ({ mutateAsync: async () => {} }) },
     },
@@ -477,6 +478,11 @@ describe('FinancePage — rules and journal tabs', () => {
     fireEvent.click(screen.getByRole('tab', { name: /Journal \(SKR04\)/ }));
     expect(screen.getByRole('button', { name: 'Prüfen' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Saldenliste' })).toBeInTheDocument();
+  });
+
+  it('opens the account ledger on the account from the URL', () => {
+    renderPage('/finance?tab=journal&account=3806');
+    expect(screen.getByRole('heading', { name: 'Kontoblatt 3806' })).toBeInTheDocument();
   });
 
   it('ledger entry form can be opened from the header', () => {

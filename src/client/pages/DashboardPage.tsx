@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { trpc } from '../lib/trpc';
+import { AvailableCashCard } from '../components/AvailableCashCard';
 import { formatDate, formatDateTime, formatEUR, toDate } from '../lib/format';
 import {
   agingBuckets,
@@ -375,6 +376,8 @@ export function DashboardPage() {
         </div>
 
         <aside className="dash-rail" aria-label={t('dash.overview')}>
+          <AvailableCashCard year={new Date().getFullYear()} compact />
+
           <section className="card rail-card">
             <div className="rail-head">
               <h2>{t('nav.bank')}</h2>

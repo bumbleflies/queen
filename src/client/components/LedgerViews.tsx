@@ -27,12 +27,12 @@ export interface EntryRow {
 }
 
 /** Journal, Saldenliste and Kontoblatt — the reporting views of the immutable SKR04 ledger. */
-export function LedgerViews({ year }: { year: number }) {
+export function LedgerViews({ year, initialView = 'journal', initialAccount = '1800' }: { year: number; initialView?: LedgerView; initialAccount?: string }) {
   const { t } = useLanguage();
   const toast = useToast();
   const utils = trpc.useUtils();
-  const [view, setView] = useState<LedgerView>('journal');
-  const [account, setAccount] = useState('1800');
+  const [view, setView] = useState<LedgerView>(initialView);
+  const [account, setAccount] = useState(initialAccount);
   const journal = trpc.ledger.list.useQuery({ year }, { enabled: view === 'journal' });
   const balances = trpc.ledger.trialBalance.useQuery({ year }, { enabled: view === 'balances' });
   const accountLedger = trpc.ledger.accountLedger.useQuery({ year, account }, { enabled: view === 'account' });

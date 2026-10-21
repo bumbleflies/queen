@@ -10,12 +10,15 @@ const foldersState = vi.hoisted(() => ({ invoices: null, receipts: null }));
 vi.mock('../lib/trpc', () => ({
   trpc: {
     useUtils: () => ({
-      settings: { getDriveFolders: { invalidate: async () => {} } },
+      settings: { getDriveFolders: { invalidate: async () => {} }, getTaxRate: { invalidate: async () => {} } },
+      ledger: { availableCash: { invalidate: async () => {} } },
       invalidate: async () => {},
     }),
     me: q({ user: { email: 'admin@example.de', role: 'admin' } }),
     settings: {
       getDriveFolders: q(foldersState),
+      getTaxRate: q({ rate: 0.33 }),
+      setTaxRate: { useMutation: () => ({ mutateAsync: async () => ({}), isPending: false }) },
       browseDriveFolders: q([{ id: 'f1', name: 'Abrechnungen' }]),
       setDriveFolders: {
         useMutation: () => ({

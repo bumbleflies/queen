@@ -7,6 +7,7 @@ import { useLanguage } from '../i18n/LanguageContext';
 import { BookingDialog, type InboxRowLike } from '../components/BookingDialog';
 import { EntryForm } from '../components/EntryForm';
 import { BackfillSection } from '../components/BackfillSection';
+import { AvailableCashCard } from '../components/AvailableCashCard';
 import { LedgerViews } from '../components/LedgerViews';
 import { RuleDialog, RulesSection, draftFromTransaction, type RuleDraft } from '../components/RulesSection';
 import { FullSyncDialog, ReceiptPickDialog, StornoDialog, type StornoTarget } from '../components/FinanceDialogs';
@@ -95,6 +96,7 @@ export function FinancePage() {
   const [params, setParams] = useSearchParams();
   const tab: Tab = TABS.includes(params.get('tab') as Tab) ? (params.get('tab') as Tab) : 'open';
   const dir: DirFilter = params.get('dir') === 'in' || params.get('dir') === 'out' ? (params.get('dir') as DirFilter) : 'all';
+  const accountParam = params.get('account');
   const [year, setYear] = useState(new Date().getFullYear());
   const [selected, setSelected] = useState<string[]>([]);
   const [active, setActive] = useState<InboxRowLike | null>(null);
@@ -440,6 +442,8 @@ export function FinancePage() {
         </div>
       </header>
 
+      <AvailableCashCard year={year} />
+
       <section className="card fin-summary" aria-label={t('finance.summary.open')}>
         <div><span className="big num">{counts.open}</span> {t('finance.summary.open')}</div>
         <div className="muted">
@@ -654,7 +658,7 @@ export function FinancePage() {
       {tab === 'journal' ? (
         <div style={{ marginTop: 14 }}>
           <BackfillSection key={`backfill-${year}`} year={year} />
-          <LedgerViews year={year} />
+          <LedgerViews key={accountParam ?? 'none'} year={year} initialView={accountParam ? 'account' : 'journal'} initialAccount={accountParam ?? '1800'} />
         </div>
       ) : null}
 
