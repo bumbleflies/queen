@@ -129,6 +129,7 @@ describe('bookings', () => {
     const b = await tx({ counterpartyName: 'Hoster GmbH', description: 'Invoice No. 100000999999', date: new Date(2026, 10, 21), amountCents: 1213 });
     const results = await caller.bookings.bookBulk({ bankTxIds: [String(a._id), String(b._id)] });
     expect(results.map((r) => r.error ?? 'ok')).toEqual(['ok', 'ok']);
+    expect(results.map((r) => r.receipt)).toEqual([true, false]);
     expect((await BankTransaction.findById(a._id))?.receipt).toMatchObject({ driveFileId: 'h10', fileName: 'Hoster_2026-10-16_100000123456.pdf' });
     expect((await BankTransaction.findById(b._id))?.receipt?.driveFileId).toBeUndefined();
     delete process.env.QUEEN_RECEIPTS_FOLDER_ID;
@@ -143,6 +144,33 @@ describe('bookings', () => {
     const a = await tx({ counterpartyName: 'Hoster GmbH', description: 'Invoice No. 100000123456' });
     expect((await caller.bookings.bookBulk({ bankTxIds: [String(a._id)] }))[0].ok).toBe(true);
     delete process.env.QUEEN_RECEIPTS_FOLDER_ID;
+  });
+
+  it('receiptMatches returns the clear receipt per open row and degrades without Drive', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    process.env.QUEEN_RECEIPTS_FOLDER_ID = 'root';
+    listReceiptFiles.mockResolvedValue([
+      { id: 'h10', name: 'Hoster_2026-10-16_100000123456.pdf', link: 'https://drive/h10' },
+      { id: 'h09', name: 'Hoster_2026-09-16_100000654321.pdf', link: 'https://drive/h09' },
+    ]);
+    const a = await tx({ counterpartyName: 'Hoster GmbH', description: 'Invoice No. 100000123456', date: new Date(2026, 9, 21), amountCents: 1213 });
+    const vague = await tx({ counterpartyName: 'Jemand', description: 'Irgendwas', date: new Date(2026, 9, 21) });
+    const ignored = await tx({ description: 'Invoice No. 100000654321', ignored: true });
+    const booked = await tx({ description: 'Invoice No. 100000654321' });
+    await caller.bookings.book({ bankTxId: String(booked._id), account: '6837', vatRate: 0.19, mode: 'normal' });
+
+    const res = await caller.bookings.receiptMatches({ year: 2026 });
+    expect(res.available).toBe(true);
+    expect(res.matches).toEqual({ [String(a._id)]: { id: 'h10', name: 'Hoster_2026-10-16_100000123456.pdf', link: 'https://drive/h10' } });
+    expect(res.matches[String(vague._id)]).toBeUndefined();
+    expect(res.matches[String(ignored._id)]).toBeUndefined();
+    expect(listReceiptFiles).toHaveBeenCalledTimes(1);
+
+    listReceiptFiles.mockRejectedValue(new Error('no token'));
+    expect(await caller.bookings.receiptMatches({ year: 2026 })).toEqual({ available: false, matches: {} });
+    delete process.env.QUEEN_RECEIPTS_FOLDER_ID;
+    expect(await caller.bookings.receiptMatches({ year: 2026 })).toEqual({ available: false, matches: {} });
   });
 
   it('unbook reverses the entry and returns the tx to the inbox; setReceipt stores metadata', async (ctx) => {

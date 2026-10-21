@@ -1492,6 +1492,8 @@ th.right {
 }
 [data-theme='dark'] .btn.honey,
 [data-theme='dark'] .btn.honey:hover {
+  background: var(--honey);
+  border-color: var(--honey-dark);
   color: #141417;
 }
 [data-theme='dark'] .btn.danger {
@@ -1594,4 +1596,167 @@ th.right {
 [data-theme='dark'] .mrow:active,
 [data-theme='dark'] .kpi:active {
   background: #26262b;
+}
+
+/* Finanzen inbox: summary, direction switch, row outcome, overflow menu, undo toast */
+:root {
+  --ok: #2f7d4a;
+  --ok-bg: #eef6f0;
+  --warn-bg: #fbf5e9;
+}
+[data-theme='dark'] {
+  --ok: #7fc795;
+  --ok-bg: #1d2a21;
+  --warn-bg: #2c251a;
+}
+.fin-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  padding: 14px 20px;
+  margin-bottom: 16px;
+}
+.fin-summary .big {
+  font-size: 22px;
+  font-weight: 700;
+}
+.fin-summary .sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--line);
+}
+.fin-summary .bal-ok {
+  color: var(--ok);
+  font-weight: 600;
+}
+.fin-summary .bal-bad {
+  color: var(--danger);
+  font-weight: 600;
+}
+.fin-subbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 0;
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.seg button {
+  border: 0;
+  background: transparent;
+  padding: 6px 14px;
+  min-height: 36px;
+  font: 600 13px 'IBM Plex Sans', sans-serif;
+  color: var(--muted);
+  cursor: pointer;
+}
+.seg button.on {
+  background: var(--ink);
+  color: var(--surface);
+}
+.tab .count {
+  margin-left: 4px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.outcome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.outcome.ok {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+.outcome.warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.outcome.inv {
+  background: var(--due-bg);
+  color: var(--due);
+}
+.outcome .what {
+  font-weight: 600;
+}
+.outcome .rc {
+  color: var(--muted);
+}
+.menu-wrap {
+  position: relative;
+}
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 40;
+  min-width: 260px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+}
+.menu button {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  font: 500 14px 'IBM Plex Sans', sans-serif;
+  color: var(--ink);
+  cursor: pointer;
+}
+.menu button:hover {
+  background: var(--surface-2);
+}
+.menu button.danger {
+  color: var(--danger);
+}
+.menu .meta {
+  margin-top: 4px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 12px;
+  color: var(--muted);
+}
+.done-state {
+  padding: 48px 16px;
+  text-align: center;
+}
+.done-state .big {
+  margin-bottom: 6px;
+  font-size: 20px;
+  font-weight: 700;
+}
+.toast-action {
+  margin-left: 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: var(--honey);
+  cursor: pointer;
+}
+@media (max-width: 760px) {
+  .fin-summary .sep {
+    display: none;
+  }
 }

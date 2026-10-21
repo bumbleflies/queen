@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { trpc } from '../lib/trpc';
 import { useToast } from './Toast';
 import { useLanguage } from '../i18n/LanguageContext';
 import type { BankBookingMode } from '../../server/lib/accounting/postingRules';
+import { suggest, type SuggestTx } from '../../server/lib/accounting/suggest';
 
 export interface RuleRow {
   id: string;
@@ -77,7 +78,8 @@ function vatLabel(rate: number | null): string {
   return rate === null ? '—' : `${Math.round(rate * 100)} %`;
 }
 
-export function RuleDialog({ draft, onDone }: { draft: RuleDraft; onDone: () => void }) {
+/** `openRows`: open bank rows to show how many this rule would match while typing. */
+export function RuleDialog({ draft, openRows, onDone }: { draft: RuleDraft; openRows?: SuggestTx[]; onDone: () => void }) {
   const { t } = useLanguage();
   const toast = useToast();
   const utils = trpc.useUtils();
@@ -94,6 +96,19 @@ export function RuleDialog({ draft, onDone }: { draft: RuleDraft; onDone: () => 
   const [mode, setMode] = useState<BankBookingMode>(draft.defaultMode);
 
   const title = draft.id ? t('rules.dialog.titleEdit') : t('rules.dialog.titleNew');
+
+  const hits = useMemo(() => {
+    if (!openRows) return null;
+    const probe = {
+      _id: 'draft',
+      kreditorNumber: 0,
+      name,
+      ibans: lines(ibans),
+      namePatterns: lines(namePatterns),
+      purposePatterns: lines(purposePatterns),
+    };
+    return openRows.filter((r) => suggest(r, [probe])).length;
+  }, [openRows, name, ibans, namePatterns, purposePatterns]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -118,7 +133,7 @@ export function RuleDialog({ draft, onDone }: { draft: RuleDraft; onDone: () => 
       else await create.mutateAsync(fields);
       await utils.suppliers.invalidate();
       await utils.bookings.invalidate();
-      toast.show(t('rules.saved'));
+      toast.show(hits ? t('rules.savedWithHits').replace('{n}', String(hits)) : t('rules.saved'));
       onDone();
     } catch (err) {
       toast.error((err as Error).message);
@@ -187,6 +202,11 @@ export function RuleDialog({ draft, onDone }: { draft: RuleDraft; onDone: () => 
             </select>
           </label>
         </div>
+        {hits !== null ? (
+          <p className="muted" style={{ margin: 0, padding: '0 16px', fontSize: 14 }} aria-live="polite">
+            {hits > 0 ? t('rules.matchesOpen').replace('{n}', String(hits)) : t('rules.matchesNone')}
+          </p>
+        ) : null}
         <datalist id="rule-accounts">
           {((accounts.data ?? []) as unknown as AccountRow[]).map((a) => (
             <option key={a.number} value={a.number}>{`${a.number} ${a.name}`}</option>

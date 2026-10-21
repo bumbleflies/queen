@@ -10,7 +10,7 @@ import { BookingError, bookBankTransaction, unbookBankTransaction } from '../lib
 import { BANK_VAT_RATES, PostingError } from '../lib/accounting/postingRules';
 import { LedgerError } from '../lib/accounting/ledger';
 import { suggest } from '../lib/accounting/suggest';
-import { loadYear } from '../lib/accounting/bankCoverage';
+import { loadYear, openTransactions } from '../lib/accounting/bankCoverage';
 import { rankReceipts, strongReceipt, type ReceiptFile } from '../lib/accounting/receipts';
 import { listReceiptFiles } from '../services/receiptsDrive';
 import { driveForUser } from '../services/driveForUser';
@@ -108,6 +108,26 @@ export const bookingsRouter = router({
       .map((t) => ({ ...row(t), suggestion: suggest(t, suppliers) }));
   }),
 
+  /** Clear receipt match per open row (inbox hint). Drive trouble → `available: false`, never an error. */
+  receiptMatches: authedProcedure.input(yearInput).query(async ({ input, ctx }) => {
+    const none = { available: false, matches: {} as Record<string, ReceiptFile> };
+    const folder = await getReceiptsFolder();
+    if (!folder) return none;
+    let files: ReceiptFile[];
+    try {
+      files = await listReceiptFiles(await driveForUser(ctx.user.sub), folder.id, input.year);
+    } catch {
+      return none;
+    }
+    const [open, suppliers] = await Promise.all([openTransactions(input.year), Supplier.find({ archived: false })]);
+    const matches: Record<string, ReceiptFile> = {};
+    for (const tx of open) {
+      const best = strongReceipt(rankReceipts(files, tx, suggest(tx, suppliers)?.supplierName));
+      if (best) matches[String(tx._id)] = { id: best.id, name: best.name, link: best.link };
+    }
+    return { available: true, matches };
+  }),
+
   booked: authedProcedure.input(yearInput).query(async ({ input }) => {
     const { txs, coverage } = await loadYear(input.year);
     const supplierIds = txs.flatMap((t) => (t.supplierId ? [t.supplierId] : []));
@@ -162,7 +182,7 @@ export const bookingsRouter = router({
         }
         return filesByYear.get(year)!;
       };
-      const results: { bankTxId: string; ok: boolean; entryNumber?: string; error?: string }[] = [];
+      const results: { bankTxId: string; ok: boolean; entryNumber?: string; receipt?: boolean; error?: string }[] = [];
       for (const bankTxId of input.bankTxIds) {
         const tx = await BankTransaction.findById(bankTxId);
         const s = tx ? suggest(tx, suppliers) : null;
@@ -183,7 +203,7 @@ export const bookingsRouter = router({
             receipt: file ? { driveFileId: file.id, fileName: file.name, link: file.link } : undefined,
             createdBy: ctx.user.sub,
           });
-          results.push({ bankTxId, ok: true, entryNumber: entry.entryNumber });
+          results.push({ bankTxId, ok: true, entryNumber: entry.entryNumber, receipt: !!tx.receipt?.driveFileId || !!file });
         } catch (err) {
           results.push({ bankTxId, ok: false, error: (err as Error).message });
         }
