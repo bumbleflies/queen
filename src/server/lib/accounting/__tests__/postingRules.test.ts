@@ -233,6 +233,11 @@ describe('bankPostingSplit', () => {
     ]);
     expect(lines.reduce((s, x) => s + x.debitCents - x.creditCents, 0)).toBe(0);
   });
+  it('rejects fewer than two parts', () => {
+    expect(() =>
+      bankPostingSplit({ direction: 'out', grossCents: 100, parts: [{ account: '6640', vatRate: 0, grossCents: 100, mode: 'normal' }] }),
+    ).toThrow('Aufteilung braucht mindestens zwei Teile');
+  });
   it('rejects parts that don\'t add up', () => {
     expect(() =>
       bankPostingSplit({

@@ -172,6 +172,7 @@ export function bankPostingSplit(input: {
   parts: SplitPart[];
 }): PostingLine[] {
   const { direction, grossCents, parts } = input;
+  if (parts.length < 2) throw new PostingError('Aufteilung braucht mindestens zwei Teile');
   const sum = parts.reduce((s, p) => s + p.grossCents, 0);
   if (sum !== grossCents) {
     throw new PostingError(`Aufteilung ergibt ${formatGermanEUR(sum)} statt ${formatGermanEUR(grossCents)}`);

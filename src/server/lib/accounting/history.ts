@@ -1,6 +1,6 @@
 import { BankTransaction } from '../../models/BankTransaction';
 import { JournalEntry } from '../../models/JournalEntry';
-import { BANK, type BankBookingMode, type PostingLine } from './postingRules';
+import { BANK, bankPosting, type BankBookingMode, type PostingLine } from './postingRules';
 import { normalizeIban, suggest, type SuggestSupplier, type SuggestTx, type Suggestion } from './suggest';
 
 export interface HistoryEntry {
@@ -22,6 +22,24 @@ const HISTORY_DEPTH = 3;
 
 /** Reads account / VAT rate / mode back out of the posted lines of a bank booking. */
 export function deriveBooking(lines: PostingLine[]): { account: string; vatRate: number; mode: BankBookingMode } | null {
+  const derived = deriveShape(lines);
+  if (!derived) return null;
+  // Merged split bookings can look like a single booking; only accept what re-posts to exactly these lines.
+  const bankNet = lines.filter((l) => l.account === BANK).reduce((s, l) => s + l.debitCents - l.creditCents, 0);
+  if (bankNet === 0) return null;
+  let expected: PostingLine[];
+  try {
+    expected = bankPosting({ direction: bankNet < 0 ? 'out' : 'in', grossCents: Math.abs(bankNet), ...derived });
+  } catch {
+    return null;
+  }
+  const key = (l: PostingLine) => `${l.account}:${l.debitCents}:${l.creditCents}`;
+  const actual = lines.map(key).sort();
+  const wanted = expected.map(key).sort();
+  return actual.length === wanted.length && actual.every((k, i) => k === wanted[i]) ? derived : null;
+}
+
+function deriveShape(lines: PostingLine[]): { account: string; vatRate: number; mode: BankBookingMode } | null {
   const rest = lines.filter((l) => l.account !== BANK);
   if (rest.length === 0) return null;
   const reverseCharge = rest.some((l) => REVERSE_CHARGE_ACCOUNTS.includes(l.account));

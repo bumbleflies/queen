@@ -31,6 +31,20 @@ describe('deriveBooking split', () => {
   });
 });
 
+describe('deriveBooking merged splits', () => {
+  it('0 % + 19 % on the same account is not a single booking', () => {
+    expect(deriveBooking([l('6640', 5000), l('1406', 190), l('1800', 0, 5190)])).toBeNull();
+  });
+  it('normal + reverseCharge on the same account is not a single booking', () => {
+    expect(deriveBooking([l('6640', 20000), l('1406', 1900), l('1407', 1900), l('1800', 0, 21900), l('3837', 0, 1900)])).toBeNull();
+    expect(deriveBooking([l('6640', 20000), l('1407', 3800), l('1800', 0, 20000), l('3837', 0, 3800)])).toEqual({
+      account: '6640',
+      vatRate: 0.19,
+      mode: 'reverseCharge',
+    });
+  });
+});
+
 describe('historyKey', () => {
   it('ignores placeholder names and normalises IBANs', () => {
     expect(historyKey({ counterpartyName: '(unknown destination)' })).toBeNull();
