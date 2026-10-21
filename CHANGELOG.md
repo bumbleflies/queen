@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.19.26](https://github.com/bumbleflies/queen/compare/queen-v0.19.25...queen-v0.19.26) (2026-10-21)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @hookform/resolvers to v6 ([#123](https://github.com/bumbleflies/queen/issues/123)) ([3fada75](https://github.com/bumbleflies/queen/commit/3fada75e31501f8ea3b4924f8b9634ebd67b3285))
+* **deps:** update dependency googleapis to v187 ([#127](https://github.com/bumbleflies/queen/issues/127)) ([0006861](https://github.com/bumbleflies/queen/commit/0006861802b8d30828d1d1efa4b9dc4192ad5268))
+
 ## [0.19.25](https://github.com/bumbleflies/queen/compare/queen-v0.19.24...queen-v0.19.25) (2026-10-20)
 
 
