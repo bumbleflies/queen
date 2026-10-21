@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.27](https://github.com/bumbleflies/queen/compare/queen-v0.19.26...queen-v0.19.27) (2026-10-21)
+
+
+### Bug Fixes
+
+* **deps:** update dependency vite to v8.3.5 ([#130](https://github.com/bumbleflies/queen/issues/130)) ([0f98594](https://github.com/bumbleflies/queen/commit/0f985940633804f521eed0131dc4b7cb92e1c3bd))
+
 ## [0.19.26](https://github.com/bumbleflies/queen/compare/queen-v0.19.25...queen-v0.19.26) (2026-10-21)
 
 
