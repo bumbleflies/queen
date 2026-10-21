@@ -10,6 +10,10 @@ import { BookingError, bookBankTransaction, unbookBankTransaction } from '../lib
 import { BANK_VAT_RATES, PostingError } from '../lib/accounting/postingRules';
 import { LedgerError } from '../lib/accounting/ledger';
 import { suggest } from '../lib/accounting/suggest';
+import { rankReceipts, strongReceipt, type ReceiptFile } from '../lib/accounting/receipts';
+import { listReceiptFiles } from '../services/receiptsDrive';
+import { driveForUser } from '../services/driveForUser';
+import { getReceiptsFolder } from '../services/appSettings';
 import { FireflyClient } from '../services/FireflyClient';
 import { readFireflyEnv } from '../lib/fireflyEnv';
 
@@ -174,6 +178,16 @@ export const bookingsRouter = router({
     .input(z.object({ bankTxIds: z.array(z.string().min(1)).min(1).max(200) }))
     .mutation(async ({ input, ctx }) => {
       const suppliers = await Supplier.find({ archived: false });
+      const folder = await getReceiptsFolder();
+      // Receipt files per year; Drive trouble only means no automatic receipt.
+      const filesByYear = new Map<number, Promise<ReceiptFile[]>>();
+      const receiptsFor = (year: number) => {
+        if (!folder) return Promise.resolve([]);
+        if (!filesByYear.has(year)) {
+          filesByYear.set(year, driveForUser(ctx.user.sub).then((d) => listReceiptFiles(d, folder.id, year)).catch(() => []));
+        }
+        return filesByYear.get(year)!;
+      };
       const results: { bankTxId: string; ok: boolean; entryNumber?: string; error?: string }[] = [];
       for (const bankTxId of input.bankTxIds) {
         const tx = await BankTransaction.findById(bankTxId);
@@ -182,6 +196,9 @@ export const bookingsRouter = router({
           results.push({ bankTxId, ok: false, error: 'Kein Vorschlag — bitte einzeln buchen' });
           continue;
         }
+        const file = tx.receipt?.driveFileId
+          ? null
+          : strongReceipt(rankReceipts(await receiptsFor(new Date(tx.date).getFullYear()), tx, s.supplierName));
         try {
           const { entry } = await bookBankTransaction({
             bankTxId,
@@ -189,6 +206,7 @@ export const bookingsRouter = router({
             vatRate: s.vatRate,
             mode: s.mode,
             supplierId: s.supplierId,
+            receipt: file ? { driveFileId: file.id, fileName: file.name, link: file.link } : undefined,
             createdBy: ctx.user.sub,
           });
           results.push({ bankTxId, ok: true, entryNumber: entry.entryNumber });

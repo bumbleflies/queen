@@ -5,6 +5,7 @@ import { LanguageProvider } from '../i18n/LanguageContext';
 import { MemoryRouter } from 'react-router-dom';
 
 const q = vi.hoisted(() => (data: unknown) => ({ useQuery: () => ({ data, isError: false }) }));
+const receiptRows = vi.hoisted(() => ({ current: [] as { id: string; name: string; link: string; score: number }[] }));
 const calls: Record<string, unknown[]> = {};
 const shown: string[] = [];
 
@@ -108,7 +109,7 @@ vi.mock('../lib/trpc', () => ({
     },
     accounts: { list: q([{ number: '6837', name: 'Lizenzen' }]) },
     suppliers: { list: q([{ _id: 's1', kreditorNumber: 70001, name: 'Acme GmbH' }]) },
-    receipts: { list: q([]) },
+    receipts: { list: { useQuery: () => ({ data: receiptRows.current, isError: false }) } },
     reports: { openItems: q({ items: [] }) },
     reconcile: {
       status: q({ finishedAt: '2026-03-04T06:10:00.000Z', fetched: 3, matched: 1, partial: 0, unmatched: 1, error: null }),
@@ -197,6 +198,7 @@ beforeEach(() => {
   calls.ignore = [];
   calls.unignore = [];
   shown.length = 0;
+  receiptRows.current = [];
 });
 
 function renderPage() {
@@ -241,6 +243,21 @@ describe('FinancePage — stream', () => {
       expect.objectContaining({ bankTxId: 'tx1', account: '6837', vatRate: 0.19, mode: 'normal', supplierId: 's1' }),
     ]));
     expect(shown).toEqual(['Gebucht 2026-00011']);
+  });
+
+  it('preselects a clearly matching receipt and sends it with the booking', async () => {
+    receiptRows.current = [
+      { id: 'f1', name: 'Acme_2026-03-01_123456.pdf', link: 'https://drive/f1', score: 8 },
+      { id: 'f2', name: 'Acme_2026-02-01_654321.pdf', link: 'https://drive/f2', score: 1 },
+    ];
+    renderPage();
+    fireEvent.click(within(screen.getByRole('row', { name: /Miete März/ })).getByRole('button', { name: 'Buchen' }));
+    expect(screen.getByRole('option', { name: 'Acme_2026-03-01_123456.pdf' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Beleg wählen' })).toHaveValue('f1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Jetzt buchen' }));
+    await waitFor(() => expect(calls.book).toEqual([
+      expect.objectContaining({ receipt: { driveFileId: 'f1', fileName: 'Acme_2026-03-01_123456.pdf', link: 'https://drive/f1' } }),
+    ]));
   });
 
   it('bulk books selected rows with suggestions', async () => {
