@@ -23,5 +23,5 @@ The plans in `docs/plans/` say what was intended. These logs say what actually s
 | 2026-10-07 | [Ledger backfill UI](2026-10-07_ledger-backfill-ui.md) | `queen-v0.15.0` |
 | 2026-10-07 | [Buchen page](2026-10-07_buchen-page.md) | `queen-v0.17.0` |
 | 2026-10-08 | [Drive folder settings + booking dialog modal](2026-10-08_drive-folder-settings.md) | `queen-v0.19.0` |
-| 2026-10-21 | [Receipts matched from the Verwendungszweck](2026-10-21_receipt-purpose-match.md) | pending |
-| 2026-10-21 | [Booking rules overview and JSON import](2026-10-21_booking-rules-admin.md) | pending |
+| 2026-10-21 | [Receipts matched from the Verwendungszweck](2026-10-21_receipt-purpose-match.md) | `queen-v0.20.0` |
+| 2026-10-21 | [Booking rules overview and JSON import](2026-10-21_booking-rules-admin.md) | `queen-v0.20.0` |
