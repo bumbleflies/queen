@@ -17,6 +17,7 @@ const fields = z.object({
   defaultAccount: z.string().regex(/^\d{4,5}$/).nullable().optional(),
   defaultVatRate: z.number().refine((r) => (BANK_VAT_RATES as readonly number[]).includes(r)).nullable().optional(),
   defaultMode: z.enum(['normal', 'vatOnly', 'reverseCharge']).optional(),
+  autoBook: z.boolean().optional(),
 });
 
 function clean(list: string[] | undefined, fn: (s: string) => string = (s) => s.trim()): string[] | undefined {
@@ -85,6 +86,7 @@ export const suppliersRouter = router({
       if (patch.defaultAccount !== undefined) supplier.defaultAccount = patch.defaultAccount ?? undefined;
       if (patch.defaultVatRate !== undefined) supplier.defaultVatRate = patch.defaultVatRate ?? undefined;
       if (patch.defaultMode !== undefined) supplier.defaultMode = patch.defaultMode;
+      if (patch.autoBook !== undefined) supplier.autoBook = patch.autoBook;
       await supplier.save();
       return supplier;
     }),

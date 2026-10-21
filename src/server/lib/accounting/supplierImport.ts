@@ -21,6 +21,7 @@ export const supplierRuleSchema = z
       .optional(),
     defaultMode: z.enum(['normal', 'vatOnly', 'reverseCharge']).optional(),
     archived: z.boolean().optional(),
+    autoBook: z.boolean().optional(),
   })
   .strict();
 
@@ -36,6 +37,7 @@ export interface SupplierExport {
   defaultVatRate: number | null;
   defaultMode: BankBookingMode;
   archived: boolean;
+  autoBook: boolean;
 }
 
 type ImportAction = 'create' | 'update' | 'unchanged';
@@ -65,6 +67,7 @@ export function toExport(s: {
   defaultVatRate?: number | null;
   defaultMode?: string | null;
   archived?: boolean | null;
+  autoBook?: boolean | null;
 }): SupplierExport {
   return {
     kreditorNumber: s.kreditorNumber,
@@ -76,6 +79,7 @@ export function toExport(s: {
     defaultVatRate: s.defaultVatRate ?? null,
     defaultMode: s.defaultMode === 'vatOnly' || s.defaultMode === 'reverseCharge' ? s.defaultMode : 'normal',
     archived: !!s.archived,
+    autoBook: !!s.autoBook,
   };
 }
 
@@ -127,6 +131,7 @@ function patchOf(rule: SupplierRule) {
     defaultVatRate: rule.defaultVatRate,
     defaultMode: rule.defaultMode,
     archived: rule.archived,
+    autoBook: rule.autoBook,
   };
 }
 
@@ -183,6 +188,7 @@ export async function applySupplierImport(json: string, dryRun: boolean): Promis
         defaultVatRate: patch.defaultVatRate ?? undefined,
         defaultMode: patch.defaultMode ?? 'normal',
         archived: patch.archived ?? false,
+        autoBook: patch.autoBook ?? false,
         kreditorNumber: rule.kreditorNumber ?? (await allocateSupplierNumber()),
       });
       items[items.length - 1].kreditorNumber = created.kreditorNumber;
@@ -205,6 +211,7 @@ export async function applySupplierImport(json: string, dryRun: boolean): Promis
       defaultVatRate: next.defaultVatRate ?? undefined,
       defaultMode: next.defaultMode,
       archived: next.archived,
+      autoBook: next.autoBook,
     });
     await existing.save();
   }

@@ -5,6 +5,7 @@ import { FireflyClient, type FireflyTransaction } from '../services/FireflyClien
 import { computeSyncWindow, syncBankTransactions } from '../lib/bankSync';
 import { isCliEntrypoint, reconcilePendingTransactions } from '../lib/reconcile';
 import { findLastSuccessfulRun, readFireflyEnv } from '../lib/fireflyEnv';
+import { autoBookOpen, type AutoBookResult } from '../lib/accounting/autoBook';
 
 export interface TransactionSource {
   fetchTransactions(start: Date, end: Date): Promise<FireflyTransaction[]>;
@@ -21,7 +22,8 @@ export interface RunReconcileOptions {
 
 /**
  * One reconcile pass: sync GLS transactions into `BankTransaction` (idempotent),
- * then match every fresh transaction against invoices. Errors are recorded on
+ * then match every fresh transaction against invoices, then book what rules
+ * flagged `autoBook` recognise (failures there only warn). Errors are recorded on
  * the `ReconcileRun` and returned; the CLI inspects `run.error` to exit non-zero.
  * Shared by the Ofelia cron entrypoint and `reconcile.runNow`.
  */
@@ -59,6 +61,16 @@ export async function runReconcile(
     run.matched = counts.matched;
     run.partial = counts.partial;
     run.unmatched = counts.unmatched;
+
+    // Auto-booking never fails the run: its trouble ends up in autoBookWarning.
+    const auto: AutoBookResult = await autoBookOpen(now).catch((err: unknown) => ({
+      booked: 0,
+      failed: 0,
+      warning: `Automatisch buchen abgebrochen: ${(err as Error).message}`,
+    }));
+    run.autoBooked = auto.booked;
+    run.autoBookFailed = auto.failed;
+    if (auto.warning) run.autoBookWarning = auto.warning;
     run.finishedAt = new Date();
     await run.save();
     return run;
@@ -80,8 +92,10 @@ async function main(): Promise<void> {
     } else {
       console.log(
         `Reconcile done: fetched=${run.fetched} matched=${run.matched} ` +
-          `partial=${run.partial} unmatched=${run.unmatched}`,
+          `partial=${run.partial} unmatched=${run.unmatched} ` +
+          `autoBooked=${run.autoBooked} autoBookFailed=${run.autoBookFailed}`,
       );
+      if (run.autoBookWarning) console.warn(`Auto-booking: ${run.autoBookWarning}`);
     }
   } finally {
     await disconnectMongo();

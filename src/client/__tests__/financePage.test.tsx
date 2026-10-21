@@ -69,6 +69,7 @@ const streamRows = vi.hoisted(() => [
     entry: {
       entryId: 'e1',
       entryNumber: '2026-00010',
+      auto: true,
       lines: [
         { account: '1406', debitCents: 1900, creditCents: 0 },
         { account: '1800', debitCents: 0, creditCents: 11900 },
@@ -124,7 +125,7 @@ vi.mock('../lib/trpc', () => ({
     receipts: { list: { useQuery: () => ({ data: receiptRows.current, isError: false }) } },
     reports: { openItems: q({ items: [] }) },
     reconcile: {
-      status: q({ finishedAt: '2026-03-04T06:10:00.000Z', fetched: 3, matched: 1, partial: 0, unmatched: 1, error: null }),
+      status: q({ finishedAt: '2026-03-04T06:10:00.000Z', fetched: 3, matched: 1, partial: 0, unmatched: 1, autoBooked: 2, error: null }),
       runNow: mut('runNow', async () => ({})),
     },
     bank: {
@@ -417,6 +418,12 @@ describe('FinancePage — inbox', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Bank vollständig neu einlesen' }));
     await waitFor(() => expect(calls.syncNow).toEqual([{ full: true }]));
   });
+
+  it('the overflow menu shows how many rows the last run booked automatically', () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Bank und Abgleich' }));
+    expect(screen.getByText(/· 2 automatisch gebucht/)).toBeInTheDocument();
+  });
 });
 
 describe('FinancePage — done', () => {
@@ -432,6 +439,7 @@ describe('FinancePage — done', () => {
     const bookedRow = screen.getByRole('row', { name: /Miete Februar/ });
     expect(within(bookedRow).getByText('2026-00010')).toBeInTheDocument();
     expect(within(bookedRow).getByText('S 6837 100,00 €')).toBeInTheDocument();
+    expect(within(bookedRow).getByText('automatisch')).toBeInTheDocument();
     fireEvent.click(within(bookedRow).getByRole('button', { name: 'Stornieren' }));
     const dialog = screen.getByRole('dialog', { name: 'Buchung 2026-00010 stornieren' });
     const confirm = within(dialog).getByRole('button', { name: 'Stornieren' });

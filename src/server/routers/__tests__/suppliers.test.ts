@@ -170,6 +170,7 @@ describe('suppliers.importJson', () => {
       defaultVatRate: 0.19,
       defaultMode: 'normal',
       archived: false,
+      autoBook: false,
     });
     const res = await caller.suppliers.importJson({ json: JSON.stringify(exported), dryRun: false });
     expect(res).toMatchObject({ created: 0, updated: 0, unchanged: 2 });
@@ -184,6 +185,31 @@ describe('suppliers.importJson', () => {
     expect(exported[0]).toMatchObject({ defaultMode: 'reverseCharge', defaultAccount: '6837' });
     const res = await caller.suppliers.importJson({ json: JSON.stringify(exported), dryRun: false });
     expect(res).toMatchObject({ created: 0, updated: 0, unchanged: 1 });
+  });
+
+  it('importJson round-trips autoBook', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    const auto = [{ name: 'Hoster GmbH', ibans: ['DE02120300000000202051'], defaultAccount: '6837', defaultVatRate: 0.19, autoBook: true }];
+    await caller.suppliers.importJson({ json: JSON.stringify(auto), dryRun: false });
+    expect(await Supplier.findOne({ name: 'Hoster GmbH' })).toMatchObject({ autoBook: true });
+    const exported = await caller.suppliers.exportJson();
+    expect(exported[0]).toMatchObject({ autoBook: true });
+    expect((await caller.suppliers.importJson({ json: JSON.stringify(exported), dryRun: false }))).toMatchObject({ unchanged: 1 });
+    const off = await caller.suppliers.importJson({ json: JSON.stringify([{ name: 'Hoster GmbH', autoBook: false }]), dryRun: false });
+    expect(off).toMatchObject({ updated: 1 });
+    expect(await Supplier.findOne({ name: 'Hoster GmbH' })).toMatchObject({ autoBook: false });
+  });
+
+  it('create and update set autoBook', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    const s = await caller.suppliers.create({ name: 'A', autoBook: true });
+    expect(s.autoBook).toBe(true);
+    expect((await caller.suppliers.update({ id: String(s._id), autoBook: false })).autoBook).toBe(false);
+    expect((await caller.suppliers.create({ name: 'B' })).autoBook).toBe(false);
+    const overview = await caller.suppliers.overview({ year: 2026 });
+    expect(overview.map((r) => r.autoBook)).toEqual([false, false]);
   });
 
   it('any error writes nothing', async (ctx) => {

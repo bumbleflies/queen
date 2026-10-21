@@ -11,6 +11,7 @@ import { BANK_VAT_RATES, PostingError } from '../lib/accounting/postingRules';
 import { LedgerError } from '../lib/accounting/ledger';
 import { loadHistory, suggestWithHistory } from '../lib/accounting/history';
 import { loadYear, openTransactions } from '../lib/accounting/bankCoverage';
+import { AUTO_BOOK_USER } from '../lib/accounting/autoBook';
 import { rankReceipts, strongReceipt, type ReceiptFile } from '../lib/accounting/receipts';
 import { listReceiptFiles } from '../services/receiptsDrive';
 import { driveForUser } from '../services/driveForUser';
@@ -91,6 +92,7 @@ export const bookingsRouter = router({
             entry: {
               entryId: String(covered._id),
               entryNumber: covered.entryNumber,
+              auto: covered.createdBy === AUTO_BOOK_USER,
               lines: covered.lines.map((l) => ({ account: l.account, debitCents: l.debitCents, creditCents: l.creditCents })),
             },
             supplierName: t.supplierId ? (names.get(String(t.supplierId)) ?? null) : null,

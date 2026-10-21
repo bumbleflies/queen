@@ -16,6 +16,7 @@ export interface RuleRow {
   defaultVatRate: number | null;
   defaultMode: BankBookingMode;
   archived: boolean;
+  autoBook: boolean;
   openHits: number;
 }
 
@@ -29,6 +30,7 @@ export interface RuleDraft {
   defaultAccount: string | null;
   defaultVatRate: number | null;
   defaultMode: BankBookingMode;
+  autoBook?: boolean;
 }
 
 interface AccountRow {
@@ -94,6 +96,7 @@ export function RuleDialog({ draft, openRows, onDone }: { draft: RuleDraft; open
   const [account, setAccount] = useState(draft.defaultAccount ?? '');
   const [vatRate, setVatRate] = useState(draft.defaultVatRate ?? 0);
   const [mode, setMode] = useState<BankBookingMode>(draft.defaultMode);
+  const [autoBook, setAutoBook] = useState(!!draft.autoBook);
 
   const title = draft.id ? t('rules.dialog.titleEdit') : t('rules.dialog.titleNew');
 
@@ -127,6 +130,7 @@ export function RuleDialog({ draft, openRows, onDone }: { draft: RuleDraft; open
       defaultAccount: mode === 'vatOnly' ? null : account.trim() || null,
       defaultVatRate: mode === 'reverseCharge' ? REVERSE_CHARGE_RATE : vatRate,
       defaultMode: mode,
+      autoBook,
     };
     try {
       if (draft.id) await update.mutateAsync({ id: draft.id, ...fields });
@@ -215,6 +219,13 @@ export function RuleDialog({ draft, openRows, onDone }: { draft: RuleDraft; open
               <option value="reverseCharge">{t('bookings.dialog.mode.reverseCharge')}</option>
             </select>
           </label>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <label className="row" style={{ gap: 6 }}>
+              <input type="checkbox" checked={autoBook} aria-describedby="rule-autobook-hint" onChange={(e) => setAutoBook(e.target.checked)} />
+              {t('rules.dialog.autoBook')}
+            </label>
+            <p id="rule-autobook-hint" className="muted" style={{ margin: '4px 0 0', fontSize: 13 }}>{t('rules.dialog.autoBookHint')}</p>
+          </div>
         </div>
         {hits !== null ? (
           <p className="muted" style={{ margin: 0, padding: '0 16px', fontSize: 14 }} aria-live="polite">
@@ -472,6 +483,7 @@ export function RulesSection({ year }: { year: number }) {
                 <td data-l={t('rules.col.number')} className="num">{r.kreditorNumber}</td>
                 <td data-l={t('rules.col.name')}>
                   {r.name}
+                  {r.autoBook ? <> <span className="badge b-sent" title={t('rules.autoTitle')}>{t('rules.auto')}</span></> : null}
                   {r.archived ? <> <span className="badge b-draft">{t('rules.archived')}</span></> : null}
                 </td>
                 <td data-l={t('rules.col.match')} className="w"><MatchChips rule={r} /></td>

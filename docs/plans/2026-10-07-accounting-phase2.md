@@ -46,7 +46,7 @@ Deferred minors, to triage in the final review:
 - **Coverage rule:** a transaction is booked iff an active `payment` entry with refId `bank:<id>` or an active `bank` entry with refId `<id>` exists.
   - An invoice-matched transaction (`matchedInvoiceId` set) can never be inbox-booked.
   - An inbox-booked transaction can never be assigned to an invoice until its entry is reversed.
-- **Nothing posts without confirmation.** Rules only suggest. Bulk confirm books the selected transactions with their suggestions.
+- **Nothing posts without confirmation except rules an admin explicitly marked `autoBook`, matched by IBAN or Verwendungszweck.** Otherwise rules only suggest. Bulk confirm books the selected transactions with their suggestions. The `autoBook` exception is specified in [the booking automation spec](2026-10-22-booking-automation.md).
 - **VAT accounts:**
   - Input VAT 0.19 → 1406, 0.07 → 1401.
   - Output VAT 0.19 → 3806, 0.07 → 3801.

@@ -50,6 +50,7 @@ interface StreamRow {
   entry?: {
     entryId: string;
     entryNumber: string;
+    auto?: boolean;
     lines: { account: string; debitCents: number; creditCents: number }[];
   } | null;
   supplierName?: string | null;
@@ -67,6 +68,8 @@ interface ReconcileRunRow {
   matched?: number;
   partial?: number;
   unmatched?: number;
+  autoBooked?: number;
+  autoBookFailed?: number;
   error?: string | null;
 }
 
@@ -435,6 +438,8 @@ export function FinancePage() {
                 <div className="meta">
                   {run?.error ? <span style={{ color: 'var(--danger)' }}>{t('bank.error')}: {run.error}</span> : runLabel}
                   {run ? ` · ${run.fetched ?? 0} ${t('bank.entries')} · ${run.matched ?? 0} ${t('bank.auto')}` : null}
+                  {run?.autoBooked ? ` · ${t('finance.autoBooked').replace('{n}', String(run.autoBooked))}` : null}
+                  {run?.autoBookFailed ? ` · ${t('finance.autoBookFailed').replace('{n}', String(run.autoBookFailed))}` : null}
                 </div>
               </div>
             ) : null}
@@ -597,7 +602,12 @@ export function FinancePage() {
                         ) : r.state === 'booked' ? (
                           <>
                             <td data-l={t('ledger.entries')} className="num" style={{ fontSize: 13 }}>
-                              {r.entry?.entryNumber ? <div><strong>{r.entry.entryNumber}</strong></div> : null}
+                              {r.entry?.entryNumber ? (
+                                <div>
+                                  <strong>{r.entry.entryNumber}</strong>
+                                  {r.entry.auto ? <> <span className="badge b-sent">{t('finance.autoBadge')}</span></> : null}
+                                </div>
+                              ) : null}
                               {(r.entry?.lines ?? []).map((l, i) => (
                                 <div key={`${i}-${l.account}-${l.debitCents}-${l.creditCents}`}>
                                   {l.debitCents > 0 ? `S ${l.account} ${formatEUR(l.debitCents)}` : `H ${l.account} ${formatEUR(l.creditCents)}`}

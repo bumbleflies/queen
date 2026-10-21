@@ -11,6 +11,8 @@ const supplierSchema = new Schema(
     defaultVatRate: { type: Number },
     defaultMode: { type: String, enum: ['normal', 'vatOnly', 'reverseCharge'], required: true, default: 'normal' },
     archived: { type: Boolean, required: true, default: false },
+    /** Opt-in: the daily reconcile books IBAN/Verwendungszweck matches of this rule without confirmation. */
+    autoBook: { type: Boolean, required: true, default: false },
   },
   { timestamps: true },
 );
