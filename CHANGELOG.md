@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.21.0](https://github.com/bumbleflies/queen/compare/queen-v0.20.1...queen-v0.21.0) (2026-10-21)
+
+
+### Features
+
+* **finance:** inbox you can work through — tabs, row outcomes, one-click booking with undo ([7a2b03f](https://github.com/bumbleflies/queen/commit/7a2b03f9287aa3d3a425066e232698e15026ee8e))
+* **finance:** inbox you can work through — tabs, row outcomes, one-click booking with undo ([79b713a](https://github.com/bumbleflies/queen/commit/79b713a09d9885247e742d58a8f122a0b1f3bb78))
+
 ## [0.20.1](https://github.com/bumbleflies/queen/compare/queen-v0.20.0...queen-v0.20.1) (2026-10-21)
 
 
