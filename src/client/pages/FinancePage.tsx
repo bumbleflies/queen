@@ -12,7 +12,7 @@ import { LedgerViews } from '../components/LedgerViews';
 import { RuleDialog, RulesSection, draftFromTransaction, type RuleDraft } from '../components/RulesSection';
 import { FullSyncDialog, ReceiptPickDialog, StornoDialog, type StornoTarget } from '../components/FinanceDialogs';
 import { suggestionsFor, type OpenItem, type Suggestion } from '../lib/paymentSuggest';
-import type { BankBookingMode } from '../../server/lib/accounting/postingRules';
+import type { BankBookingMode, SplitPart } from '../../server/lib/accounting/postingRules';
 
 type Tab = 'open' | 'done' | 'ignored' | 'rules' | 'journal';
 type DirFilter = 'all' | 'in' | 'out';
@@ -22,8 +22,10 @@ const TABS: Tab[] = ['open', 'done', 'ignored', 'rules', 'journal'];
 interface StreamSuggestion {
   supplierId?: string;
   kreditorNumber?: number;
-  matchedBy: 'iban' | 'purpose' | 'name' | 'history';
+  matchedBy: 'iban' | 'purpose' | 'name' | 'history' | 'receipt';
   lastBookedAt?: string | Date;
+  split?: SplitPart[];
+  reading?: { vendor: string; totalCents: number; lines: { vatRate: number; grossCents: number; account: string }[] };
   supplierName: string;
   account?: string;
   vatRate?: number;
@@ -83,9 +85,13 @@ function signed(amountCents: number, direction: 'in' | 'out'): number {
 }
 
 /** A suggestion that can be booked without asking anything (same rule as bookBulk). */
-function complete(s: StreamSuggestion | null | undefined): s is StreamSuggestion & { vatRate: number } {
-  return !!s && s.vatRate !== undefined && (s.mode === 'vatOnly' || !!s.account);
+function complete(s: StreamSuggestion | null | undefined): s is StreamSuggestion {
+  if (!s) return false;
+  if (s.split && s.split.length >= 2) return true;
+  return s.vatRate !== undefined && (s.mode === 'vatOnly' || !!s.account);
 }
+
+type ReadHint = 'failed' | 'noText' | 'unavailable' | 'noReceipt';
 
 /** Firefly placeholders like "(unknown destination)" are not a counterparty. */
 function counterparty(name: string | null | undefined): string | null {
@@ -130,6 +136,9 @@ export function FinancePage() {
   const syncNow = trpc.bank.syncNow.useMutation();
   const runNow = trpc.reconcile.runNow.useMutation();
   const book = trpc.bookings.book.useMutation();
+  const readReceipt = trpc.bookings.readReceipt.useMutation();
+  const [readHints, setReadHints] = useState<Record<string, ReadHint>>({});
+  const [reading, setReading] = useState<string | null>(null);
   const bookBulk = trpc.bookings.bookBulk.useMutation();
   const unbook = trpc.bookings.unbook.useMutation();
 
@@ -225,8 +234,9 @@ export function FinancePage() {
       const res = await book.mutateAsync({
         bankTxId: r.id,
         account: s.account ?? '',
-        vatRate: s.vatRate,
+        vatRate: s.vatRate ?? 0,
         mode: s.mode,
+        ...(s.split ? { split: s.split } : {}),
         supplierId: s.supplierId,
         receipt: match ? { driveFileId: match.id, fileName: match.name, link: match.link } : undefined,
       });
@@ -235,6 +245,24 @@ export function FinancePage() {
       toast.show(t('finance.booked').replace('{entry}', res?.entryNumber ?? ''), { label: t('finance.undo'), onClick: () => undo([r.id]) });
     } catch (err) {
       toast.error((err as Error).message);
+    }
+  }
+
+  async function readOne(r: StreamRow) {
+    setReading(r.id);
+    try {
+      const res = await readReceipt.mutateAsync(readHints[r.id] === 'failed' || readHints[r.id] === 'noText' ? { bankTxId: r.id, force: true } : { bankTxId: r.id });
+      setReadHints((h) => {
+        const next = { ...h };
+        if (res.status === 'ok') delete next[r.id];
+        else next[r.id] = res.status;
+        return next;
+      });
+      if (res.status === 'ok') await refresh();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setReading(null);
     }
   }
 
@@ -319,21 +347,31 @@ export function FinancePage() {
         {s ? (
           <div className="outcome ok">
             <span className="what">
-              ✓ {s.mode === 'vatOnly' ? t('finance.outcome.vatOnly') : `${s.account ?? '—'} ${accountNames.get(s.account ?? '') ?? ''}`.trim()}
+              ✓ {s.split ? t('finance.outcome.split').replace('{n}', String(s.split.length)) : s.mode === 'vatOnly' ? t('finance.outcome.vatOnly') : `${s.account ?? '—'} ${accountNames.get(s.account ?? '') ?? ''}`.trim()}
               {s.mode === 'reverseCharge' ? ` · ${t('finance.outcome.reverseCharge')}` : ''}
               {s.vatRate !== undefined ? ` · ${Math.round(s.vatRate * 100)} %` : ''}
             </span>
             <span className="rc">
-              {s.matchedBy === 'history' && s.lastBookedAt
-                ? t('finance.outcome.history').replace('{date}', formatDate(s.lastBookedAt))
-                : t('finance.outcome.rule').replace('{name}', s.supplierName)}
+              {s.matchedBy === 'receipt'
+                ? t('finance.outcome.receipt.read').replace('{vendor}', s.reading?.vendor ?? s.supplierName)
+                : s.matchedBy === 'history' && s.lastBookedAt
+                  ? t('finance.outcome.history').replace('{date}', formatDate(s.lastBookedAt))
+                  : t('finance.outcome.rule').replace('{name}', s.supplierName)}
             </span>
+            {s.reading
+              ? s.reading.lines.map((l) => (
+                <span className="rc num" key={`${l.account}-${l.vatRate}-${l.grossCents}`}>
+                  {Math.round(l.vatRate * 100)} % · {formatEUR(l.grossCents)}
+                </span>
+              ))
+              : null}
             {receiptLine ?? (receiptMatches.data?.available ? <span className="rc">{t('finance.outcome.noReceipt')}</span> : null)}
           </div>
         ) : (
           <div className="outcome warn">
             <span className="what">{t('finance.outcome.noRule')}</span>
             {receiptLine}
+            {readHints[r.id] ? <span className="rc">{t(`finance.readReceipt.${readHints[r.id]}`)}</span> : null}
           </div>
         )}
       </>
@@ -354,6 +392,9 @@ export function FinancePage() {
           <button type="button" className="btn sm" onClick={openDialog}>{t('finance.adjust')}</button>
         ) : (
           <>
+            {matches[r.id] && receiptMatches.data?.readingAvailable ? (
+              <button type="button" className="btn ghost sm" disabled={reading === r.id} onClick={() => readOne(r)}>{t('finance.readReceipt')}</button>
+            ) : null}
             {isAdmin ? (
               <button type="button" className="btn honey sm" onClick={() => setRuleDraft(draftFromTransaction(r))}>{t('rules.new')}</button>
             ) : null}
