@@ -24,6 +24,10 @@ export function LoginPage() {
           {t('auth.google')}
         </a>
         <p className="auth-foot muted">{t('auth.restricted')}</p>
+        <p className="auth-foot muted">{t('auth.noGoogle')}</p>
+        {new URLSearchParams(window.location.search).has('invite') ? (
+          <p className="auth-foot" style={{ color: 'var(--danger)' }}>{t('auth.inviteInvalid')}</p>
+        ) : null}
       </div>
     </main>
   );
