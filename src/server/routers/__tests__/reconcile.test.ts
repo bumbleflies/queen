@@ -18,7 +18,7 @@ import { initLedgerModels, resetLedgerDb } from './helpers/ledgerFixtures';
 const listReceiptFiles = vi.hoisted(() => vi.fn(async (): Promise<{ id: string; name: string; link: string }[]> => []));
 vi.mock('../../services/receiptsDrive', () => ({ listReceiptFiles }));
 const driveForCron = vi.hoisted(() => vi.fn(async () => ({})));
-vi.mock('../../services/driveForUser', () => ({ driveForUser: vi.fn(async () => ({})), driveForCron }));
+vi.mock('../../services/driveForUser', () => ({ driveForUser: vi.fn(async () => ({})), driveForActor: vi.fn(async () => ({})), driveForCron }));
 const ask = vi.hoisted(() => vi.fn(async (_prompt: string): Promise<{ text: string; model: { providerID: string; id: string } }> => ({ text: '', model: { providerID: 'free', id: 'm1' } })));
 const opencode = vi.hoisted(() => ({ enabled: false }));
 vi.mock('../../services/OpencodeClient', () => ({ opencodeFromEnv: () => (opencode.enabled ? { ask } : null) }));

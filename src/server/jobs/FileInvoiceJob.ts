@@ -9,7 +9,8 @@ import {
   type UploadInvoicePdfArgs,
   type UploadInvoicePdfResult,
 } from '../services/DriveService';
-import { getGoogleAccessTokenForUser, type GoogleAccess } from '../services/AuthService';
+import type { GoogleAccess } from '../services/AuthService';
+import { driveAccessForActor } from '../services/driveForUser';
 import { getInvoicesFolder } from '../services/appSettings';
 
 /** Sheet `nameTemplate` convention: `YYYY-MM.<invoiceNumber> - <clientName> <customerNumber> - <title>.pdf`. */
@@ -109,7 +110,7 @@ export async function processFileInvoice(
   if (!client) throw new Error(`Client ${String(invoice.clientId)} not found`);
 
   const userId = deps.userId ?? invoice.filingUserId ?? (await resolveFilingUserId());
-  const getAccessToken = deps.getAccessToken ?? getGoogleAccessTokenForUser;
+  const getAccessToken = deps.getAccessToken ?? driveAccessForActor;
   const generatePdf = deps.generatePdf ?? generateInvoicePdf;
   const upload = deps.upload ?? uploadInvoicePdf;
   const folderRef = deps.folderId != null ? { id: deps.folderId, name: null } : await getInvoicesFolder();
