@@ -124,7 +124,20 @@ export async function readTxReceipts(
 
   for (const file of files) {
     const previous = cached.get(file.id);
-    readings.push(!force && isFinal(previous) ? previous! : await readOne(file, deps));
+    // Rebuilt as a plain object: a Mongoose subdocument does not spread its fields.
+    const reused: ReceiptFileReading | null =
+      !force && isFinal(previous)
+        ? {
+            driveFileId: previous!.driveFileId,
+            fileName: previous!.fileName || file.name,
+            status: previous!.status,
+            reading: previous!.reading,
+            model: previous!.model,
+            readAt: previous!.readAt,
+            error: previous!.error,
+          }
+        : null;
+    readings.push(reused ?? (await readOne(file, deps)));
     const found = matchReceiptSet(entriesOf(readings), tx.amountCents, hints);
     if (found) {
       const model = readings.find((r) => found.fileIds.includes(r.driveFileId) && r.model)?.model ?? null;
