@@ -15,6 +15,13 @@ vi.mock('../lib/trpc', () => ({
       invalidate: async () => {},
     }),
     me: q({ user: { email: 'admin@example.de', role: 'admin' } }),
+    users: {
+      list: { useQuery: () => ({ data: [], isError: false }) },
+      invite: { useMutation: () => ({ mutateAsync: async () => ({}), isPending: false }) },
+      revokeInvite: { useMutation: () => ({ mutateAsync: async () => ({}), isPending: false }) },
+      setRole: { useMutation: () => ({ mutateAsync: async () => ({}), isPending: false }) },
+      setDisabled: { useMutation: () => ({ mutateAsync: async () => ({}), isPending: false }) },
+    },
     settings: {
       getDriveFolders: q(foldersState),
       getTaxRate: q({ rate: 0.33 }),

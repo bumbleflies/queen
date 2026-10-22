@@ -8,6 +8,13 @@ vi.mock('../lib/trpc', () => ({
     bank: { list: { useQuery: () => ({ data: [] }) } },
     bookings: { stats: { useQuery: () => ({ data: { open: 0, booked: 0, missingReceipts: 0 } }) } },
     me: { useQuery: () => ({ data: { user: { email: 'a@example.com', role: 'admin' } } }) },
+    users: {
+      list: { useQuery: () => ({ data: [], isError: false }) },
+      invite: { useMutation: () => ({ mutateAsync: async () => ({}), isPending: false }) },
+      revokeInvite: { useMutation: () => ({ mutateAsync: async () => ({}), isPending: false }) },
+      setRole: { useMutation: () => ({ mutateAsync: async () => ({}), isPending: false }) },
+      setDisabled: { useMutation: () => ({ mutateAsync: async () => ({}), isPending: false }) },
+    },
     settings: {
       getDriveFolders: { useQuery: () => ({ data: null, isError: false }) },
       getTaxRate: { useQuery: () => ({ data: { rate: 0.33 } }) },
