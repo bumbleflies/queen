@@ -1,4 +1,4 @@
-import { lineNetCents, lineVatCents } from '../money';
+import { formatGermanEUR, lineNetCents, lineVatCents } from '../money';
 
 /** One side of a journal line; exactly one of debit/credit is > 0. */
 export interface PostingLine {
@@ -89,7 +89,9 @@ export function reversalLines(lines: PostingLine[]): PostingLine[] {
   }));
 }
 
-export type BankBookingMode = 'normal' | 'vatOnly';
+export type BankBookingMode = 'normal' | 'vatOnly' | 'reverseCharge';
+/** §13b UStG reverse charge is always 19 %. */
+export const REVERSE_CHARGE_RATE = 0.19;
 export const BANK_VAT_RATES = [0, 0.07, 0.19] as const;
 
 const INPUT_VAT: Record<string, string> = { '0.19': '1406', '0.07': '1401' };
@@ -113,6 +115,8 @@ export interface BankPostingInput {
  * Book one bank transaction. Outgoing: account (net) + Vorsteuer an Bank.
  * Incoming: Bank an account (net) + Umsatzsteuer. `vatOnly` books the whole
  * amount to the VAT account (e.g. a bank's separate "Mehrwertsteuerbelast").
+ * `reverseCharge` (§13b, outgoing only): expense gross, Vorsteuer 1407 and
+ * Umsatzsteuer 3837 at 19 % of gross, bank gross.
  */
 export function bankPosting(input: BankPostingInput): PostingLine[] {
   const { direction, grossCents, account, vatRate, mode } = input;
@@ -121,6 +125,19 @@ export function bankPosting(input: BankPostingInput): PostingLine[] {
   }
   if (!(BANK_VAT_RATES as readonly number[]).includes(vatRate)) {
     throw new PostingError(`Unsupported VAT rate ${vatRate}`);
+  }
+  if (mode === 'reverseCharge') {
+    if (direction !== 'out') throw new PostingError('§13b nur für Ausgänge');
+    if (vatRate !== REVERSE_CHARGE_RATE) throw new PostingError('§13b immer mit 19 %');
+    if (!account) throw new PostingError('Booking account is required');
+    if (account === BANK) throw new PostingError('Cannot book a bank transaction to the bank account');
+    const vatCents = Math.round(grossCents * REVERSE_CHARGE_RATE);
+    const signed = new Map<string, number>();
+    add(signed, BANK, -grossCents);
+    add(signed, account, grossCents);
+    add(signed, '1407', vatCents);
+    add(signed, '3837', -vatCents);
+    return toLines(signed);
   }
   const sign = direction === 'out' ? 1 : -1; // debit side of the counter account
   const vatAccount = (direction === 'out' ? INPUT_VAT : OUTPUT_VAT)[String(vatRate)];
@@ -138,5 +155,31 @@ export function bankPosting(input: BankPostingInput): PostingLine[] {
   const { netCents, vatCents } = splitGross(grossCents, vatRate);
   add(signed, account, sign * netCents);
   if (vatCents !== 0 && vatAccount) add(signed, vatAccount, sign * vatCents);
+  return toLines(signed);
+}
+
+export interface SplitPart {
+  account: string;
+  vatRate: number;
+  grossCents: number;
+  mode: 'normal' | 'reverseCharge';
+}
+
+/** One bank transaction booked across several accounts / VAT rates; each part is posted like `bankPosting`, lines merged per account. */
+export function bankPostingSplit(input: {
+  direction: 'in' | 'out';
+  grossCents: number;
+  parts: SplitPart[];
+}): PostingLine[] {
+  const { direction, grossCents, parts } = input;
+  if (parts.length < 2) throw new PostingError('Aufteilung braucht mindestens zwei Teile');
+  const sum = parts.reduce((s, p) => s + p.grossCents, 0);
+  if (sum !== grossCents) {
+    throw new PostingError(`Aufteilung ergibt ${formatGermanEUR(sum)} statt ${formatGermanEUR(grossCents)}`);
+  }
+  const signed = new Map<string, number>();
+  for (const part of parts) {
+    for (const l of bankPosting({ direction, ...part })) add(signed, l.account, l.debitCents - l.creditCents);
+  }
   return toLines(signed);
 }

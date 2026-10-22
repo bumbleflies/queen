@@ -170,9 +170,68 @@ describe('suppliers.importJson', () => {
       defaultVatRate: 0.19,
       defaultMode: 'normal',
       archived: false,
+      autoBook: false,
     });
     const res = await caller.suppliers.importJson({ json: JSON.stringify(exported), dryRun: false });
     expect(res).toMatchObject({ created: 0, updated: 0, unchanged: 2 });
+  });
+
+  it('importJson round-trips defaultMode reverseCharge', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    const rev = [{ name: 'Ausland Ltd', defaultAccount: '6837', defaultVatRate: 0.19, defaultMode: 'reverseCharge' }];
+    await caller.suppliers.importJson({ json: JSON.stringify(rev), dryRun: false });
+    const exported = await caller.suppliers.exportJson();
+    expect(exported[0]).toMatchObject({ defaultMode: 'reverseCharge', defaultAccount: '6837' });
+    const res = await caller.suppliers.importJson({ json: JSON.stringify(exported), dryRun: false });
+    expect(res).toMatchObject({ created: 0, updated: 0, unchanged: 1 });
+  });
+
+  it('importJson round-trips autoBook', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    const auto = [{ name: 'Hoster GmbH', ibans: ['DE02120300000000202051'], defaultAccount: '6837', defaultVatRate: 0.19, autoBook: true }];
+    await caller.suppliers.importJson({ json: JSON.stringify(auto), dryRun: false });
+    expect(await Supplier.findOne({ name: 'Hoster GmbH' })).toMatchObject({ autoBook: true });
+    const exported = await caller.suppliers.exportJson();
+    expect(exported[0]).toMatchObject({ autoBook: true });
+    expect((await caller.suppliers.importJson({ json: JSON.stringify(exported), dryRun: false }))).toMatchObject({ unchanged: 1 });
+    const off = await caller.suppliers.importJson({ json: JSON.stringify([{ name: 'Hoster GmbH', autoBook: false }]), dryRun: false });
+    expect(off).toMatchObject({ updated: 1 });
+    expect(await Supplier.findOne({ name: 'Hoster GmbH' })).toMatchObject({ autoBook: false });
+  });
+
+  it('§13b rules must keep 19 %: create, update and import reject other rates', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    const msg = /§13b.*19 %/;
+    await expect(caller.suppliers.create({ name: 'Cloud Ltd', defaultAccount: '6837', defaultVatRate: 0, defaultMode: 'reverseCharge' }))
+      .rejects.toMatchObject({ code: 'BAD_REQUEST', message: expect.stringMatching(msg) });
+    const ok = await caller.suppliers.create({ name: 'Cloud Ltd', defaultAccount: '6837', defaultVatRate: 0.19, defaultMode: 'reverseCharge' });
+    await expect(caller.suppliers.update({ id: String(ok._id), defaultVatRate: 0.07 }))
+      .rejects.toMatchObject({ code: 'BAD_REQUEST', message: expect.stringMatching(msg) });
+    const plain = await caller.suppliers.create({ name: 'Laden', defaultAccount: '6837', defaultVatRate: 0.07 });
+    await expect(caller.suppliers.update({ id: String(plain._id), defaultMode: 'reverseCharge' }))
+      .rejects.toMatchObject({ code: 'BAD_REQUEST', message: expect.stringMatching(msg) });
+    expect((await Supplier.findById(plain._id))?.defaultMode).not.toBe('reverseCharge');
+
+    const res = await caller.suppliers.importJson({
+      json: JSON.stringify([{ name: 'Ausland Ltd', defaultAccount: '6837', defaultVatRate: 0, defaultMode: 'reverseCharge' }]),
+      dryRun: false,
+    });
+    expect(res.errors).toEqual([expect.stringMatching(/^Eintrag 1: .*§13b.*19 %/)]);
+    expect(await Supplier.countDocuments({ name: 'Ausland Ltd' })).toBe(0);
+  });
+
+  it('create and update set autoBook', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    const s = await caller.suppliers.create({ name: 'A', autoBook: true });
+    expect(s.autoBook).toBe(true);
+    expect((await caller.suppliers.update({ id: String(s._id), autoBook: false })).autoBook).toBe(false);
+    expect((await caller.suppliers.create({ name: 'B' })).autoBook).toBe(false);
+    const overview = await caller.suppliers.overview({ year: 2026 });
+    expect(overview.map((r) => r.autoBook)).toEqual([false, false]);
   });
 
   it('any error writes nothing', async (ctx) => {

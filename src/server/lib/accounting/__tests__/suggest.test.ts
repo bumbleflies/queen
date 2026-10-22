@@ -33,6 +33,12 @@ describe('suggest', () => {
     expect(suggest({ counterpartyName: 'Other Software GmbH', description: 'x' }, suppliers)).toBeNull();
   });
 
+  it('a §13b rule always suggests 19 %, whatever rate it stores', () => {
+    const rc: SuggestSupplier = { ...base, _id: 'r', kreditorNumber: 70010, name: 'Cloud Ltd', namePatterns: ['cloud ltd'], defaultAccount: '6837', defaultVatRate: 0, defaultMode: 'reverseCharge' };
+    expect(suggest({ counterpartyName: 'Cloud Ltd', description: 'x' }, [rc])).toMatchObject({ mode: 'reverseCharge', vatRate: 0.19, account: '6837' });
+    expect(suggest({ counterpartyName: 'Cloud Ltd', description: 'x' }, [{ ...rc, defaultVatRate: null }])?.vatRate).toBe(0.19);
+  });
+
   it('returns null when nothing matches', () => {
     expect(suggest({ counterpartyName: 'Unbekannt', description: 'Gutschrift' }, suppliers)).toBeNull();
   });

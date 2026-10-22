@@ -64,3 +64,21 @@ export async function setDriveFolders(
     { upsert: true },
   );
 }
+
+const TAX_KEY = 'tax';
+export const DEFAULT_TAX_ESTIMATE_RATE = 0.33;
+
+/** Income-tax estimate rate for "frei verfügbar"; defaults to 33 %. */
+export async function getTaxEstimateRate(): Promise<number> {
+  const doc = await Setting.findOne({ key: TAX_KEY });
+  const rate = (doc?.value as { estimateRate?: number } | undefined)?.estimateRate;
+  return typeof rate === 'number' ? rate : DEFAULT_TAX_ESTIMATE_RATE;
+}
+
+export async function setTaxEstimateRate(rate: number, updatedBy: string): Promise<void> {
+  await Setting.updateOne(
+    { key: TAX_KEY },
+    { key: TAX_KEY, value: { estimateRate: rate }, updatedBy, updatedAt: new Date() },
+    { upsert: true },
+  );
+}

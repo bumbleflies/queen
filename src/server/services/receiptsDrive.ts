@@ -12,6 +12,11 @@ export interface DriveFilesLike {
     }): Promise<{
       data: { files?: { id?: string | null; name?: string | null; webViewLink?: string | null }[] | null };
     }>;
+    /** File content download (googleapis `files.get` with `alt: 'media'`). */
+    get(
+      params: { fileId: string; alt: 'media'; supportsAllDrives?: boolean },
+      options: { responseType: 'arraybuffer' },
+    ): Promise<{ data: unknown }>;
   };
 }
 

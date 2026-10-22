@@ -6,7 +6,7 @@ import { Account } from '../models/Account';
 import { allocateSupplierNumber } from '../lib/numbering';
 import { normalizeIban, suggest } from '../lib/accounting/suggest';
 import { openTransactions } from '../lib/accounting/bankCoverage';
-import { applySupplierImport, toExport } from '../lib/accounting/supplierImport';
+import { applySupplierImport, isBadReverseChargeRate, REVERSE_CHARGE_RATE_MESSAGE, toExport } from '../lib/accounting/supplierImport';
 import { BANK_VAT_RATES } from '../lib/accounting/postingRules';
 
 const fields = z.object({
@@ -16,11 +16,16 @@ const fields = z.object({
   purposePatterns: z.array(z.string()).optional(),
   defaultAccount: z.string().regex(/^\d{4,5}$/).nullable().optional(),
   defaultVatRate: z.number().refine((r) => (BANK_VAT_RATES as readonly number[]).includes(r)).nullable().optional(),
-  defaultMode: z.enum(['normal', 'vatOnly']).optional(),
+  defaultMode: z.enum(['normal', 'vatOnly', 'reverseCharge']).optional(),
+  autoBook: z.boolean().optional(),
 });
 
 function clean(list: string[] | undefined, fn: (s: string) => string = (s) => s.trim()): string[] | undefined {
   return list?.map(fn).filter((s) => s !== '');
+}
+
+function assertReverseChargeRate(mode: string | null | undefined, vatRate: number | null | undefined): void {
+  if (isBadReverseChargeRate(mode, vatRate)) throw new TRPCError({ code: 'BAD_REQUEST', message: REVERSE_CHARGE_RATE_MESSAGE });
 }
 
 async function assertAccount(account: string | null | undefined): Promise<void> {
@@ -61,6 +66,7 @@ export const suppliersRouter = router({
     .mutation(async ({ input }) => applySupplierImport(input.json, input.dryRun)),
 
   create: adminProcedure.input(fields).mutation(async ({ input }) => {
+    assertReverseChargeRate(input.defaultMode, input.defaultVatRate);
     await assertAccount(input.defaultAccount);
     return Supplier.create({
       ...input,
@@ -85,6 +91,8 @@ export const suppliersRouter = router({
       if (patch.defaultAccount !== undefined) supplier.defaultAccount = patch.defaultAccount ?? undefined;
       if (patch.defaultVatRate !== undefined) supplier.defaultVatRate = patch.defaultVatRate ?? undefined;
       if (patch.defaultMode !== undefined) supplier.defaultMode = patch.defaultMode;
+      if (patch.autoBook !== undefined) supplier.autoBook = patch.autoBook;
+      assertReverseChargeRate(supplier.defaultMode, supplier.defaultVatRate);
       await supplier.save();
       return supplier;
     }),

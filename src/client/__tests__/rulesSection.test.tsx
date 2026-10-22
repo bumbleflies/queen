@@ -17,6 +17,7 @@ const rules = vi.hoisted(() => [
     defaultVatRate: 0.19,
     defaultMode: 'normal',
     archived: false,
+    autoBook: false,
     openHits: 2,
   },
   {
@@ -30,6 +31,7 @@ const rules = vi.hoisted(() => [
     defaultVatRate: 0.19,
     defaultMode: 'vatOnly',
     archived: false,
+    autoBook: false,
     openHits: 0,
   },
 ]);
@@ -108,6 +110,20 @@ describe('RulesSection', () => {
     expect(within(vat).getByText('0 offen')).toBeInTheDocument();
   });
 
+  it('marks §13b rules in the account and VAT columns', () => {
+    rules.push({ ...rules[0], id: 's3', kreditorNumber: 70002, name: 'Cloud Ltd', ibans: [], namePatterns: ['Cloud'], defaultAccount: '6837', defaultVatRate: 0.19, defaultMode: 'reverseCharge', openHits: 0 });
+    try {
+      renderSection();
+      const row = screen.getByRole('row', { name: /Cloud Ltd/ });
+      expect(within(row).getByText('6837 · §13b')).toBeInTheDocument();
+      expect(within(row).getByText('19 %')).toBeInTheDocument();
+      // plain rules keep the bare account
+      expect(within(screen.getByRole('row', { name: /Hoster GmbH/ })).getByText('6837')).toBeInTheDocument();
+    } finally {
+      rules.pop();
+    }
+  });
+
   it('show archived asks the server for archived rules', () => {
     renderSection();
     fireEvent.click(screen.getByRole('checkbox', { name: 'Archivierte zeigen' }));
@@ -131,7 +147,36 @@ describe('RulesSection', () => {
       defaultAccount: '6855',
       defaultVatRate: 0,
       defaultMode: 'normal',
+      autoBook: false,
     }]));
+  });
+
+  it('saving with "Automatisch buchen" checked sends autoBook: true', async () => {
+    renderSection();
+    fireEvent.click(screen.getByRole('button', { name: 'Regel anlegen' }));
+    const dialog = screen.getByRole('dialog', { name: 'Regel anlegen' });
+    fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Hoster' } });
+    fireEvent.change(within(dialog).getByLabelText('IBAN'), { target: { value: 'DE02120300000000202051' } });
+    fireEvent.change(within(dialog).getByLabelText('Konto'), { target: { value: '6837' } });
+    expect(within(dialog).getByText('nur bei Erkennung über IBAN oder Verwendungszweck')).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: /Automatisch buchen \(täglich 07:30\)/ }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Speichern' }));
+    await waitFor(() => expect(calls.create).toEqual([expect.objectContaining({ name: 'Hoster', autoBook: true })]));
+  });
+
+  it('shows an "auto" badge for flagged rules and keeps the flag when editing', async () => {
+    rules[0].autoBook = true;
+    try {
+      renderSection();
+      const row = screen.getByRole('row', { name: /Hoster GmbH/ });
+      expect(within(row).getByText('auto')).toBeInTheDocument();
+      expect(within(screen.getByRole('row', { name: /USt Kontoführung/ })).queryByText('auto')).not.toBeInTheDocument();
+      fireEvent.click(within(row).getByRole('button', { name: 'Bearbeiten' }));
+      const dialog = screen.getByRole('dialog', { name: 'Regel bearbeiten' });
+      expect(within(dialog).getByRole('checkbox', { name: /Automatisch buchen/ })).toBeChecked();
+    } finally {
+      rules[0].autoBook = false;
+    }
   });
 
   it('edits and archives an existing rule', async () => {

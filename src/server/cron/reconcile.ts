@@ -5,6 +5,8 @@ import { FireflyClient, type FireflyTransaction } from '../services/FireflyClien
 import { computeSyncWindow, syncBankTransactions } from '../lib/bankSync';
 import { isCliEntrypoint, reconcilePendingTransactions } from '../lib/reconcile';
 import { findLastSuccessfulRun, readFireflyEnv } from '../lib/fireflyEnv';
+import { autoBookOpen, type AutoBookResult } from '../lib/accounting/autoBook';
+import { readOpenReceipts } from '../services/receiptReader';
 
 export interface TransactionSource {
   fetchTransactions(start: Date, end: Date): Promise<FireflyTransaction[]>;
@@ -17,11 +19,16 @@ export interface RunReconcileOptions {
   /** Inject a Firefly client (tests); otherwise built from env. */
   client?: TransactionSource;
   bankStart?: Date;
+  /** Read open receipts with opencode (slow); the cron entrypoint does, `reconcile.runNow` does not. Default true. */
+  readReceipts?: boolean;
 }
 
 /**
  * One reconcile pass: sync GLS transactions into `BankTransaction` (idempotent),
- * then match every fresh transaction against invoices. Errors are recorded on
+ * then match every fresh transaction against invoices, then book what rules
+ * flagged `autoBook` recognise (failures there only warn), then read up to 10
+ * receipts of open rows without a suggestion (never booked; trouble is ignored;
+ * skipped with `readReceipts: false`). Errors are recorded on
  * the `ReconcileRun` and returned; the CLI inspects `run.error` to exit non-zero.
  * Shared by the Ofelia cron entrypoint and `reconcile.runNow`.
  */
@@ -59,6 +66,26 @@ export async function runReconcile(
     run.matched = counts.matched;
     run.partial = counts.partial;
     run.unmatched = counts.unmatched;
+
+    // Auto-booking never fails the run: its trouble ends up in autoBookWarning.
+    const auto: AutoBookResult = await autoBookOpen(now).catch((err: unknown) => ({
+      booked: 0,
+      failed: 0,
+      warning: `Automatisch buchen abgebrochen: ${(err as Error).message}`,
+    }));
+    run.autoBooked = auto.booked;
+    run.autoBookFailed = auto.failed;
+    if (auto.warning) run.autoBookWarning = auto.warning;
+
+    // Receipt reading only caches suggestions; it never books and never fails the run.
+    const receipts: { read: number; warning?: string } = options.readReceipts === false
+      ? { read: 0 }
+      : await readOpenReceipts(now).catch((err: unknown) => ({
+        read: 0,
+        warning: `Belege lesen abgebrochen: ${(err as Error).message}`,
+      }));
+    run.receiptsRead = receipts.read;
+    if (receipts.warning) run.receiptReadWarning = receipts.warning;
     run.finishedAt = new Date();
     await run.save();
     return run;
@@ -80,8 +107,11 @@ async function main(): Promise<void> {
     } else {
       console.log(
         `Reconcile done: fetched=${run.fetched} matched=${run.matched} ` +
-          `partial=${run.partial} unmatched=${run.unmatched}`,
+          `partial=${run.partial} unmatched=${run.unmatched} ` +
+          `autoBooked=${run.autoBooked} autoBookFailed=${run.autoBookFailed} receiptsRead=${run.receiptsRead}`,
       );
+      if (run.autoBookWarning) console.warn(`Auto-booking: ${run.autoBookWarning}`);
+      if (run.receiptReadWarning) console.warn(`Receipt reading: ${run.receiptReadWarning}`);
     }
   } finally {
     await disconnectMongo();

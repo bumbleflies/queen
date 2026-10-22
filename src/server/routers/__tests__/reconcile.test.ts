@@ -1,14 +1,29 @@
-import { describe, it, expect, beforeEach, beforeAll, type TaskContext } from 'vitest';
+import { describe, it, expect, beforeEach, beforeAll, afterEach, vi, type TaskContext } from 'vitest';
 import mongoose from 'mongoose';
 import { appRouter } from '../../trpc';
 import { Invoice } from '../../models/Invoice';
 import { BankTransaction } from '../../models/BankTransaction';
+import { JournalEntry } from '../../models/JournalEntry';
+import { FiscalYear } from '../../models/FiscalYear';
+import { Supplier } from '../../models/Supplier';
+import { runReconcile } from '../../cron/reconcile';
+import { openTransactions } from '../../lib/accounting/bankCoverage';
 import {
   reconcileBankTransaction,
   reconcilePendingTransactions,
   reversePayment,
 } from '../../lib/reconcile';
 import { initLedgerModels, resetLedgerDb } from './helpers/ledgerFixtures';
+
+const listReceiptFiles = vi.hoisted(() => vi.fn(async (): Promise<{ id: string; name: string; link: string }[]> => []));
+vi.mock('../../services/receiptsDrive', () => ({ listReceiptFiles }));
+const driveForCron = vi.hoisted(() => vi.fn(async () => ({})));
+vi.mock('../../services/driveForUser', () => ({ driveForUser: vi.fn(async () => ({})), driveForCron }));
+const ask = vi.hoisted(() => vi.fn(async (_prompt: string): Promise<{ text: string; model: { providerID: string; id: string } }> => ({ text: '', model: { providerID: 'free', id: 'm1' } })));
+const opencode = vi.hoisted(() => ({ enabled: false }));
+vi.mock('../../services/OpencodeClient', () => ({ opencodeFromEnv: () => (opencode.enabled ? { ask } : null) }));
+const receiptText = vi.hoisted(() => vi.fn(async (): Promise<string> => 'Laden KG Rechnung 11,90 EUR'));
+vi.mock('../../services/receiptText', () => ({ receiptText }));
 
 function dbAvailable(): boolean {
   return mongoose.connection.readyState === 1;
@@ -36,7 +51,10 @@ beforeEach(async () => {
   if (!dbAvailable()) return;
   await Invoice.deleteMany({});
   await BankTransaction.deleteMany({});
+  await Supplier.deleteMany({});
   await resetLedgerDb(); // seeds accounts for the ledger hooks
+  listReceiptFiles.mockReset();
+  listReceiptFiles.mockResolvedValue([]);
 });
 
 const clientId = new mongoose.Types.ObjectId();
@@ -188,5 +206,318 @@ describe('reconcile (DB)', () => {
     expect(updated!.payments).toHaveLength(1);
     expect(updated!.reconcileState).toBe('partial');
     expect(updated!.status).toBe('sent');
+  });
+});
+
+describe('auto-booking in the daily reconcile (DB)', () => {
+  const IBAN = 'DE02120300000000202051';
+  const NOW = new Date(2026, 9, 22, 7, 30);
+  let seq = 0;
+
+  async function outTx(overrides: Record<string, unknown> = {}) {
+    seq += 1;
+    return BankTransaction.create({
+      fireflyJournalId: `${700 + seq}:0`,
+      date: new Date(2026, 9, 16),
+      amountCents: 1190,
+      currency: 'EUR',
+      direction: 'out',
+      description: `Invoice No. 1000${seq}`,
+      counterpartyName: 'Hoster GmbH',
+      counterpartyIban: IBAN,
+      ignored: false,
+      ...overrides,
+    });
+  }
+
+  async function flaggedRule(overrides: Record<string, unknown> = {}) {
+    return Supplier.create({
+      kreditorNumber: 70000,
+      name: 'Hoster',
+      ibans: [IBAN],
+      namePatterns: ['Hoster'],
+      defaultAccount: '6837',
+      defaultVatRate: 0.19,
+      defaultMode: 'normal',
+      autoBook: true,
+      ...overrides,
+    });
+  }
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  const bankEntries = () => JournalEntry.find({ 'source.kind': 'bank', active: true });
+
+  it('auto-books flagged IBAN rules and records the count', async (ctx) => {
+    skipIfNoDb(ctx);
+    await flaggedRule();
+    await outTx();
+    await outTx();
+    const byName = await outTx({ counterpartyIban: null });
+
+    const run = await runReconcile({ skipSync: true, now: NOW });
+    expect(run.error ?? null).toBeNull();
+    expect(run.autoBooked).toBe(2);
+    expect(run.autoBookFailed).toBe(0);
+    const entries = await bankEntries();
+    expect(entries).toHaveLength(2);
+    expect(entries.map((e) => e.createdBy)).toEqual(['auto:reconcile', 'auto:reconcile']);
+    expect((await openTransactions(2026)).map((t) => String(t._id))).toEqual([String(byName._id)]);
+    const stream = await adminCaller().bookings.stream({ year: 2026 });
+    expect(stream.filter((r) => r.state === 'booked').map((r) => r.state === 'booked' && r.entry.auto)).toEqual([true, true]);
+  });
+
+  it('second run books nothing new', async (ctx) => {
+    skipIfNoDb(ctx);
+    await flaggedRule();
+    await outTx();
+    await outTx();
+    await runReconcile({ skipSync: true, now: NOW });
+    const again = await runReconcile({ skipSync: true, now: NOW });
+    expect(again.autoBooked).toBe(0);
+    expect(await bankEntries()).toHaveLength(2);
+  });
+
+  it('never re-books a transaction whose booking was reversed', async (ctx) => {
+    skipIfNoDb(ctx);
+    await flaggedRule();
+    const t = await outTx();
+    expect((await runReconcile({ skipSync: true, now: NOW })).autoBooked).toBe(1);
+    await adminCaller().bookings.unbook({ bankTxId: String(t._id), reason: 'falsch' });
+    const again = await runReconcile({ skipSync: true, now: NOW });
+    expect(again.autoBooked).toBe(0);
+    expect(again.autoBookFailed).toBe(0);
+    expect((await openTransactions(2026)).map((x) => String(x._id))).toEqual([String(t._id)]);
+  });
+
+  it('never books incoming transactions', async (ctx) => {
+    skipIfNoDb(ctx);
+    await flaggedRule();
+    const incoming = await outTx({ direction: 'in' });
+    const run = await runReconcile({ skipSync: true, now: NOW });
+    expect(run.autoBooked).toBe(0);
+    expect((await openTransactions(2026)).map((x) => String(x._id))).toEqual([String(incoming._id)]);
+  });
+
+  it('leaves rules without the flag alone', async (ctx) => {
+    skipIfNoDb(ctx);
+    await flaggedRule({ autoBook: false });
+    await outTx();
+    const run = await runReconcile({ skipSync: true, now: NOW });
+    expect(run.autoBooked).toBe(0);
+    expect(await bankEntries()).toHaveLength(0);
+  });
+
+  it('skips closed fiscal years', async (ctx) => {
+    skipIfNoDb(ctx);
+    await FiscalYear.create({ year: 2025, status: 'closed' });
+    await flaggedRule();
+    const old = await outTx({ date: new Date(2025, 11, 30) });
+    const run = await runReconcile({ skipSync: true, now: NOW });
+    expect(run.autoBooked).toBe(0);
+    expect(run.autoBookFailed).toBe(0);
+    expect((await openTransactions(2025)).map((t) => String(t._id))).toEqual([String(old._id)]);
+  });
+
+  it('books open transactions of earlier years that are not closed', async (ctx) => {
+    skipIfNoDb(ctx);
+    await FiscalYear.create({ year: 2025, status: 'open' });
+    await flaggedRule();
+    await outTx({ date: new Date(2025, 11, 30) });
+    const run = await runReconcile({ skipSync: true, now: NOW });
+    expect(run.autoBooked).toBe(1);
+  });
+
+  it('attaches a clearly matching receipt', async (ctx) => {
+    skipIfNoDb(ctx);
+    vi.stubEnv('QUEEN_RECEIPTS_FOLDER_ID', 'root');
+    listReceiptFiles.mockResolvedValue([{ id: 'h1', name: 'Hoster_2026-10-16_100000123456.pdf', link: 'https://drive/h1' }]);
+    await flaggedRule();
+    const t = await outTx({ description: 'Invoice No. 100000123456' });
+    const run = await runReconcile({ skipSync: true, now: NOW });
+    expect(run.autoBooked).toBe(1);
+    expect(run.autoBookWarning ?? null).toBeNull();
+    expect((await BankTransaction.findById(t._id))?.receipt?.driveFileId).toBe('h1');
+  });
+
+  it('Drive failure books without receipt and warns', async (ctx) => {
+    skipIfNoDb(ctx);
+    vi.stubEnv('QUEEN_RECEIPTS_FOLDER_ID', 'root');
+    listReceiptFiles.mockRejectedValue(new Error('invalid_grant'));
+    await flaggedRule();
+    const t = await outTx();
+    const run = await runReconcile({ skipSync: true, now: NOW });
+    expect(run.error ?? null).toBeNull();
+    expect(run.autoBooked).toBe(1);
+    expect(run.autoBookWarning).toMatch(/invalid_grant/);
+    expect((await BankTransaction.findById(t._id))?.receipt?.driveFileId).toBeUndefined();
+  });
+
+  it('counts per-row failures without failing the run', async (ctx) => {
+    skipIfNoDb(ctx);
+    await flaggedRule({ defaultAccount: '6837' });
+    await outTx();
+    // a rule pointing at an account archived after it was saved makes the posting fail
+    await mongoose.connection.collection('accounts').updateOne({ number: '6837' }, { $set: { archived: true } });
+    const run = await runReconcile({ skipSync: true, now: NOW });
+    expect(run.error ?? null).toBeNull();
+    expect(run.autoBooked).toBe(0);
+    expect(run.autoBookFailed).toBe(1);
+  });
+});
+
+describe('receipt reading in the daily reconcile (DB)', () => {
+  const NOW = new Date(2026, 9, 22, 7, 30);
+
+  beforeEach(() => {
+    receiptText.mockClear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    opencode.enabled = false;
+    ask.mockReset();
+  });
+
+  async function openWithReceipt(n: number, overrides: Record<string, unknown> = {}) {
+    const number = String(100000000 + n);
+    await BankTransaction.create({
+      fireflyJournalId: `${800 + n}:0`,
+      date: new Date(2026, 9, 16),
+      amountCents: 1190,
+      currency: 'EUR',
+      direction: 'out',
+      description: `Rechnung ${number}`,
+      counterpartyName: 'Laden KG',
+      ignored: false,
+      ...overrides,
+    });
+    return { id: `f${n}`, name: `Laden_2026-10-16_${number}.pdf`, link: `https://drive/f${n}` };
+  }
+
+  it('reconcile reads at most 10 receipts and never books them', async (ctx) => {
+    skipIfNoDb(ctx);
+    vi.stubEnv('QUEEN_RECEIPTS_FOLDER_ID', 'root');
+    opencode.enabled = true;
+    ask.mockResolvedValue({
+      text: JSON.stringify({ vendor: 'Laden KG', totalCents: 1190, lines: [{ vatRate: 0.19, grossCents: 1190, account: '6837' }] }),
+      model: { providerID: 'free', id: 'm1' },
+    });
+    const files = [];
+    for (let n = 1; n <= 12; n++) files.push(await openWithReceipt(n));
+    // a rule suggestion means no reading is needed
+    await Supplier.create({ kreditorNumber: 70001, name: 'Regel', namePatterns: ['Regel AG'], defaultAccount: '6820', defaultVatRate: 0.19 });
+    files.push(await openWithReceipt(13, { counterpartyName: 'Regel AG' }));
+    listReceiptFiles.mockResolvedValue(files);
+
+    const run = await runReconcile({ skipSync: true, now: NOW });
+    expect(run.error ?? null).toBeNull();
+    expect(run.receiptsRead).toBe(10);
+    expect(ask).toHaveBeenCalledTimes(10);
+    expect(await JournalEntry.countDocuments({ 'source.kind': 'bank' })).toBe(0);
+    expect(await BankTransaction.countDocuments({ 'receiptReading.status': 'ok' })).toBe(10);
+    expect((await BankTransaction.findOne({ counterpartyName: 'Regel AG' }))?.receiptReading).toBeUndefined();
+
+    const second = await runReconcile({ skipSync: true, now: NOW });
+    expect(second.receiptsRead).toBe(2);
+    expect(ask).toHaveBeenCalledTimes(12);
+    expect(await JournalEntry.countDocuments({ 'source.kind': 'bank' })).toBe(0);
+    const stream = await adminCaller().bookings.stream({ year: 2026 });
+    expect(stream.filter((r) => r.state === 'open' && r.suggestion?.matchedBy === 'receipt')).toHaveLength(12);
+  });
+
+  it('reading trouble never fails the run, and without a key nothing is read', async (ctx) => {
+    skipIfNoDb(ctx);
+    vi.stubEnv('QUEEN_RECEIPTS_FOLDER_ID', 'root');
+    listReceiptFiles.mockResolvedValue([await openWithReceipt(1)]);
+    const off = await runReconcile({ skipSync: true, now: NOW });
+    expect(off.receiptsRead).toBe(0);
+    expect(receiptText).not.toHaveBeenCalled();
+
+    opencode.enabled = true;
+    ask.mockRejectedValue(new Error('all models failed'));
+    const run = await runReconcile({ skipSync: true, now: NOW });
+    expect(run.error ?? null).toBeNull();
+    expect(run.receiptsRead).toBe(1);
+    expect((await BankTransaction.findOne({}))?.receiptReading?.status).toBe('failed');
+
+    // a failed reading is retried on the next run
+    ask.mockResolvedValue({
+      text: JSON.stringify({ vendor: 'Laden KG', totalCents: 1190, lines: [{ vatRate: 0.19, grossCents: 1190, account: '6837' }] }),
+      model: { providerID: 'free', id: 'm1' },
+    });
+    const retry = await runReconcile({ skipSync: true, now: NOW });
+    expect(retry.receiptsRead).toBe(1);
+    expect((await BankTransaction.findOne({}))?.receiptReading?.status).toBe('ok');
+    expect((await runReconcile({ skipSync: true, now: NOW })).receiptsRead).toBe(0);
+
+    listReceiptFiles.mockRejectedValue(new Error('invalid_grant'));
+    expect((await runReconcile({ skipSync: true, now: NOW })).error ?? null).toBeNull();
+  });
+
+  it('reads never-read receipts first, then retries failed ones oldest first', async (ctx) => {
+    skipIfNoDb(ctx);
+    vi.stubEnv('QUEEN_RECEIPTS_FOLDER_ID', 'root');
+    opencode.enabled = true;
+    ask.mockResolvedValue({
+      text: JSON.stringify({ vendor: 'Laden KG', totalCents: 1190, lines: [{ vatRate: 0.19, grossCents: 1190, account: '6837' }] }),
+      model: { providerID: 'free', id: 'm1' },
+    });
+    const files = [];
+    const failedAt = (n: number, readAt: Date) => ({ receiptReading: { driveFileId: `f${n}`, status: 'failed', readAt, error: 'timeout' } });
+    files.push(await openWithReceipt(1, failedAt(1, new Date(2026, 9, 10))));
+    files.push(await openWithReceipt(2, failedAt(2, new Date(2026, 8, 1))));
+    files.push(await openWithReceipt(3, failedAt(3, new Date(2026, 9, 1))));
+    for (let n = 4; n <= 12; n++) files.push(await openWithReceipt(n));
+    listReceiptFiles.mockResolvedValue(files);
+
+    const run = await runReconcile({ skipSync: true, now: NOW });
+    expect(run.receiptsRead).toBe(10);
+    const status = async (n: number) => (await BankTransaction.findOne({ fireflyJournalId: `${800 + n}:0` }))?.receiptReading?.status;
+    expect(await status(2)).toBe('ok');
+    expect(await status(1)).toBe('failed');
+    expect(await status(3)).toBe('failed');
+    for (let n = 4; n <= 12; n++) expect(await status(n)).toBe('ok');
+  });
+
+  it('a total failure of the reading step is recorded as a warning, not an error', async (ctx) => {
+    skipIfNoDb(ctx);
+    opencode.enabled = true;
+    driveForCron.mockRejectedValueOnce(new Error('boom'));
+    const run = await runReconcile({ skipSync: true, now: NOW });
+    expect(run.error ?? null).toBeNull();
+    expect(run.receiptsRead).toBe(0);
+    expect(run.receiptReadWarning).toMatch(/boom/);
+  });
+
+  it('runNow (the button) never reads receipts; only the cron entrypoint does', async (ctx) => {
+    skipIfNoDb(ctx);
+    vi.stubEnv('QUEEN_RECEIPTS_FOLDER_ID', 'root');
+    vi.stubEnv('FIREFLY_URL', 'http://firefly.test');
+    vi.stubEnv('FIREFLY_PAT', 'pat');
+    vi.stubEnv('FIREFLY_GLS_ACCOUNT_ID', '1');
+    vi.stubEnv('QUEEN_BANK_START', '2026-01-01');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ data: [] }), { status: 200, headers: { 'content-type': 'application/json' } })));
+    try {
+      opencode.enabled = true;
+      ask.mockResolvedValue({
+        text: JSON.stringify({ vendor: 'Laden KG', totalCents: 1190, lines: [{ vatRate: 0.19, grossCents: 1190, account: '6837' }] }),
+        model: { providerID: 'free', id: 'm1' },
+      });
+      listReceiptFiles.mockResolvedValue([await openWithReceipt(1)]);
+
+      const button = await adminCaller().reconcile.runNow();
+      expect(button.error ?? null).toBeNull();
+      expect(button.receiptsRead ?? 0).toBe(0);
+      expect(ask).not.toHaveBeenCalled();
+      expect(receiptText).not.toHaveBeenCalled();
+
+      expect((await runReconcile({ skipSync: true, now: NOW })).receiptsRead).toBe(1);
+      expect(ask).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

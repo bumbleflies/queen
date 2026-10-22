@@ -1,9 +1,11 @@
-import type { BankBookingMode } from './postingRules';
+import { REVERSE_CHARGE_RATE, type BankBookingMode, type SplitPart } from './postingRules';
 
 export interface SuggestTx {
   counterpartyName?: string | null;
   counterpartyIban?: string | null;
   description: string;
+  /** 'in' | 'out'; missing counts as incoming (the BankTransaction default). */
+  direction?: string | null;
 }
 
 export interface SuggestSupplier {
@@ -20,13 +22,20 @@ export interface SuggestSupplier {
 }
 
 export interface Suggestion {
-  supplierId: string;
-  kreditorNumber: number;
+  /** Absent for history suggestions (no supplier behind them). */
+  supplierId?: string;
+  kreditorNumber?: number;
+  /** The counterparty name for history suggestions. */
   supplierName: string;
   account?: string;
   vatRate?: number;
   mode: BankBookingMode;
-  matchedBy: 'iban' | 'purpose' | 'name';
+  matchedBy: 'iban' | 'purpose' | 'name' | 'history' | 'receipt';
+  lastBookedAt?: Date;
+  /** Receipt readings across several accounts / VAT rates; `account`/`vatRate` are then absent. */
+  split?: SplitPart[];
+  /** The extracted receipt figures, always shown with a receipt suggestion. */
+  reading?: { vendor: string; totalCents: number; lines: { vatRate: number; grossCents: number; account: string }[] };
 }
 
 export function normalizeIban(s: string): string {
@@ -50,7 +59,7 @@ export function suggest(tx: SuggestTx, suppliers: SuggestSupplier[]): Suggestion
   const purpose = norm(tx.description);
   const name = norm(tx.counterpartyName);
 
-  const checks: [Suggestion['matchedBy'], (s: SuggestSupplier) => boolean][] = [
+  const checks: [Exclude<Suggestion['matchedBy'], 'history' | 'receipt'>, (s: SuggestSupplier) => boolean][] = [
     ['iban', (s) => iban !== '' && s.ibans.some((i) => normalizeIban(i) === iban)],
     ['purpose', (s) => containsAny(purpose, s.purposePatterns)],
     ['name', (s) => name !== '' && containsAny(name, s.namePatterns)],
@@ -58,13 +67,15 @@ export function suggest(tx: SuggestTx, suppliers: SuggestSupplier[]): Suggestion
   for (const [matchedBy, test] of checks) {
     const hit = active.find(test);
     if (hit) {
+      const mode: BankBookingMode = hit.defaultMode === 'vatOnly' || hit.defaultMode === 'reverseCharge' ? hit.defaultMode : 'normal';
       return {
         supplierId: String(hit._id),
         kreditorNumber: hit.kreditorNumber,
         supplierName: hit.name,
         account: hit.defaultAccount ?? undefined,
-        vatRate: hit.defaultVatRate ?? undefined,
-        mode: hit.defaultMode === 'vatOnly' ? 'vatOnly' : 'normal',
+        // §13b always books 19 %, whatever an older rule stored
+        vatRate: mode === 'reverseCharge' ? REVERSE_CHARGE_RATE : (hit.defaultVatRate ?? undefined),
+        mode,
         matchedBy,
       };
     }

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { trpc } from '../lib/trpc';
+import { useToast } from '../components/Toast';
 import { LanguageToggle } from '../components/LanguageToggle';
 import { FolderPicker, type PickerFolder, type PickerScope } from '../components/FolderPicker';
 import { useLanguage } from '../i18n/LanguageContext';
@@ -15,6 +16,53 @@ const SCOPE_KEYS: Record<PickerScope, DictKey> = {
 function folderLabel(f: PickerFolder | null, none: string): string {
   if (!f) return none;
   return f.name ?? f.id;
+}
+
+function TaxRateSection() {
+  const { t } = useLanguage();
+  const toast = useToast();
+  const utils = trpc.useUtils();
+  const rate = trpc.settings.getTaxRate.useQuery();
+  const setRate = trpc.settings.setTaxRate.useMutation();
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = draft ?? (rate.data === undefined ? '' : String(Math.round(rate.data.rate * 1000) / 10));
+  const pct = Number(shown.replace(',', '.'));
+  const valid = shown.trim() !== '' && Number.isFinite(pct) && pct >= 0 && pct <= 60;
+
+  async function save() {
+    try {
+      await setRate.mutateAsync({ rate: Math.round(pct * 10) / 1000 });
+      await utils.settings.getTaxRate.invalidate();
+      await utils.ledger.availableCash.invalidate();
+      setDraft(null);
+      toast.show(t('settings.taxSaved'));
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
+  return (
+    <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <h2 style={{ margin: 0, fontSize: 18 }}>{t('settings.taxTitle')}</h2>
+      <div>
+        <label className="lbl" htmlFor="tax-rate">{t('settings.taxRate')}</label>
+        <div className="row" style={{ marginTop: 4 }}>
+          <input
+            id="tax-rate"
+            className="field num"
+            inputMode="decimal"
+            value={shown}
+            onChange={(e) => setDraft(e.target.value)}
+            style={{ width: '6rem' }}
+          />
+          <button type="button" className="btn" disabled={!valid || setRate.isPending || draft === null} onClick={save}>
+            {t('settings.taxSave')}
+          </button>
+        </div>
+        <p className="muted" style={{ margin: '6px 0 0', fontSize: 14 }}>{t('settings.taxHint')}</p>
+      </div>
+    </section>
+  );
 }
 
 export function SettingsPage() {
@@ -60,6 +108,8 @@ export function SettingsPage() {
           </div>
         </section>
       ) : null}
+
+      {user?.role === 'admin' ? <TaxRateSection /> : null}
 
       <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h2 style={{ margin: 0, fontSize: 18 }}>{t('settings.theme')}</h2>

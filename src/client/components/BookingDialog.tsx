@@ -4,7 +4,7 @@ import { formatDate, formatEUR } from '../lib/format';
 import { useToast } from '../components/Toast';
 import { previewBankPosting } from '../lib/bookingPreview';
 import { useLanguage } from '../i18n/LanguageContext';
-import type { BankBookingMode } from '../../server/lib/accounting/postingRules';
+import { REVERSE_CHARGE_RATE, bankPostingSplit, type BankBookingMode, type SplitPart } from '../../server/lib/accounting/postingRules';
 import { strongReceipt } from '../../server/lib/accounting/receipts';
 
 export interface InboxRowLike {
@@ -16,11 +16,13 @@ export interface InboxRowLike {
   counterpartyIban?: string | null;
   description: string;
   suggestion: {
-    supplierId: string;
+    supplierId?: string;
     supplierName: string;
     account?: string;
     vatRate?: number;
     mode: BankBookingMode;
+    split?: SplitPart[];
+    reading?: { vendor: string };
   } | null;
 }
 
@@ -61,10 +63,18 @@ export function BookingDialog({ year, tx, onDone }: { year: number; tx: InboxRow
   const [missing, setMissing] = useState(false);
   const [missingReason, setMissingReason] = useState('');
 
-  const preview = useMemo(
-    () => previewBankPosting({ direction: tx.direction, amountCents: tx.amountCents, account, vatRate, mode }),
-    [tx.direction, tx.amountCents, account, vatRate, mode],
-  );
+  const suggestedSplit = tx.suggestion?.split && tx.suggestion.split.length >= 2 ? tx.suggestion.split : null;
+  const [useSplit, setUseSplit] = useState(true);
+  const split = suggestedSplit && useSplit ? suggestedSplit : null;
+
+  const preview = useMemo(() => {
+    if (!split) return previewBankPosting({ direction: tx.direction, amountCents: tx.amountCents, account, vatRate, mode });
+    try {
+      return { lines: bankPostingSplit({ direction: tx.direction, grossCents: tx.amountCents, parts: split }), error: null };
+    } catch (err) {
+      return { lines: [], error: (err as Error).message };
+    }
+  }, [tx.direction, tx.amountCents, account, vatRate, mode, split]);
 
   const files = (receipts.data ?? []) as ReceiptFile[];
   const chosen = files.find((f) => f.id === receiptId);
@@ -82,6 +92,7 @@ export function BookingDialog({ year, tx, onDone }: { year: number; tx: InboxRow
         account,
         vatRate,
         mode,
+        ...(split ? { split } : {}),
         supplierId: supplierId || undefined,
         text: text || undefined,
         rememberRule: remember,
@@ -126,6 +137,24 @@ export function BookingDialog({ year, tx, onDone }: { year: number; tx: InboxRow
         </div>
       </div>
       <div className="grid-form" style={{ padding: 16 }}>
+        {suggestedSplit ? (
+          <div style={{ gridColumn: '1 / -1' }}>
+            {tx.suggestion?.reading ? (
+              <div className="lbl">{t('finance.outcome.receipt.read').replace('{vendor}', tx.suggestion.reading.vendor)}</div>
+            ) : null}
+            <div className="num">
+              {suggestedSplit.map((p) => (
+                <div key={`${p.account}-${p.vatRate}-${p.grossCents}`}>
+                  {p.account} · {Math.round(p.vatRate * 100)} %{p.mode === 'reverseCharge' ? ` · ${t('finance.outcome.reverseCharge')}` : ''} · {formatEUR(p.grossCents)}
+                </div>
+              ))}
+            </div>
+            <label className="lab" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={useSplit} onChange={(e) => setUseSplit(e.target.checked)} />
+              {t('bookings.dialog.useSplit')}
+            </label>
+          </div>
+        ) : null}
         <label className="lab">
           {t('bookings.dialog.account')}
           <input
@@ -138,7 +167,12 @@ export function BookingDialog({ year, tx, onDone }: { year: number; tx: InboxRow
         </label>
         <label className="lab">
           {t('bookings.dialog.vat')}
-          <select className="field" value={vatRate} onChange={(e) => setVatRate(Number(e.target.value))}>
+          <select
+            className="field"
+            value={mode === 'reverseCharge' ? REVERSE_CHARGE_RATE : vatRate}
+            disabled={mode === 'reverseCharge'}
+            onChange={(e) => setVatRate(Number(e.target.value))}
+          >
             <option value={0}>0 %</option>
             <option value={0.07}>7 %</option>
             <option value={0.19}>19 %</option>
@@ -146,9 +180,18 @@ export function BookingDialog({ year, tx, onDone }: { year: number; tx: InboxRow
         </label>
         <label className="lab">
           {t('bookings.dialog.mode')}
-          <select className="field" value={mode} onChange={(e) => setMode(e.target.value as BankBookingMode)}>
+          <select
+            className="field"
+            value={mode}
+            onChange={(e) => {
+              const next = e.target.value as BankBookingMode;
+              setMode(next);
+              if (next === 'reverseCharge') setVatRate(REVERSE_CHARGE_RATE);
+            }}
+          >
             <option value="normal">{t('bookings.dialog.mode.normal')}</option>
             <option value="vatOnly">{t('bookings.dialog.mode.vatOnly')}</option>
+            <option value="reverseCharge">{t('bookings.dialog.mode.reverseCharge')}</option>
           </select>
         </label>
         <label className="lab">

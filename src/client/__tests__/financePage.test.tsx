@@ -6,7 +6,7 @@ import { MemoryRouter } from 'react-router-dom';
 
 const q = vi.hoisted(() => (data: unknown) => ({ useQuery: () => ({ data, isError: false }) }));
 const receiptRows = vi.hoisted(() => ({ current: [] as { id: string; name: string; link: string; score: number }[] }));
-const state = vi.hoisted(() => ({ role: 'admin', rows: null as unknown[] | null, matches: {} as Record<string, unknown> }));
+const state = vi.hoisted(() => ({ role: 'admin', rows: null as unknown[] | null, matches: {} as Record<string, unknown>, readingAvailable: true, readResult: { status: 'ok', suggestion: null, reading: null } as unknown }));
 const calls: Record<string, unknown[]> = {};
 const shown: string[] = [];
 const actions: { label: string; onClick: () => void }[] = [];
@@ -69,6 +69,7 @@ const streamRows = vi.hoisted(() => [
     entry: {
       entryId: 'e1',
       entryNumber: '2026-00010',
+      auto: true,
       lines: [
         { account: '1406', debitCents: 1900, creditCents: 0 },
         { account: '1800', debitCents: 0, creditCents: 11900 },
@@ -107,6 +108,7 @@ vi.mock('../lib/trpc', () => ({
       list: q([]),
       trialBalance: q({ rows: [], debitCents: 0, creditCents: 0 }),
       accountLedger: q([]),
+      availableCash: q({ bankCents: 0, vatCents: 0, provisionsCents: 0, estimatedTaxCents: 0, liabilitiesCents: 0, availableCents: 0, profitCents: 0, taxRate: 0.33, bankSource: 'firefly', asOf: '2026-03-04T00:00:00.000Z', openCount: 0 }),
       postManual: { useMutation: () => ({ mutateAsync: async () => {}, isPending: false }) },
       reverse: { useMutation: () => ({ mutateAsync: async () => {} }) },
     },
@@ -123,7 +125,7 @@ vi.mock('../lib/trpc', () => ({
     receipts: { list: { useQuery: () => ({ data: receiptRows.current, isError: false }) } },
     reports: { openItems: q({ items: [] }) },
     reconcile: {
-      status: q({ finishedAt: '2026-03-04T06:10:00.000Z', fetched: 3, matched: 1, partial: 0, unmatched: 1, error: null }),
+      status: q({ finishedAt: '2026-03-04T06:10:00.000Z', fetched: 3, matched: 1, partial: 0, unmatched: 1, autoBooked: 2, error: null }),
       runNow: mut('runNow', async () => ({})),
     },
     bank: {
@@ -135,7 +137,8 @@ vi.mock('../lib/trpc', () => ({
     },
     bookings: {
       stream: { useQuery: () => ({ data: state.rows ?? streamRows, isError: false }) },
-      receiptMatches: { useQuery: () => ({ data: { available: true, matches: state.matches } }) },
+      receiptMatches: { useQuery: () => ({ data: { available: true, matches: state.matches, readingAvailable: state.readingAvailable } }) },
+      readReceipt: mut('readReceipt', async () => state.readResult),
       setReceipt: mut('setReceipt', async () => ({})),
       stats: q({ open: 2, booked: 1, missingReceipts: 1 }),
       balanceCheck: q({ ledgerCents: 0, bankCents: 0, diffCents: null }),
@@ -219,12 +222,15 @@ beforeEach(() => {
   calls.unignore = [];
   calls.syncNow = [];
   calls.setReceipt = [];
+  calls.readReceipt = [];
   shown.length = 0;
   actions.length = 0;
   receiptRows.current = [];
   state.role = 'admin';
   state.rows = null;
   state.matches = {};
+  state.readingAvailable = true;
+  state.readResult = { status: 'ok', suggestion: null, reading: null };
 });
 
 function renderPage(url = '/finance') {
@@ -294,6 +300,50 @@ describe('FinancePage — inbox', () => {
     expect(actions.map((a) => a.label)).toEqual(['Rückgängig']);
     actions[0].onClick();
     await waitFor(() => expect(calls.unbook).toEqual([{ bankTxId: 'tx1', reason: 'Rückgängig direkt nach dem Buchen' }]));
+  });
+
+  it('books a §13b suggestion in one click and labels the outcome', async () => {
+    state.rows = [{
+      ...(streamRows[0] as Record<string, unknown>),
+      suggestion: { supplierId: 's1', supplierName: 'Acme GmbH', account: '6837', vatRate: 0.19, mode: 'reverseCharge' },
+    }];
+    renderPage();
+    const row = screen.getByRole('row', { name: /Miete März/ });
+    expect(within(row).getByText(/✓ 6837 Lizenzen · §13b/)).toBeInTheDocument();
+    fireEvent.click(within(row).getByRole('button', { name: 'Buchen' }));
+    await waitFor(() => expect(calls.book).toEqual([{
+      bankTxId: 'tx1',
+      account: '6837',
+      vatRate: 0.19,
+      mode: 'reverseCharge',
+      supplierId: 's1',
+    }]));
+  });
+
+  it('history suggestion shows "wie am" and books with one click', async () => {
+    state.rows = [{
+      ...(streamRows[0] as Record<string, unknown>),
+      suggestion: {
+        matchedBy: 'history',
+        account: '6837',
+        vatRate: 0.19,
+        mode: 'normal',
+        supplierName: 'Alex Muster',
+        lastBookedAt: '2026-09-03',
+      },
+    }];
+    renderPage();
+    const row = screen.getByRole('row', { name: /Miete März/ });
+    expect(within(row).getByText('wie am 03.09.2026')).toBeInTheDocument();
+    expect(within(row).queryByText(/Regel/)).not.toBeInTheDocument();
+    fireEvent.click(within(row).getByRole('button', { name: 'Buchen' }));
+    await waitFor(() => expect(calls.book).toEqual([{
+      bankTxId: 'tx1',
+      account: '6837',
+      vatRate: 0.19,
+      mode: 'normal',
+      supplierId: undefined,
+    }]));
   });
 
   it('Anpassen opens the booking dialog with the suggestion and a preselected receipt', async () => {
@@ -372,6 +422,12 @@ describe('FinancePage — inbox', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Bank vollständig neu einlesen' }));
     await waitFor(() => expect(calls.syncNow).toEqual([{ full: true }]));
   });
+
+  it('the overflow menu shows how many rows the last run booked automatically', () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Bank und Abgleich' }));
+    expect(screen.getByText(/· 2 automatisch gebucht/)).toBeInTheDocument();
+  });
 });
 
 describe('FinancePage — done', () => {
@@ -387,6 +443,7 @@ describe('FinancePage — done', () => {
     const bookedRow = screen.getByRole('row', { name: /Miete Februar/ });
     expect(within(bookedRow).getByText('2026-00010')).toBeInTheDocument();
     expect(within(bookedRow).getByText('S 6837 100,00 €')).toBeInTheDocument();
+    expect(within(bookedRow).getByText('automatisch')).toBeInTheDocument();
     fireEvent.click(within(bookedRow).getByRole('button', { name: 'Stornieren' }));
     const dialog = screen.getByRole('dialog', { name: 'Buchung 2026-00010 stornieren' });
     const confirm = within(dialog).getByRole('button', { name: 'Stornieren' });
@@ -435,9 +492,146 @@ describe('FinancePage — rules and journal tabs', () => {
     expect(screen.getByRole('button', { name: 'Saldenliste' })).toBeInTheDocument();
   });
 
+  it('opens the account ledger on the account from the URL', () => {
+    renderPage('/finance?tab=journal&account=3806');
+    expect(screen.getByRole('heading', { name: 'Kontoblatt 3806' })).toBeInTheDocument();
+  });
+
   it('ledger entry form can be opened from the header', () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: 'Buchung erfassen' }));
     expect(screen.getByRole('heading', { name: 'Buchung erfassen' })).toBeInTheDocument();
+  });
+});
+
+describe('FinancePage — receipt reading', () => {
+  const split = [
+    { account: '6837', vatRate: 0.19, grossCents: 8330, mode: 'normal' },
+    { account: '6830', vatRate: 0.07, grossCents: 3570, mode: 'normal' },
+  ];
+  const receiptRow = () => ({
+    ...(streamRows[0] as Record<string, unknown>),
+    suggestion: {
+      matchedBy: 'receipt',
+      supplierName: 'Muster Handel',
+      mode: 'normal',
+      split,
+      reading: {
+        vendor: 'Muster Handel',
+        totalCents: 11900,
+        lines: [
+          { vatRate: 0.19, grossCents: 8330, account: '6837' },
+          { vatRate: 0.07, grossCents: 3570, account: '6830' },
+        ],
+      },
+    },
+  });
+  const openMatch = () => { state.matches = { tx1: { id: 'f1', name: 'beleg.pdf', link: 'https://drive/f1' } }; };
+
+  it('receipt suggestion shows vendor and VAT lines and books the split in one click', async () => {
+    state.rows = [receiptRow()];
+    renderPage();
+    const row = screen.getByRole('row', { name: /Miete März/ });
+    expect(within(row).getByText(/aus Beleg gelesen: Muster Handel/)).toBeInTheDocument();
+    expect(within(row).getByText(/19 %.*83,30/)).toBeInTheDocument();
+    expect(within(row).getByText(/7 %.*35,70/)).toBeInTheDocument();
+    fireEvent.click(within(row).getByRole('button', { name: 'Buchen' }));
+    await waitFor(() => expect(calls.book).toEqual([{
+      bankTxId: 'tx1',
+      account: '',
+      vatRate: 0,
+      mode: 'normal',
+      split,
+      supplierId: undefined,
+    }]));
+  });
+
+  it('Beleg auslesen calls readReceipt and shows the failed state', async () => {
+    state.rows = [{ ...(streamRows[0] as Record<string, unknown>), suggestion: null }];
+    openMatch();
+    state.readResult = { status: 'failed', suggestion: null, reading: null };
+    renderPage();
+    const row = screen.getByRole('row', { name: /Miete März/ });
+    fireEvent.click(within(row).getByRole('button', { name: 'Beleg auslesen' }));
+    await waitFor(() => expect(calls.readReceipt).toEqual([{ bankTxId: 'tx1' }]));
+    expect(await within(row).findByText('Beleg konnte nicht gelesen werden')).toBeInTheDocument();
+    fireEvent.click(within(row).getByRole('button', { name: 'Beleg auslesen' }));
+    await waitFor(() => expect(calls.readReceipt).toEqual([{ bankTxId: 'tx1' }, { bankTxId: 'tx1', force: true }]));
+  });
+
+  it('shows muted hints for noText, unavailable and noReceipt', async () => {
+    state.rows = [{ ...(streamRows[0] as Record<string, unknown>), suggestion: null }];
+    openMatch();
+    renderPage();
+    const row = screen.getByRole('row', { name: /Miete März/ });
+    for (const [status, text] of [
+      ['noText', 'Beleg hat keinen Text (Scan)'],
+      ['unavailable', 'Beleg lesen derzeit nicht verfügbar'],
+      ['noReceipt', 'Kein eindeutiger Beleg gefunden'],
+    ]) {
+      state.readResult = { status, suggestion: null, reading: null };
+      fireEvent.click(within(row).getByRole('button', { name: 'Beleg auslesen' }));
+      expect(await within(row).findByText(text)).toBeInTheDocument();
+    }
+    expect(shown).toEqual([]);
+  });
+
+  it('on load, a stored reading without suggestion explains itself and offers a forced re-read', async () => {
+    state.rows = [{
+      ...(streamRows[0] as Record<string, unknown>),
+      suggestion: null,
+      receiptReading: { status: 'ok', reading: { vendor: 'Cloud Inc', totalCents: 10000, lines: [{ vatRate: 0, grossCents: 10000, account: '6837' }] } },
+    }];
+    openMatch();
+    renderPage();
+    const row = screen.getByRole('row', { name: /Miete März/ });
+    expect(within(row).getByText(/Beleg gelesen: Cloud Inc 100,00\s€ — Betrag passt nicht zum Umsatz \(119,00\s€\)/)).toBeInTheDocument();
+    fireEvent.click(within(row).getByRole('button', { name: 'Beleg auslesen' }));
+    await waitFor(() => expect(calls.readReceipt).toEqual([{ bankTxId: 'tx1', force: true }]));
+  });
+
+  it('on load, a failed or textless stored reading shows its hint and the re-read button', () => {
+    state.rows = [
+      { ...(streamRows[0] as Record<string, unknown>), suggestion: null, receiptReading: { status: 'failed' } },
+      { ...(streamRows[0] as Record<string, unknown>), id: 'tx9', description: 'Scan April', suggestion: null, receiptReading: { status: 'noText' } },
+    ];
+    // no Drive match needed: the stored reading itself makes the row re-readable
+    renderPage();
+    const failed = screen.getByRole('row', { name: /Miete März/ });
+    expect(within(failed).getByText('Beleg konnte nicht gelesen werden')).toBeInTheDocument();
+    expect(within(failed).getByRole('button', { name: 'Beleg auslesen' })).toBeInTheDocument();
+    const noText = screen.getByRole('row', { name: /Scan April/ });
+    expect(within(noText).getByText('Beleg hat keinen Text (Scan)')).toBeInTheDocument();
+  });
+
+  it('the button is hidden when readingAvailable is false', () => {
+    state.rows = [{ ...(streamRows[0] as Record<string, unknown>), suggestion: null }];
+    openMatch();
+    state.readingAvailable = false;
+    renderPage();
+    expect(screen.queryByRole('button', { name: 'Beleg auslesen' })).not.toBeInTheDocument();
+  });
+
+  it('the dialog books the split unless unticked', async () => {
+    state.rows = [receiptRow()];
+    renderPage();
+    fireEvent.click(within(screen.getByRole('row', { name: /Miete März/ })).getByRole('button', { name: 'Anpassen' }));
+    const box = screen.getByRole('checkbox', { name: 'Aufteilung aus Beleg übernehmen' });
+    expect(box).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'Jetzt buchen' }));
+    await waitFor(() => expect(calls.book).toHaveLength(1));
+    expect((calls.book[0] as { split?: unknown }).split).toEqual(split);
+  });
+
+  it('the dialog falls back to a single account when the split is unticked', async () => {
+    state.rows = [receiptRow()];
+    renderPage();
+    fireEvent.click(within(screen.getByRole('row', { name: /Miete März/ })).getByRole('button', { name: 'Anpassen' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Aufteilung aus Beleg übernehmen' }));
+    fireEvent.change(screen.getByLabelText('Konto'), { target: { value: '6837' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Jetzt buchen' }));
+    await waitFor(() => expect(calls.book).toHaveLength(1));
+    expect((calls.book[0] as { split?: unknown }).split).toBeUndefined();
+    expect((calls.book[0] as { account: string }).account).toBe('6837');
   });
 });

@@ -7,7 +7,7 @@ describe('listReceiptFiles', () => {
       .fn()
       .mockResolvedValueOnce({ data: { files: [{ id: 'y2026', name: '2026' }] } })
       .mockResolvedValueOnce({ data: { files: [{ id: 'p1', name: 'a.pdf', webViewLink: 'https://drive/p1' }] } });
-    const files = await listReceiptFiles({ files: { list } }, 'root', 2026);
+    const files = await listReceiptFiles({ files: { list, get: vi.fn() } }, 'root', 2026);
     expect(files).toEqual([{ id: 'p1', name: 'a.pdf', link: 'https://drive/p1' }]);
     expect(list.mock.calls[0][0].q).toContain("'root' in parents");
     expect(list.mock.calls[0][0].q).toContain("name = '2026'");
@@ -17,7 +17,7 @@ describe('listReceiptFiles', () => {
 
   it('returns [] when the year folder does not exist', async () => {
     const list = vi.fn().mockResolvedValueOnce({ data: { files: [] } });
-    expect(await listReceiptFiles({ files: { list } }, 'root', 2027)).toEqual([]);
+    expect(await listReceiptFiles({ files: { list, get: vi.fn() } }, 'root', 2027)).toEqual([]);
     expect(list).toHaveBeenCalledTimes(1);
   });
 });
