@@ -349,7 +349,7 @@ export const en: Dict = {
   'cash.provisions': '− Provisions',
   'cash.provisions.title': 'Balance 3020/3035/3040',
   'cash.tax': '− Income tax, estimate ({pct} %)',
-  'cash.tax.title': 'Profit of the current year × {pct} % − already booked 7600/7608/7610/7641; confirm the rate with your tax advisor',
+  'cash.tax.title': 'Profit of the current year (before income tax) × {pct} % − prepayments already booked on 7600/7608/7610; confirm the rate with your tax advisor',
   'cash.liabilities': '− Liabilities',
   'cash.liabilities.title': 'Balance 3300/3500/3501',
   'cash.result': '= available',

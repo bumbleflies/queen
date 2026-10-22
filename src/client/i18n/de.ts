@@ -347,7 +347,7 @@ export const de = {
   'cash.provisions': '− Rückstellungen',
   'cash.provisions.title': 'Saldo 3020/3035/3040',
   'cash.tax': '− Ertragsteuer, Schätzung ({pct} %)',
-  'cash.tax.title': 'Gewinn des laufenden Jahres × {pct} % − bereits gebucht 7600/7608/7610/7641; Satz bitte mit dem Steuerberater abstimmen',
+  'cash.tax.title': 'Gewinn des laufenden Jahres (vor Ertragsteuern) × {pct} % − bereits gebuchte Vorauszahlungen auf 7600/7608/7610; Satz bitte mit dem Steuerberater abstimmen',
   'cash.liabilities': '− Verbindlichkeiten',
   'cash.liabilities.title': 'Saldo 3300/3500/3501',
   'cash.result': '= frei verfügbar',

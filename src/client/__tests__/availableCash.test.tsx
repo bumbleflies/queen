@@ -73,6 +73,13 @@ describe('AvailableCashCard', () => {
     expect(screen.getByText(/Schätzung \(33 %\)/)).toBeInTheDocument();
   });
 
+  it('explains the estimate with the prepayment accounts it really subtracts', () => {
+    renderCard();
+    const title = screen.getByText(/Schätzung \(33 %\)/).closest('li')?.getAttribute('title') ?? '';
+    expect(title).toContain('Vorauszahlungen auf 7600/7608/7610');
+    expect(title).not.toContain('7641');
+  });
+
   it('warns when transactions are open', () => {
     cash.current = { ...cash.current, openCount: 4 };
     renderCard();
