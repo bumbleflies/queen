@@ -78,14 +78,14 @@ export async function runReconcile(
     if (auto.warning) run.autoBookWarning = auto.warning;
 
     // Receipt reading only caches suggestions; it never books and never fails the run.
-    const receipts = options.readReceipts === false
+    const receipts: { read: number; warning?: string } = options.readReceipts === false
       ? { read: 0 }
       : await readOpenReceipts(now).catch((err: unknown) => ({
         read: 0,
         warning: `Belege lesen abgebrochen: ${(err as Error).message}`,
       }));
     run.receiptsRead = receipts.read;
-    if ('warning' in receipts) run.receiptReadWarning = receipts.warning;
+    if (receipts.warning) run.receiptReadWarning = receipts.warning;
     run.finishedAt = new Date();
     await run.save();
     return run;
