@@ -1,30 +1,43 @@
 import mongoose, { Schema, type InferSchemaType } from 'mongoose';
 
-const receiptReadingSchema = new Schema(
+const readingSchema = new Schema(
   {
-    driveFileId: { type: String, required: true },
-    status: { type: String, enum: ['ok', 'failed', 'noText'], required: true },
-    reading: {
-      type: new Schema(
-        {
-          vendor: { type: String, default: '' },
-          country: { type: String },
-          date: { type: String },
-          totalCents: { type: Number, required: true },
-          reverseCharge: { type: Boolean, required: true, default: false },
-          lines: [
-            new Schema(
-              { vatRate: { type: Number, required: true }, grossCents: { type: Number, required: true }, account: { type: String, required: true } },
-              { _id: false },
-            ),
-          ],
-        },
+    vendor: { type: String, default: '' },
+    country: { type: String },
+    date: { type: String },
+    totalCents: { type: Number, required: true },
+    reverseCharge: { type: Boolean, required: true, default: false },
+    lines: [
+      new Schema(
+        { vatRate: { type: Number, required: true }, grossCents: { type: Number, required: true }, account: { type: String, required: true } },
         { _id: false },
       ),
-    },
+    ],
+  },
+  { _id: false },
+);
+
+/** One receipt file that was read (cache; re-read of 'failed' files is allowed). */
+const receiptFileReadingSchema = new Schema(
+  {
+    driveFileId: { type: String, required: true },
+    fileName: { type: String },
+    status: { type: String, enum: ['ok', 'failed', 'noText'], required: true },
+    reading: { type: readingSchema },
     model: { type: String },
     readAt: { type: Date, required: true },
     error: { type: String },
+  },
+  { _id: false },
+);
+
+/** The receipts whose totals add up to the transaction, merged into one reading. */
+const receiptMatchSchema = new Schema(
+  {
+    driveFileIds: { type: [String], required: true },
+    reading: { type: readingSchema, required: true },
+    model: { type: String },
+    readAt: { type: Date, required: true },
   },
   { _id: false },
 );
@@ -47,8 +60,12 @@ const bankTransactionSchema = new Schema(
       ),
     },
     receiptMissingReason: { type: String },
-    /** Cached opencode reading of the receipt (per Drive file; re-read only when forced). */
-    receiptReading: { type: receiptReadingSchema },
+    /** Every receipt file read for this transaction (per Drive file; 'ok'/'noText' are final). */
+    receiptReadings: { type: [receiptFileReadingSchema], default: [] },
+    /** The set of readings whose totals add up to the transaction amount. */
+    receiptMatch: { type: receiptMatchSchema },
+    /** Legacy single reading (pre multi-receipt); still honoured, no longer written. */
+    receiptReading: { type: receiptFileReadingSchema },
     matchedInvoiceId: { type: Schema.Types.ObjectId, ref: 'Invoice' },
     matchMethod: { type: String, enum: ['reference', 'manual'] },
     ignored: { type: Boolean, required: true, default: false },

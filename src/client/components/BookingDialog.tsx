@@ -22,7 +22,7 @@ export interface InboxRowLike {
     vatRate?: number;
     mode: BankBookingMode;
     split?: SplitPart[];
-    reading?: { vendor: string };
+    reading?: { vendor: string; files?: number };
   } | null;
 }
 
@@ -140,7 +140,11 @@ export function BookingDialog({ year, tx, onDone }: { year: number; tx: InboxRow
         {suggestedSplit ? (
           <div style={{ gridColumn: '1 / -1' }}>
             {tx.suggestion?.reading ? (
-              <div className="lbl">{t('finance.outcome.receipt.read').replace('{vendor}', tx.suggestion.reading.vendor)}</div>
+              <div className="lbl">
+                {(tx.suggestion.reading.files ?? 1) > 1
+                  ? t('finance.outcome.receipt.readMany').replace('{n}', String(tx.suggestion.reading.files)).replace('{vendor}', tx.suggestion.reading.vendor)
+                  : t('finance.outcome.receipt.read').replace('{vendor}', tx.suggestion.reading.vendor)}
+              </div>
             ) : null}
             <div className="num">
               {suggestedSplit.map((p) => (

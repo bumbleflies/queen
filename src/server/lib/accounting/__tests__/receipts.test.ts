@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { amountTokens, rankReceipts, strongReceipt } from '../receipts';
+import { amountTokens, rankReceipts, receiptCandidates, strongReceipt } from '../receipts';
 
 const f = (name: string) => ({ id: name, name, link: `https://drive/${name}` });
 
@@ -65,5 +65,45 @@ describe('strongReceipt', () => {
     expect(strongReceipt([{ ...f('a'), score: 5 }, { ...f('b'), score: 5 }])).toBeNull();
     expect(strongReceipt([{ ...f('a'), score: 6 }, { ...f('b'), score: 5 }])?.name).toBe('a');
     expect(strongReceipt([])).toBeNull();
+  });
+});
+
+describe('receiptCandidates', () => {
+  const tx = {
+    date: new Date(2026, 8, 3),
+    amountCents: 5460,
+    counterpartyName: 'Christian Dähn',
+    description: '2x Spesen - Chris - Augustiner - 08/2026 + Spesen - Chris - Augustiner - 08.2/2026 SecureGo plus',
+  };
+  const files = [
+    f('Spesen - Chris - Augustiner - 08/2026.pdf'),
+    f('Spesen - Chris - Augustiner - 08_2/2026.pdf'),
+    f('Spesen - Kim - Kantine - 08_2026.pdf'),
+    f('Spesen - Chris - Augustiner - 09/2026.pdf'),
+    f('random.pdf'),
+  ];
+
+  it('adds the sibling file that the score alone would miss', () => {
+    expect(receiptCandidates(tx, files, 'Augustiner Keller').map((r) => r.name)).toEqual([
+      'Spesen - Chris - Augustiner - 08/2026.pdf',
+      'Spesen - Chris - Augustiner - 08_2/2026.pdf',
+    ]);
+  });
+
+  it('keeps the attached receipt first and does not duplicate it', () => {
+    const attached = { receipt: { driveFileId: 'Spesen - Chris - Augustiner - 08_2/2026.pdf', fileName: 'Spesen - Chris - Augustiner - 08_2/2026.pdf' } };
+    const names = receiptCandidates({ ...tx, ...attached }, files, 'Augustiner Keller').map((r) => r.name);
+    expect(names[0]).toBe('Spesen - Chris - Augustiner - 08_2/2026.pdf');
+    expect(names).toContain('Spesen - Chris - Augustiner - 08/2026.pdf');
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  it('caps the list at three files', () => {
+    const many = [f('Spesen - Chris - Augustiner - 08/2026.pdf'), f('Spesen - Chris - Augustiner - 08_2/2026.pdf'), f('Spesen - Chris - Augustiner - 08_3/2026.pdf'), f('Spesen - Chris - Augustiner - 08_4/2026.pdf')];
+    expect(receiptCandidates(tx, many, 'Augustiner Keller')).toHaveLength(3);
+  });
+
+  it('returns nothing without a strong seed', () => {
+    expect(receiptCandidates({ ...tx, amountCents: 1234, description: '' }, [f('random.pdf'), f('2026-01-01 something.pdf')], null)).toEqual([]);
   });
 });
