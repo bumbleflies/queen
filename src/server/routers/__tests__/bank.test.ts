@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, beforeAll, type TaskContext } from 'vitest';
+import { describe, it, expect, beforeEach, beforeAll, vi, type TaskContext } from 'vitest';
 import mongoose from 'mongoose';
 import { appRouter } from '../../trpc';
 import { buildBankListFilter } from '../bank';
@@ -8,6 +8,17 @@ import { Client } from '../../models/Client';
 import { Invoice } from '../../models/Invoice';
 import { InvoiceLine } from '../../models/InvoiceLine';
 import { initLedgerModels, resetLedgerDb } from './helpers/ledgerFixtures';
+
+/** The GLS import is replaced by these rows, so `syncNow` runs without Firefly. */
+const firefly = vi.hoisted(() => ({ rows: [] as unknown[] }));
+
+vi.mock('../../services/FireflyClient', () => ({
+  FireflyClient: class {
+    async fetchTransactions() {
+      return firefly.rows;
+    }
+  },
+}));
 
 function dbAvailable(): boolean {
   return mongoose.connection.readyState === 1;
@@ -157,6 +168,50 @@ describe('bank router', () => {
     });
     expect((await caller.bank.ignore({ bankTxId: tx._id.toString() })).ignored).toBe(true);
     expect((await caller.bank.unignore({ bankTxId: tx._id.toString() })).ignored).toBe(false);
+  });
+
+  it('syncNow matches referenced incoming payments in the same run', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    const invoiceId = await createSentInvoice(caller);
+    const invoice = await Invoice.findById(invoiceId);
+
+    const prev = { ...process.env };
+    process.env.FIREFLY_URL = 'http://firefly.test';
+    process.env.FIREFLY_PAT = 'test-pat';
+    process.env.FIREFLY_GLS_ACCOUNT_ID = '1';
+    process.env.QUEEN_BANK_START = '2026-01-01';
+    firefly.rows = [
+      {
+        fireflyJournalId: '401:0',
+        date: new Date(2026, 5, 9),
+        amountCents: invoice!.totals.grossCents,
+        currency: 'EUR',
+        description: `${invoice!.customerNumber}-${invoice!.invoiceNumber} AFCV NRW`,
+        direction: 'in',
+        counterpartyName: 'AFCV NRW',
+        counterpartyIban: 'DE67440100460052359469',
+      },
+    ];
+    try {
+      const res = await caller.bank.syncNow({ full: true });
+      expect(res.ok).toBe(true);
+      if (!res.ok) return;
+      // The row is imported in this call — and matched without waiting for the cron.
+      expect(res.fetched).toBe(1);
+      expect(res.matched).toBe(1);
+
+      const tx = await BankTransaction.findOne({ fireflyJournalId: '401:0' });
+      expect(String(tx?.matchedInvoiceId)).toBe(invoiceId);
+      expect(tx?.matchMethod).toBe('reference');
+
+      const run = await ReconcileRun.findOne({}).sort({ startedAt: -1 });
+      expect(run?.fetched).toBe(1);
+      expect(run?.matched).toBe(1);
+    } finally {
+      process.env = prev;
+      firefly.rows = [];
+    }
   });
 
   it('syncNow stores an error on ReconcileRun and returns ok:false instead of throwing', async (ctx) => {
