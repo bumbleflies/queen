@@ -2,18 +2,18 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import passport from 'passport';
 import { Strategy as GoogleStrategy, type VerifyCallback } from 'passport-google-oauth20';
 import { User } from '../models/User';
-import { isAdmin, parseBearerToken, signToken, verifyToken } from '../services/AuthService';
+import { isAdmin, parseBearerToken, signToken, verifyToken, assertSessionValid, SESSION_HOURS } from '../services/AuthService';
 import { userRoleSchema } from '../../shared/schemas/user';
 
 export const AUTH_COOKIE = 'queen_token';
 
-function authCookieOptions() {
+function authCookieOptions(maxAgeMs: number = SESSION_HOURS * 60 * 60 * 1000) {
   return {
     httpOnly: true,
     sameSite: 'lax' as const,
     secure: process.env.NODE_ENV === 'production',
     path: '/',
-    maxAge: 12 * 60 * 60 * 1000,
+    maxAge: maxAgeMs,
   };
 }
 
@@ -97,7 +97,7 @@ async function upsertUserFromProfile(profile: GoogleProfile, refreshToken?: stri
   });
 }
 
-export function requireAuth(req: Request, res: Response, next: NextFunction): void {
+export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const bearer = parseBearerToken(req.headers.authorization);
   const token = bearer ?? req.cookies?.[AUTH_COOKIE];
   if (!token) {
@@ -105,7 +105,9 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     return;
   }
   try {
-    res.locals.user = verifyToken(token);
+    const payload = verifyToken(token);
+    await assertSessionValid(payload);
+    res.locals.user = payload;
     next();
   } catch {
     res.status(401).json({ error: 'unauthorized' });

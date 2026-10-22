@@ -31,7 +31,7 @@ export function createApp() {
     '/trpc',
     createExpressMiddleware({
       router: appRouter,
-      createContext: ({ req }) =>
+      createContext: async ({ req }) =>
         buildContext({
           authHeader: req.headers.authorization,
           cookieToken: req.cookies?.[AUTH_COOKIE] as string | undefined,
