@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { OpencodeClient, opencodeFromEnv, type OpencodeClientOptions, type OpencodeModel } from '../OpencodeClient';
 
 const BASE = 'http://oc.test';
@@ -24,7 +24,7 @@ const registry = [
 interface Behaviour {
   registry?: () => Response;
   /** Per model key: handler for each prompt call. */
-  prompt?: Record<string, (n: number) => Response>;
+  prompt?: Record<string, (n: number, body: unknown) => Response>;
   /** Per model key: the assistant reply (newest first message list). */
   messages?: Record<string, () => unknown[]>;
 }
@@ -54,7 +54,7 @@ function setup(b: Behaviour) {
       const k = sessionModel.get(prompt[1])!;
       const n = (promptCount.get(k) ?? 0) + 1;
       promptCount.set(k, n);
-      return b.prompt?.[k] ? b.prompt[k](n) : json({ data: {} });
+      return b.prompt?.[k] ? b.prompt[k](n, body) : json({ data: {} });
     }
     const msg = /^\/api\/session\/(s\d+)\/message$/.exec(path);
     if (msg) {
@@ -195,8 +195,53 @@ describe('OpencodeClient', () => {
     const create = calls.find((c) => c.url.endsWith('/api/session'))!;
     expect(create.body).toEqual({ model: A });
     const prompt = calls.find((c) => c.url.endsWith('/prompt'))!;
-    expect(prompt.body).toEqual({ prompt: { text: 'hello' } });
+    expect(prompt.body).toEqual({ text: 'hello' });
     expect(prompt.headers['X-Api-Key']).toBe('k');
+  });
+
+  it('falls back to the legacy prompt body when the server rejects {text} with 400', async () => {
+    const { make, calls } = setup({
+      prompt: {
+        [key(A)]: (_n, body) =>
+          'text' in (body as Record<string, unknown>)
+            ? new Response('{"message":"Missing key at [\\"text\\"]"}', { status: 400 })
+            : json({ data: {} }),
+      },
+    });
+    const res = await make([A], null).ask('hello');
+    expect(res.text).toBe('reply from opencode:a-free');
+    const prompts = calls.filter((c) => c.url.endsWith('/prompt'));
+    expect(prompts.map((c) => c.body)).toEqual([{ text: 'hello' }, { prompt: { text: 'hello' } }]);
+  });
+
+  it('does not swallow other 400s: fails the attempt after the legacy retry', async () => {
+    const bad = () => new Response('{"message":"bad model"}', { status: 400 });
+    const { make, calls } = setup({
+      registry: () => new Response('x', { status: 500 }),
+      prompt: { [key(A)]: bad },
+    });
+    await expect(make([A], null).ask('hello')).rejects.toThrow(/400/);
+    // V2 body then legacy body on each of the 3 attempts — nothing masked.
+    expect(calls.filter((c) => c.url.endsWith('/prompt'))).toHaveLength(6);
+  });
+
+  it('skips the free-model auto-fill when freeModels is false', async () => {
+    const { make } = setup({});
+    expect((await make([], PAID, { freeModels: false }).modelChain()).map(key)).toEqual([key(PAID)]);
+    expect((await make([A], PAID, { freeModels: false }).modelChain()).map(key)).toEqual([key(A), key(PAID)]);
+  });
+
+  it('ignores non-assistant control messages at the head of the message list', async () => {
+    const { make } = setup({
+      messages: {
+        [key(A)]: () => [
+          { type: 'idle', finish: 'stop' },
+          { type: 'assistant', finish: 'stop', content: [{ type: 'text', text: 'reply under idle' }] },
+          { type: 'user', text: 'hello' },
+        ],
+      },
+    });
+    expect((await make([A], null).ask('hello')).text).toBe('reply under idle');
   });
 });
 
@@ -211,6 +256,41 @@ describe('opencodeFromEnv', () => {
     } finally {
       if (saved === undefined) delete process.env.OPENCODE_API_KEY;
       else process.env.OPENCODE_API_KEY = saved;
+    }
+  });
+
+  it('QUEEN_OPENCODE_FREE_MODELS=false leaves only the paid model', async () => {
+    const saved = {
+      key: process.env.OPENCODE_API_KEY,
+      free: process.env.QUEEN_OPENCODE_FREE_MODELS,
+      models: process.env.QUEEN_OPENCODE_MODELS,
+      paid: process.env.QUEEN_OPENCODE_PAID_MODEL,
+    };
+    vi.stubGlobal('fetch', async () => json(registry));
+    process.env.OPENCODE_API_KEY = 'k';
+    process.env.QUEEN_OPENCODE_PAID_MODEL = key(PAID);
+    delete process.env.QUEEN_OPENCODE_MODELS;
+    try {
+      process.env.QUEEN_OPENCODE_FREE_MODELS = 'false';
+      expect((await opencodeFromEnv()!.modelChain()).map(key)).toEqual([key(PAID)]);
+
+      process.env.QUEEN_OPENCODE_FREE_MODELS = 'true';
+      expect((await opencodeFromEnv()!.modelChain()).map(key)).toEqual([
+        'opencode:a-free',
+        'opencode:d-free',
+        'opencode:e-free',
+        key(PAID),
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
+      if (saved.key === undefined) delete process.env.OPENCODE_API_KEY;
+      else process.env.OPENCODE_API_KEY = saved.key;
+      if (saved.free === undefined) delete process.env.QUEEN_OPENCODE_FREE_MODELS;
+      else process.env.QUEEN_OPENCODE_FREE_MODELS = saved.free;
+      if (saved.models === undefined) delete process.env.QUEEN_OPENCODE_MODELS;
+      else process.env.QUEEN_OPENCODE_MODELS = saved.models;
+      if (saved.paid === undefined) delete process.env.QUEEN_OPENCODE_PAID_MODEL;
+      else process.env.QUEEN_OPENCODE_PAID_MODEL = saved.paid;
     }
   });
 });

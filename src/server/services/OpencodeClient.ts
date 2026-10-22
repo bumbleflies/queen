@@ -1,9 +1,12 @@
 /**
  * Thin client for the shared opencode instance.
  *   POST /api/session            -> { data: { id } }   (body: { model })
- *   POST /api/session/:id/prompt -> ack               (body: { prompt: { text } })
- *   GET  /api/session/:id/message -> { data: [newest first] }, polled until the
- *                                    newest assistant message has `finish`
+ *   POST /api/session/:id/prompt -> ack               (body: { text }; V2 servers.
+ *                                    V1 servers only accept { prompt: { text } },
+ *                                    so a 400 falls back to the legacy shape once)
+ *   GET  /api/session/:id/message -> { data: [newest first] }, polled until a
+ *                                    finished assistant message is in the list
+ *                                    (V2 prepends `idle` control entries)
  *   GET  /api/model              -> registry (array, { data } or { models })
  * Auth header: X-Api-Key. Every request times out after 30 s; one `ask`
  * (one receipt reading) gets 180 s across the whole model chain.
@@ -23,6 +26,8 @@ export interface OpencodeClientOptions {
   preferred?: OpencodeModel[];
   /** The one paid last resort; `null` disables it. */
   paid?: OpencodeModel | null;
+  /** Auto-fill the chain with every active free registry model (default true). */
+  freeModels?: boolean;
   /** Abort signal per request (tests); default `AbortSignal.timeout`. */
   timeoutSignal?: (ms: number) => AbortSignal;
   /** Overall time for one `ask` across all models and attempts. */
@@ -48,6 +53,16 @@ const modelKey = (m: OpencodeModel) => `${m.providerID}:${m.id}`;
 
 /** The reading's overall time is used up: no further attempts or models. */
 class BudgetExceeded extends Error {}
+
+/** A non-2xx answer; `status` lets the caller tell a contract mismatch apart. */
+class HttpError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
@@ -92,6 +107,7 @@ export class OpencodeClient {
   private readonly now: () => number;
   private readonly preferred: OpencodeModel[];
   private readonly paid: OpencodeModel | null;
+  private readonly freeModels: boolean;
   private readonly timeoutSignal: (ms: number) => AbortSignal;
   private readonly budgetMs: number;
 
@@ -103,11 +119,15 @@ export class OpencodeClient {
     this.now = opts.now ?? Date.now;
     this.preferred = opts.preferred ?? [];
     this.paid = opts.paid === undefined ? DEFAULT_PAID : opts.paid;
+    this.freeModels = opts.freeModels ?? true;
     this.timeoutSignal = opts.timeoutSignal ?? ((ms) => AbortSignal.timeout(ms));
     this.budgetMs = opts.budgetMs ?? ASK_BUDGET_MS;
   }
 
-  /** Preferred usable models, other active free models, then one paid model. */
+  /**
+   * Preferred usable models, then (unless disabled) other active free registry
+   * models, then one paid model.
+   */
   async modelChain(): Promise<OpencodeModel[]> {
     const registry = await this.fetchRegistry();
     const usable = registry ? new Set(registry.filter(isUsable).map(modelKey)) : null;
@@ -119,8 +139,10 @@ export class OpencodeClient {
     };
     const paidKey = this.paid ? modelKey(this.paid) : null;
     for (const m of this.preferred) if (servable(m) && modelKey(m) !== paidKey) add(m);
-    for (const m of registry ?? []) {
-      if (isUsable(m) && isFree(m) && modelKey(m) !== paidKey) add(m);
+    if (this.freeModels) {
+      for (const m of registry ?? []) {
+        if (isUsable(m) && isFree(m) && modelKey(m) !== paidKey) add(m);
+      }
     }
     if (this.paid && servable(this.paid)) add(this.paid);
     return chain;
@@ -173,8 +195,23 @@ export class OpencodeClient {
     const created = await this.request('/api/session', 'POST', { model });
     const id = isRecord(created) && isRecord(created.data) ? created.data.id : undefined;
     if (typeof id !== 'string') throw new Error('opencode session create returned no id');
-    await this.request(`/api/session/${id}/prompt`, 'POST', { prompt: { text: prompt } });
+    await this.prompt(id, prompt);
     return this.poll(id, deadline);
+  }
+
+  /**
+   * V2 takes `{ text }`; V1 only takes `{ prompt: { text } }` and both schemas
+   * are strict, so a 400 on the V2 body means "old server" — retry once with
+   * the legacy shape. Other 400s fail the second call as well, so nothing is
+   * masked.
+   */
+  private async prompt(sessionId: string, prompt: string): Promise<void> {
+    try {
+      await this.request(`/api/session/${sessionId}/prompt`, 'POST', { text: prompt });
+    } catch (err) {
+      if (!(err instanceof HttpError) || err.status !== 400) throw err;
+      await this.request(`/api/session/${sessionId}/prompt`, 'POST', { prompt: { text: prompt } });
+    }
   }
 
   private async request(path: string, method: 'GET' | 'POST', body?: unknown): Promise<unknown> {
@@ -184,7 +221,7 @@ export class OpencodeClient {
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: this.timeoutSignal(REQUEST_TIMEOUT_MS),
     });
-    if (!res.ok) throw new Error(`opencode ${method} ${path} failed: ${res.status}`);
+    if (!res.ok) throw new HttpError(`opencode ${method} ${path} failed: ${res.status}`, res.status);
     return res.json();
   }
 
@@ -194,8 +231,10 @@ export class OpencodeClient {
       if (this.now() >= budgetDeadline) throw new BudgetExceeded();
       const json = await this.request(`/api/session/${sessionId}/message`, 'GET');
       const list = isRecord(json) && Array.isArray(json.data) ? json.data : [];
-      const latest: unknown = list[0];
-      if (isRecord(latest) && latest.type === 'assistant' && latest.finish) {
+      // Newest first, but V2 interleaves `idle` control entries at the head, so
+      // take the newest *finished assistant* message rather than list[0].
+      const latest = list.find((m) => isRecord(m) && m.type === 'assistant' && m.finish);
+      if (isRecord(latest) && latest.finish) {
         if (latest.finish === 'error') {
           const msg = isRecord(latest.error) && typeof latest.error.message === 'string' ? latest.error.message : 'unknown error';
           throw new Error(`opencode generation failed: ${msg}`);
@@ -219,6 +258,11 @@ function parseModelList(value: string | undefined): OpencodeModel[] {
     .filter((m): m is OpencodeModel => m !== null);
 }
 
+/** `false`/`0`/`off`/`no` disable the free-model auto-fill; anything else keeps it on. */
+function freeModelsFromEnv(value: string | undefined): boolean {
+  return !/^(0|false|off|no)$/i.test((value ?? '').trim());
+}
+
 /** Builds the client from the environment; `null` when `OPENCODE_API_KEY` is unset. */
 export function opencodeFromEnv(): OpencodeClient | null {
   const apiKey = process.env.OPENCODE_API_KEY;
@@ -228,5 +272,6 @@ export function opencodeFromEnv(): OpencodeClient | null {
     apiKey,
     preferred: parseModelList(process.env.QUEEN_OPENCODE_MODELS),
     paid: (process.env.QUEEN_OPENCODE_PAID_MODEL && parseModelKey(process.env.QUEEN_OPENCODE_PAID_MODEL)) || DEFAULT_PAID,
+    freeModels: freeModelsFromEnv(process.env.QUEEN_OPENCODE_FREE_MODELS),
   });
 }
