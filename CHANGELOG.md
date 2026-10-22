@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.22.2](https://github.com/bumbleflies/queen/compare/queen-v0.22.1...queen-v0.22.2) (2026-10-22)
+
+
+### Bug Fixes
+
+* **finance:** confirm a posted entry without waiting for the refetch ([f6a6f06](https://github.com/bumbleflies/queen/commit/f6a6f06807a6f05006d6e46467865763a794476c))
+* **finance:** confirm a posted entry without waiting for the refetch ([76d9071](https://github.com/bumbleflies/queen/commit/76d90719c1faf2a157d3a174ab414e09ec5ba502))
+* **opencode:** read receipts on the V2 server ([#148](https://github.com/bumbleflies/queen/issues/148)) ([cec4180](https://github.com/bumbleflies/queen/commit/cec418036e13840050e1b91532f5041669a2c0e3))
+
 ## [0.22.1](https://github.com/bumbleflies/queen/compare/queen-v0.22.0...queen-v0.22.1) (2026-10-22)
 
 
