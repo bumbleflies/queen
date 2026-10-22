@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { OpencodeClient, opencodeFromEnv, type OpencodeModel } from '../OpencodeClient';
+import { OpencodeClient, opencodeFromEnv, type OpencodeClientOptions, type OpencodeModel } from '../OpencodeClient';
 
 const BASE = 'http://oc.test';
 const A: OpencodeModel = { providerID: 'opencode', id: 'a-free' };
@@ -32,7 +32,7 @@ interface Behaviour {
 function setup(b: Behaviour) {
   const sleeps: number[] = [];
   let clock = 0;
-  const calls: { url: string; method: string; headers: Record<string, string>; body?: unknown }[] = [];
+  const calls: { url: string; method: string; headers: Record<string, string>; body?: unknown; signal?: AbortSignal }[] = [];
   const sessionModel = new Map<string, string>();
   const promptCount = new Map<string, number>();
   let sid = 0;
@@ -40,7 +40,7 @@ function setup(b: Behaviour) {
     const url = String(input);
     const method = init?.method ?? 'GET';
     const body = init?.body ? (JSON.parse(String(init.body)) as unknown) : undefined;
-    calls.push({ url, method, headers: (init?.headers ?? {}) as Record<string, string>, body });
+    calls.push({ url, method, headers: (init?.headers ?? {}) as Record<string, string>, body, signal: init?.signal ?? undefined });
     const path = url.slice(BASE.length);
     if (path === '/api/model') return b.registry ? b.registry() : json(registry);
     if (path === '/api/session' && method === 'POST') {
@@ -70,9 +70,14 @@ function setup(b: Behaviour) {
     sleeps.push(ms);
     clock += ms;
   };
-  const make = (preferred: OpencodeModel[], paid: OpencodeModel | null = PAID) =>
-    new OpencodeClient({ baseUrl: BASE, apiKey: 'k', fetch: fetchImpl, sleep, now: () => clock, preferred, paid });
-  return { make, sleeps, calls };
+  const timeouts: number[] = [];
+  const timeoutSignal = (ms: number) => {
+    timeouts.push(ms);
+    return new AbortController().signal;
+  };
+  const make = (preferred: OpencodeModel[], paid: OpencodeModel | null = PAID, extra: Partial<OpencodeClientOptions> = {}) =>
+    new OpencodeClient({ baseUrl: BASE, apiKey: 'k', fetch: fetchImpl, sleep, now: () => clock, preferred, paid, timeoutSignal, ...extra });
+  return { make, sleeps, calls, timeouts };
 }
 
 describe('OpencodeClient', () => {
@@ -142,11 +147,29 @@ describe('OpencodeClient', () => {
       registry: () => new Response('x', { status: 500 }),
       messages: { [key(A)]: pending },
     });
-    const res = await make([A]).ask('hi');
+    const res = await make([A], PAID, { budgetMs: Number.POSITIVE_INFINITY }).ask('hi');
     expect(res.model).toEqual(PAID);
     // 120 polls of 1 s per attempt, plus 1 s / 2 s backoff between the 3 attempts
     expect(sleeps.filter((ms) => ms === 1000).length).toBeGreaterThanOrEqual(120);
     expect(sleeps).toContain(2000);
+  });
+
+  it('every request carries a 30 s timeout signal', async () => {
+    const { make, calls, timeouts } = setup({});
+    await make([A], null).ask('hi');
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls.every((c) => c.signal instanceof AbortSignal)).toBe(true);
+    expect(timeouts).toHaveLength(calls.length);
+    expect(timeouts.every((ms) => ms === 30_000)).toBe(true);
+  });
+
+  it('stops after the 180 s budget of one reading without trying further models', async () => {
+    const pending = () => [{ type: 'assistant', content: [] }];
+    const { make, calls } = setup({ messages: { [key(A)]: pending } });
+    await expect(make([A]).ask('hi')).rejects.toThrow(/180 s/);
+    const created = calls.filter((c) => c.url.endsWith('/api/session')).map((c) => key((c.body as { model: OpencodeModel }).model));
+    expect(created.every((k) => k === key(A))).toBe(true);
+    expect(created.length).toBeLessThanOrEqual(2);
   });
 
   it('registry failure still tries preferred and paid', async () => {

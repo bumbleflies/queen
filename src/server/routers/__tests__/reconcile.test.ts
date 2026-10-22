@@ -491,4 +491,33 @@ describe('receipt reading in the daily reconcile (DB)', () => {
     expect(run.receiptsRead).toBe(0);
     expect(run.receiptReadWarning).toMatch(/boom/);
   });
+
+  it('runNow (the button) never reads receipts; only the cron entrypoint does', async (ctx) => {
+    skipIfNoDb(ctx);
+    vi.stubEnv('QUEEN_RECEIPTS_FOLDER_ID', 'root');
+    vi.stubEnv('FIREFLY_URL', 'http://firefly.test');
+    vi.stubEnv('FIREFLY_PAT', 'pat');
+    vi.stubEnv('FIREFLY_GLS_ACCOUNT_ID', '1');
+    vi.stubEnv('QUEEN_BANK_START', '2026-01-01');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ data: [] }), { status: 200, headers: { 'content-type': 'application/json' } })));
+    try {
+      opencode.enabled = true;
+      ask.mockResolvedValue({
+        text: JSON.stringify({ vendor: 'Laden KG', totalCents: 1190, lines: [{ vatRate: 0.19, grossCents: 1190, account: '6837' }] }),
+        model: { providerID: 'free', id: 'm1' },
+      });
+      listReceiptFiles.mockResolvedValue([await openWithReceipt(1)]);
+
+      const button = await adminCaller().reconcile.runNow();
+      expect(button.error ?? null).toBeNull();
+      expect(button.receiptsRead ?? 0).toBe(0);
+      expect(ask).not.toHaveBeenCalled();
+      expect(receiptText).not.toHaveBeenCalled();
+
+      expect((await runReconcile({ skipSync: true, now: NOW })).receiptsRead).toBe(1);
+      expect(ask).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

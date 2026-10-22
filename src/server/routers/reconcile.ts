@@ -6,6 +6,6 @@ export const reconcileRouter = router({
   /** The most recent reconcile run (successful or not). */
   status: authedProcedure.query(async () => ReconcileRun.findOne().sort({ startedAt: -1 })),
 
-  /** Trigger a sync + match pass now and return the resulting run. */
-  runNow: authedProcedure.mutation(async () => runReconcile()),
+  /** Trigger a sync + match (+ auto-book) pass now and return the run; receipt reading stays with the cron (too slow for a request). */
+  runNow: authedProcedure.mutation(async () => runReconcile({ readReceipts: false })),
 });

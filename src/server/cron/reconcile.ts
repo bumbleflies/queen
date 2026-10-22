@@ -19,13 +19,16 @@ export interface RunReconcileOptions {
   /** Inject a Firefly client (tests); otherwise built from env. */
   client?: TransactionSource;
   bankStart?: Date;
+  /** Read open receipts with opencode (slow); the cron entrypoint does, `reconcile.runNow` does not. Default true. */
+  readReceipts?: boolean;
 }
 
 /**
  * One reconcile pass: sync GLS transactions into `BankTransaction` (idempotent),
  * then match every fresh transaction against invoices, then book what rules
  * flagged `autoBook` recognise (failures there only warn), then read up to 10
- * receipts of open rows without a suggestion (never booked; trouble is ignored). Errors are recorded on
+ * receipts of open rows without a suggestion (never booked; trouble is ignored;
+ * skipped with `readReceipts: false`). Errors are recorded on
  * the `ReconcileRun` and returned; the CLI inspects `run.error` to exit non-zero.
  * Shared by the Ofelia cron entrypoint and `reconcile.runNow`.
  */
@@ -75,10 +78,12 @@ export async function runReconcile(
     if (auto.warning) run.autoBookWarning = auto.warning;
 
     // Receipt reading only caches suggestions; it never books and never fails the run.
-    const receipts = await readOpenReceipts(now).catch((err: unknown) => ({
-      read: 0,
-      warning: `Belege lesen abgebrochen: ${(err as Error).message}`,
-    }));
+    const receipts = options.readReceipts === false
+      ? { read: 0 }
+      : await readOpenReceipts(now).catch((err: unknown) => ({
+        read: 0,
+        warning: `Belege lesen abgebrochen: ${(err as Error).message}`,
+      }));
     run.receiptsRead = receipts.read;
     if ('warning' in receipts) run.receiptReadWarning = receipts.warning;
     run.finishedAt = new Date();
