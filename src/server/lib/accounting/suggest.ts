@@ -4,6 +4,8 @@ export interface SuggestTx {
   counterpartyName?: string | null;
   counterpartyIban?: string | null;
   description: string;
+  /** 'in' | 'out'; missing counts as incoming (the BankTransaction default). */
+  direction?: string | null;
 }
 
 export interface SuggestSupplier {

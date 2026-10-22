@@ -196,6 +196,18 @@ describe('bookings', () => {
       expect(row).toMatchObject({ state: 'open', suggestion: { matchedBy: 'history', account: '6837', vatRate: 0.19, mode: 'normal' } });
     });
 
+    it('keeps directions apart: an incoming tx never gets the outgoing booking', async (ctx) => {
+      skipIfNoDb(ctx);
+      const caller = adminCaller();
+      const a = await tx({ counterpartyIban: IBAN });
+      await caller.bookings.book({ bankTxId: String(a._id), account: '6837', vatRate: 0.19, mode: 'normal' });
+      const incoming = await tx({ counterpartyIban: IBAN, direction: 'in' });
+      const outgoing = await tx({ counterpartyIban: IBAN });
+      const inbox = await caller.bookings.inbox({ year: 2026 });
+      expect(inbox.find((r) => r.id === String(incoming._id))?.suggestion).toBeNull();
+      expect(inbox.find((r) => r.id === String(outgoing._id))?.suggestion).toMatchObject({ matchedBy: 'history', account: '6837' });
+    });
+
     it('skips reversed entries', async (ctx) => {
       skipIfNoDb(ctx);
       const caller = adminCaller();

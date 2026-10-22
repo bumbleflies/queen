@@ -47,21 +47,25 @@ describe('deriveBooking merged splits', () => {
 
 describe('historyKey', () => {
   it('ignores placeholder names and normalises IBANs', () => {
-    expect(historyKey({ counterpartyName: '(unknown destination)' })).toBeNull();
-    expect(historyKey({ counterpartyName: '  ' })).toBeNull();
-    expect(historyKey({ counterpartyIban: 'de02 1203 0000 0000 2020 51' })).toBe('iban:DE02120300000000202051');
-    expect(historyKey({ counterpartyName: ' Hoster  GmbH ' })).toBe('name:hoster gmbh');
+    expect(historyKey({ counterpartyName: '(unknown destination)', direction: 'out' })).toBeNull();
+    expect(historyKey({ counterpartyName: '  ', direction: 'out' })).toBeNull();
+    expect(historyKey({ counterpartyIban: 'de02 1203 0000 0000 2020 51', direction: 'out' })).toBe('out:iban:DE02120300000000202051');
+    expect(historyKey({ counterpartyName: ' Hoster  GmbH ', direction: 'in' })).toBe('in:name:hoster gmbh');
+  });
+  it('keeps directions apart (a missing direction is incoming, like the model default)', () => {
+    expect(historyKey({ counterpartyName: 'Hoster', direction: 'out' })).not.toBe(historyKey({ counterpartyName: 'Hoster', direction: 'in' }));
+    expect(historyKey({ counterpartyName: 'Hoster' })).toBe('in:name:hoster');
   });
 });
 
 describe('historySuggestion', () => {
-  const tx = { counterpartyName: 'Hoster', counterpartyIban: null, description: 'x' };
+  const tx = { counterpartyName: 'Hoster', counterpartyIban: null, description: 'x', direction: 'out' };
   const e = (account: string, day: number) => ({ account, vatRate: 0.19, mode: 'normal' as const, date: new Date(2026, 0, day) });
 
   it('requires agreement', () => {
-    const disagree: BookingHistory = new Map([['name:hoster', [e('6837', 3), e('6837', 2), e('6640', 1)]]]);
+    const disagree: BookingHistory = new Map([['out:name:hoster', [e('6837', 3), e('6837', 2), e('6640', 1)]]]);
     expect(historySuggestion(tx, disagree)).toBeNull();
-    const agree: BookingHistory = new Map([['name:hoster', [e('6837', 3), e('6837', 2), e('6837', 1)]]]);
+    const agree: BookingHistory = new Map([['out:name:hoster', [e('6837', 3), e('6837', 2), e('6837', 1)]]]);
     expect(historySuggestion(tx, agree)).toMatchObject({
       matchedBy: 'history',
       account: '6837',
@@ -71,5 +75,11 @@ describe('historySuggestion', () => {
   });
   it('returns null without history', () => {
     expect(historySuggestion(tx, new Map())).toBeNull();
+  });
+  it('never applies an outgoing booking to an incoming transaction', () => {
+    const iban = 'DE02120300000000202051';
+    const booked: BookingHistory = new Map([[`out:iban:${iban}`, [e('6837', 3)]]]);
+    expect(historySuggestion({ ...tx, counterpartyIban: iban, direction: 'in' }, booked)).toBeNull();
+    expect(historySuggestion({ ...tx, counterpartyIban: iban, direction: 'out' }, booked)).toMatchObject({ account: '6837' });
   });
 });

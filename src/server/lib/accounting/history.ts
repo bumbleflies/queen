@@ -58,13 +58,18 @@ function deriveShape(lines: PostingLine[]): { account: string; vatRate: number; 
   return { account: expense[0].account, vatRate: vat ? VAT_RATE_BY_ACCOUNT[vat.account] : 0, mode: 'normal' };
 }
 
-/** `iban:<NORMALISED>`, else `name:<lowercased>`; placeholder names like "(unknown destination)" give null. */
-export function historyKey(tx: Pick<SuggestTx, 'counterpartyIban' | 'counterpartyName'>): string | null {
+/**
+ * `<dir>:iban:<NORMALISED>`, else `<dir>:name:<lowercased>` with dir `in`/`out`
+ * (an incoming payment never gets an outgoing booking); placeholder names like
+ * "(unknown destination)" give null.
+ */
+export function historyKey(tx: Pick<SuggestTx, 'counterpartyIban' | 'counterpartyName' | 'direction'>): string | null {
+  const dir = tx.direction === 'out' ? 'out' : 'in';
   const iban = tx.counterpartyIban ? normalizeIban(tx.counterpartyIban) : '';
-  if (iban) return `iban:${iban}`;
+  if (iban) return `${dir}:iban:${iban}`;
   const name = (tx.counterpartyName ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
   if (name === '' || name.startsWith('(')) return null;
-  return `name:${name}`;
+  return `${dir}:name:${name}`;
 }
 
 const HISTORY_YEARS = 3;
@@ -79,7 +84,7 @@ export async function loadHistory(now: Date = new Date()): Promise<BookingHistor
     .lean();
   const refIds = entries.flatMap((e) => (e.source?.refId ? [e.source.refId] : []));
   const txs = await BankTransaction.find({ fireflyJournalId: { $in: refIds } })
-    .select('fireflyJournalId counterpartyName counterpartyIban')
+    .select('fireflyJournalId counterpartyName counterpartyIban direction')
     .lean();
   const keyByRef = new Map(txs.map((t) => [t.fireflyJournalId, historyKey(t)]));
 
