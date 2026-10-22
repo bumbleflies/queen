@@ -124,6 +124,8 @@ BankTransaction (existing) += direction: 'in' | 'out' (default 'in'), journalEnt
 
 Goal: fill the 2026 books from the bank feed. **Every** GLS transaction ends up in the journal exactly once, so ledger 1800 equals the Firefly balance. Nothing posts without confirmation (inbox plus rules, no auto-booking).
 
+> **Amended 2026-10-22:** [booking automation](2026-10-22-booking-automation.md) adds opt-in auto-booking. Only rules flagged `autoBook` book automatically, only on IBAN or Verwendungszweck matches and only outgoing transactions, during the daily reconcile run. Everything else still waits for confirmation in the inbox.
+
 1. **Sync all transactions.** `FireflyClient.fetchTransactions(start, end)` returns deposits and withdrawals; transfers are ignored, since there is one account.
    - `BankTransaction` gains `direction: 'in' | 'out'` (existing rows default to `'in'`), `journalEntryId?` and `bookingState: 'open' | 'booked'` (derived for invoice payments).
    - Reconcile still matches only `direction: 'in'`.
@@ -163,7 +165,7 @@ Goal: fill the 2026 books from the bank feed. **Every** GLS transaction ends up 
 
    The nav badge shows the open count.
 
-**Out of scope for Phase 2:** automatic reverse charge (§13b) rules and splitting one transaction across several accounts. Both are booked as manual multi-line entries. Also out of scope: OCR of receipts.
+**Out of scope for Phase 2:** automatic reverse charge (§13b) rules and splitting one transaction across several accounts. Both are booked as manual multi-line entries. Also out of scope: OCR of receipts. (Later added by the [booking automation](2026-10-22-booking-automation.md): §13b rules, split bookings and reading receipts into suggestions.)
 
 ## Verification
 
