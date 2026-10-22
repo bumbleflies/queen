@@ -6,7 +6,7 @@ import { MemoryRouter } from 'react-router-dom';
 
 const q = vi.hoisted(() => (data: unknown) => ({ useQuery: () => ({ data, isError: false }) }));
 const receiptRows = vi.hoisted(() => ({ current: [] as { id: string; name: string; link: string; score: number }[] }));
-const state = vi.hoisted(() => ({ role: 'admin', rows: null as unknown[] | null, matches: {} as Record<string, unknown>, readingAvailable: true, readResult: { status: 'ok', suggestion: null, reading: null } as unknown, openItems: { items: [] } as unknown }));
+const state = vi.hoisted(() => ({ role: 'admin', rows: null as unknown[] | null, matches: {} as Record<string, unknown>, readingAvailable: true, readResult: { status: 'ok', suggestion: null, reading: null } as unknown, openItems: { items: [] } as unknown, overview: [] as unknown[] }));
 const calls: Record<string, unknown[]> = {};
 const shown: string[] = [];
 const actions: { label: string; onClick: () => void }[] = [];
@@ -116,7 +116,7 @@ vi.mock('../lib/trpc', () => ({
     me: { useQuery: () => ({ data: { user: { sub: 'u', email: 'u@example.de', role: state.role } } }) },
     suppliers: {
       list: q([{ _id: 's1', kreditorNumber: 70001, name: 'Acme GmbH' }]),
-      overview: q([]),
+      overview: { useQuery: () => ({ data: state.overview, isError: false }) },
       create: mut('createRule', async () => ({})),
       update: mut('updateRule', async () => ({})),
       setArchived: mut('setArchived', async () => ({})),
@@ -139,6 +139,15 @@ vi.mock('../lib/trpc', () => ({
       stream: { useQuery: () => ({ data: state.rows ?? streamRows, isError: false }) },
       receiptMatches: { useQuery: () => ({ data: { available: true, matches: state.matches, readingAvailable: state.readingAvailable } }) },
       readReceipt: mut('readReceipt', async () => state.readResult),
+      readReceiptsNow: {
+        useMutation: () => ({
+          mutateAsync: async (input: unknown) => {
+            calls.readAll?.push(input);
+            return { read: 2, available: true };
+          },
+          isPending: false,
+        }),
+      },
       setReceipt: mut('setReceipt', async () => ({})),
       stats: q({ open: 2, booked: 1, missingReceipts: 1 }),
       balanceCheck: q({ ledgerCents: 0, bankCents: 0, diffCents: null }),
@@ -223,6 +232,7 @@ beforeEach(() => {
   calls.syncNow = [];
   calls.setReceipt = [];
   calls.readReceipt = [];
+  calls.readAll = [];
   shown.length = 0;
   actions.length = 0;
   receiptRows.current = [];
@@ -232,6 +242,7 @@ beforeEach(() => {
   state.readingAvailable = true;
   state.readResult = { status: 'ok', suggestion: null, reading: null };
   state.openItems = { items: [] };
+  state.overview = [];
 });
 
 function renderPage(url = '/finance') {
@@ -388,12 +399,11 @@ describe('FinancePage — inbox', () => {
     renderPage();
     fireEvent.click(within(screen.getByRole('row', { name: /Miete März/ })).getByRole('button', { name: 'Anpassen' }));
     expect(screen.getByRole('heading', { name: 'Transaktion buchen' })).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: 'Als Regel merken' })).not.toBeChecked();
     await waitFor(() => expect(screen.getByRole('combobox', { name: 'Beleg wählen' })).toHaveValue('f1'));
     fireEvent.click(screen.getByRole('button', { name: 'Jetzt buchen' }));
     await waitFor(() => expect(calls.book).toEqual([
       expect.objectContaining({
-        bankTxId: 'tx1', account: '6837', vatRate: 0.19, mode: 'normal', supplierId: 's1', rememberRule: false,
+        bankTxId: 'tx1', account: '6837', vatRate: 0.19, mode: 'normal', supplierId: 's1',
         receipt: { driveFileId: 'f1', fileName: 'Acme_2026-03-01_123456.pdf', link: 'https://drive/f1' },
       }),
     ]));
@@ -516,6 +526,36 @@ describe('FinancePage — rules and journal tabs', () => {
     expect(screen.queryByRole('region', { name: 'Buchungsregeln' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: /Regeln/ }));
     expect(screen.getByRole('region', { name: 'Buchungsregeln' })).toBeInTheDocument();
+  });
+
+  it('marks a learned rule with its date', () => {
+    state.overview = [{
+      id: 's2',
+      kreditorNumber: 70002,
+      name: 'Cafe',
+      ibans: [],
+      namePatterns: ['Cafe'],
+      purposePatterns: [],
+      defaultAccount: '6640',
+      defaultVatRate: 0.07,
+      defaultMode: 'normal',
+      archived: false,
+      autoBook: false,
+      origin: 'learned',
+      learnedAt: '2026-03-04T00:00:00.000Z',
+      openHits: 0,
+    }];
+    renderPage();
+    fireEvent.click(screen.getByRole('tab', { name: /Regeln/ }));
+    expect(screen.getByText('gelernt')).toBeInTheDocument();
+  });
+
+  it('the menu reads all receipts of the year', async () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Bank und Abgleich' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Alle Belege jetzt lesen' }));
+    await waitFor(() => expect(calls.readAll).toEqual([{ year: 2026 }]));
+    expect(shown).toContain('2 Belege gelesen.');
   });
 
   it('the Journal tab shows backfill and ledger views', () => {
@@ -699,5 +739,50 @@ describe('FinancePage — receipt reading', () => {
     await waitFor(() => expect(calls.book).toHaveLength(1));
     expect((calls.book[0] as { split?: unknown }).split).toBeUndefined();
     expect((calls.book[0] as { account: string }).account).toBe('6837');
+  });
+
+  it('a rule/receipt conflict is not bookable in one click and asks which side in the dialog', async () => {
+    state.rows = [{
+      ...(streamRows[0] as Record<string, unknown>),
+      suggestion: {
+        supplierId: 's1',
+        supplierName: 'Acme GmbH',
+        account: '6837',
+        vatRate: 0.19,
+        mode: 'normal',
+        conflict: { mode: 'normal', split },
+        reading: { vendor: 'Muster Handel', totalCents: 11900, lines: [{ vatRate: 0.19, grossCents: 11900, account: '6837' }] },
+      },
+    }];
+    renderPage();
+    const row = screen.getByRole('row', { name: /Miete März/ });
+    expect(within(row).getByText(/Regel ≠ Beleg/)).toBeInTheDocument();
+    expect(within(row).queryByRole('button', { name: 'Buchen' })).not.toBeInTheDocument();
+    fireEvent.click(within(row).getByRole('button', { name: 'Prüfen' }));
+    expect(screen.getByText(/widersprechen sich/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Beleg übernehmen/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Jetzt buchen' }));
+    await waitFor(() => expect(calls.book).toHaveLength(1));
+    expect(calls.book[0]).toEqual(expect.objectContaining({ bankTxId: 'tx1', split }));
+  });
+
+  it('the dialog keeps the rule side when the receipt is not chosen', async () => {
+    state.rows = [{
+      ...(streamRows[0] as Record<string, unknown>),
+      suggestion: {
+        supplierId: 's1',
+        supplierName: 'Acme GmbH',
+        account: '6820',
+        vatRate: 0.19,
+        mode: 'normal',
+        conflict: { account: '6837', vatRate: 0.07, mode: 'normal' },
+      },
+    }];
+    renderPage();
+    fireEvent.click(within(screen.getByRole('row', { name: /Miete März/ })).getByRole('button', { name: 'Prüfen' }));
+    expect(screen.getByRole('button', { name: /Regel übernehmen/ })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Jetzt buchen' }));
+    await waitFor(() => expect(calls.book).toHaveLength(1));
+    expect(calls.book[0]).toEqual(expect.objectContaining({ account: '6820', vatRate: 0.19 }));
   });
 });

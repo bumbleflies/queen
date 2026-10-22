@@ -4,6 +4,8 @@ import { useToast } from './Toast';
 import { useLanguage } from '../i18n/LanguageContext';
 import { REVERSE_CHARGE_RATE, type BankBookingMode } from '../../server/lib/accounting/postingRules';
 import { suggest, type SuggestTx } from '../../server/lib/accounting/suggest';
+import { purposePrefix } from '../../server/lib/accounting/ruleLearning';
+import { formatDate } from '../lib/format';
 
 export interface RuleRow {
   id: string;
@@ -17,6 +19,9 @@ export interface RuleRow {
   defaultMode: BankBookingMode;
   archived: boolean;
   autoBook: boolean;
+  /** 'learned' rules come from a confirmed booking, not from the dialog. */
+  origin: 'manual' | 'learned';
+  learnedAt: string | null;
   openHits: number;
 }
 
@@ -64,13 +69,14 @@ export function draftFromTransaction(tx: {
 }): RuleDraft {
   // Firefly shows "(unknown destination)" etc. when GLS gives no counterparty.
   const name = tx.counterpartyName && !tx.counterpartyName.startsWith('(') ? tx.counterpartyName.trim() : '';
-  const words = tx.description.trim().split(/\s+/).slice(0, 2).join(' ');
+  // The same prefix the learned rules use: cut before the invoice number or Drive link.
+  const purpose = purposePrefix(tx.description) ?? tx.description.trim().slice(0, 40);
   return {
     ...emptyRule,
-    name: name || words,
+    name: name || purpose,
     ibans: tx.counterpartyIban ? [tx.counterpartyIban] : [],
     namePatterns: name ? [name] : [],
-    purposePatterns: name || tx.counterpartyIban ? [] : [words],
+    purposePatterns: name || tx.counterpartyIban || !purpose ? [] : [purpose],
   };
 }
 
@@ -483,6 +489,17 @@ export function RulesSection({ year }: { year: number }) {
                 <td data-l={t('rules.col.number')} className="num">{r.kreditorNumber}</td>
                 <td data-l={t('rules.col.name')}>
                   {r.name}
+                  {r.origin === 'learned' ? (
+                    <>
+                      {' '}
+                      <span
+                        className="badge b-draft"
+                        title={t('rules.learnedTitle').replace('{date}', formatDate(r.learnedAt))}
+                      >
+                        {t('rules.learned')}
+                      </span>
+                    </>
+                  ) : null}
                   {r.autoBook ? <> <span className="badge b-sent" title={t('rules.autoTitle')}>{t('rules.auto')}</span></> : null}
                   {r.archived ? <> <span className="badge b-draft">{t('rules.archived')}</span></> : null}
                 </td>

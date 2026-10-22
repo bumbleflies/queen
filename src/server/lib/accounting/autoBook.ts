@@ -7,7 +7,8 @@ import { getReceiptsFolder } from '../../services/appSettings';
 import { BookingError, bookBankTransaction } from './bankBooking';
 import { openTransactions } from './bankCoverage';
 import { LedgerError } from './ledger';
-import { loadHistory, suggestWithHistory } from './history';
+import { loadHistory } from './history';
+import { suggestForTx } from './receiptReading';
 import { rankReceipts, strongReceipt, type ReceiptFile } from './receipts';
 import type { Suggestion } from './suggest';
 
@@ -24,6 +25,7 @@ export function isAutoBookable(
   supplier: { autoBook?: boolean | null } | null,
 ): boolean {
   if (!suggestion || !supplier?.autoBook) return false;
+  if (suggestion.conflict) return false;
   if (suggestion.matchedBy !== 'iban' && suggestion.matchedBy !== 'purpose') return false;
   if (suggestion.vatRate === undefined || suggestion.vatRate === null) return false;
   return suggestion.mode === 'vatOnly' || !!suggestion.account;
@@ -104,7 +106,7 @@ export async function autoBookOpen(now: Date): Promise<AutoBookResult> {
     const reversed = await reversedRefs(candidates.map((t) => t.fireflyJournalId));
     for (const tx of candidates) {
       if (reversed.has(tx.fireflyJournalId)) continue;
-      const s = suggestWithHistory(tx, suppliers, history);
+      const s = suggestForTx(tx, suppliers, history);
       const supplier = s?.supplierId ? (flagged.get(s.supplierId) ?? null) : null;
       if (!s || s.vatRate === undefined || !isAutoBookable(s, supplier)) continue;
       try {

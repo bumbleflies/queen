@@ -1,11 +1,12 @@
-import { BankTransaction } from '../../models/BankTransaction';
+import { BankTransaction, type BankTransactionDoc } from '../../models/BankTransaction';
 import type { SupplierDoc } from '../../models/Supplier';
 import type { HydratedDocument } from 'mongoose';
 import { Supplier } from '../../models/Supplier';
 import { allocateSupplierNumber } from '../numbering';
 import { findActiveBySource, post, reverse } from './ledger';
 import { bankPosting, bankPostingSplit, type BankBookingMode, type SplitPart } from './postingRules';
-import { normalizeIban } from './suggest';
+import { learningKey, type RuleKey } from './ruleLearning';
+import { suggest, type SuggestTx } from './suggest';
 
 export type BookingErrorCode = 'NOT_FOUND' | 'MATCHED' | 'ALREADY_BOOKED' | 'NOT_BOOKED' | 'SUPPLIER_NOT_FOUND' | 'FORBIDDEN';
 
@@ -46,11 +47,10 @@ export interface BookBankInput {
   split?: SplitPart[];
   supplierId?: string;
   text?: string;
-  rememberRule?: boolean;
   receipt?: { driveFileId: string; fileName: string; link: string } | null;
   receiptMissingReason?: string | null;
   createdBy: string;
-  /** The caller's role: only an admin may change a rule that books automatically via `rememberRule`. */
+  /** The caller's role: only an admin may change a rule that books automatically. */
   role?: string;
 }
 
@@ -65,9 +65,6 @@ export async function bookBankTransaction(input: BookBankInput) {
   }
   let supplier = input.supplierId ? await Supplier.findById(input.supplierId) : null;
   if (input.supplierId && !supplier) throw new BookingError('SUPPLIER_NOT_FOUND', 'Kreditor nicht gefunden');
-  if (input.rememberRule && !input.split && supplier?.autoBook && input.role !== 'admin') {
-    throw new BookingError('FORBIDDEN', 'Regel mit automatischer Buchung kann nur ein Admin ändern');
-  }
 
   const direction = tx.direction === 'out' ? 'out' : 'in';
   const lines = input.split
@@ -81,17 +78,81 @@ export async function bookBankTransaction(input: BookBankInput) {
     createdBy: input.createdBy,
   });
 
-  if (input.rememberRule && !input.split) supplier = await rememberRule(tx, input, supplier);
+  supplier = await learnFromBooking(tx, input, supplier, direction);
   if (supplier) tx.supplierId = supplier._id;
   if (input.receipt !== undefined) tx.receipt = input.receipt ?? undefined;
+  else attachMatchedReceipt(tx);
   if (input.receiptMissingReason !== undefined) tx.receiptMissingReason = input.receiptMissingReason ?? undefined;
   await tx.save();
   return { entry, tx };
 }
 
+/**
+ * Every confirmed single-account booking teaches the rule for its counterparty
+ * (IBAN → name → purpose prefix), so the next row arrives pre-classified. Split
+ * bookings, incoming payments and collective reimbursements (receipt vendor is
+ * not the bank counterparty) teach nothing. A rule that books automatically is
+ * only changed by an admin; the booking itself always goes through.
+ */
+async function learnFromBooking(
+  tx: HydratedDocument<BookBankTx>,
+  input: Pick<BookBankInput, 'account' | 'vatRate' | 'mode' | 'split' | 'role'>,
+  supplier: HydratedDocument<SupplierDoc> | null,
+  direction: 'in' | 'out',
+): Promise<HydratedDocument<SupplierDoc> | null> {
+  const key = learningKey({
+    direction,
+    split: !!input.split,
+    receiptVendor: tx.receiptMatch?.reading?.vendor ?? tx.receiptReading?.reading?.vendor,
+    counterpartyName: tx.counterpartyName,
+    counterpartyIban: tx.counterpartyIban,
+    description: tx.description,
+  });
+  if (!key) return supplier;
+  const target = supplier ?? (await matchingRule(tx));
+  if (target?.autoBook && input.role !== 'admin') return supplier;
+  return rememberRule(key, tx, input, target);
+}
+
+type BookBankTx = {
+  counterpartyName?: string | null;
+  counterpartyIban?: string | null;
+  description: string;
+  receiptMatch?: { reading?: { vendor?: string | null } | null } | null;
+  receiptReading?: { reading?: { vendor?: string | null } | null } | null;
+};
+
+/** An existing active rule that would have matched this row, so learning extends instead of duplicating. */
+async function matchingRule(tx: SuggestTx): Promise<HydratedDocument<SupplierDoc> | null> {
+  const active = await Supplier.find({ archived: false });
+  const id = suggest(tx, active)?.supplierId;
+  return (id ? active.find((s) => String(s._id) === id) : null) ?? null;
+}
+
+/**
+ * Attach the receipt set that matched this row (first file, link from the
+ * reading) when the caller passed none. Rule, bulk and automatic bookings
+ * thereby carry their document.
+ */
+function attachMatchedReceipt(tx: HydratedDocument<BankTransactionDoc>): void {
+  if (tx.receipt?.driveFileId) return;
+  const ids = tx.receiptMatch?.driveFileIds ?? [];
+  const id = ids[0];
+  if (!id) return;
+  const file =
+    (tx.receiptReadings ?? []).find((r) => r.driveFileId === id) ??
+    (tx.receiptReading?.driveFileId === id ? tx.receiptReading : undefined);
+  tx.receipt = {
+    driveFileId: id,
+    fileName: file?.fileName ?? undefined,
+    link: file?.link ?? `https://drive.google.com/file/d/${id}/view`,
+  };
+}
+
 /** Create or extend a supplier so the next matching transaction gets the same suggestion. */
 async function rememberRule(
-  tx: { counterpartyName?: string | null; counterpartyIban?: string | null; description: string },
+  key: RuleKey,
+  tx: { counterpartyName?: string | null; description: string },
   input: Pick<BookBankInput, 'account' | 'vatRate' | 'mode'>,
   supplier: HydratedDocument<SupplierDoc> | null,
 ) {
@@ -99,16 +160,16 @@ async function rememberRule(
     supplier ??
     new Supplier({
       kreditorNumber: await allocateSupplierNumber(),
-      name: tx.counterpartyName?.trim() || tx.description.slice(0, 60),
+      name: tx.counterpartyName?.trim() || key.value || tx.description.slice(0, 60),
+      origin: 'learned',
+      learnedAt: new Date(),
     });
-  const iban = tx.counterpartyIban ? normalizeIban(tx.counterpartyIban) : '';
-  if (iban) {
-    if (!s.ibans.includes(iban)) s.ibans.push(iban);
-  } else if (tx.counterpartyName?.trim()) {
-    if (!s.namePatterns.includes(tx.counterpartyName.trim())) s.namePatterns.push(tx.counterpartyName.trim());
-  } else {
-    const pattern = tx.description.slice(0, 40).trim();
-    if (pattern && !s.purposePatterns.includes(pattern)) s.purposePatterns.push(pattern);
+  if (key.kind === 'iban') {
+    if (!s.ibans.includes(key.value)) s.ibans.push(key.value);
+  } else if (key.kind === 'name') {
+    if (!s.namePatterns.some((p) => p.toLowerCase() === key.value.toLowerCase())) s.namePatterns.push(key.value);
+  } else if (!s.purposePatterns.some((p) => p.toLowerCase() === key.value.toLowerCase())) {
+    s.purposePatterns.push(key.value);
   }
   if (input.mode === 'normal' || input.mode === 'reverseCharge') s.defaultAccount = input.account;
   s.defaultVatRate = input.vatRate;

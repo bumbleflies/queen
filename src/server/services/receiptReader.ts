@@ -34,6 +34,8 @@ export interface ReceiptFileReading {
   fileName?: string | null;
   status: ReadStatus;
   reading?: ReceiptReading | null;
+  /** Drive web link, so the file can be attached to a posting later. */
+  link?: string | null;
   model?: string | null;
   readAt: Date;
   error?: string | null;
@@ -56,8 +58,18 @@ export interface ReadTxResult {
 
 /** Fewer visible characters than this means a scan without a text layer. */
 const MIN_TEXT_CHARS = 10;
-/** Transactions the daily reconcile reads per run at most. */
-export const RECEIPTS_PER_RUN = 10;
+/**
+ * Transactions the daily reconcile reads per run at most. Every open outgoing
+ * row with a clear candidate is read — rule or not — because the receipt is also
+ * the document that has to end up on the posting.
+ */
+export const RECEIPTS_PER_RUN = 25;
+
+/** `QUEEN_RECEIPTS_PER_RUN` overrides the per-run cap. */
+export function receiptsPerRun(): number {
+  const n = Number(process.env.QUEEN_RECEIPTS_PER_RUN);
+  return Number.isInteger(n) && n > 0 ? n : RECEIPTS_PER_RUN;
+}
 
 /** Active, non-archived accounts a receipt line may be booked to (numbers and names only). */
 export async function receiptPromptAccounts(): Promise<{ number: string; name: string }[]> {
@@ -73,7 +85,7 @@ function isNonPdfName(name: string | null | undefined): boolean {
 
 /** One file through the whole path: download → text → opencode → validation. Never throws. */
 async function readOne(file: ReceiptFile, deps: ReadDeps): Promise<ReceiptFileReading> {
-  const base = { driveFileId: file.id, fileName: file.name, readAt: new Date() };
+  const base = { driveFileId: file.id, fileName: file.name, link: file.link, readAt: new Date() };
   try {
     const text = isNonPdfName(file.name) ? '' : await receiptText(deps.drive, file.id);
     if (text.replace(/\s+/g, '').length < MIN_TEXT_CHARS) return { ...base, status: 'noText' };
@@ -132,6 +144,7 @@ export async function readTxReceipts(
             fileName: previous!.fileName || file.name,
             status: previous!.status,
             reading: previous!.reading,
+            link: previous!.link ?? file.link,
             model: previous!.model,
             readAt: previous!.readAt,
             error: previous!.error,
@@ -164,18 +177,31 @@ export async function readTxReceipts(
 }
 
 /**
- * Daily reconcile step: reads the receipts of up to `limit` open outgoing rows
- * that have no rule or history suggestion and no matching receipt set yet —
- * never-read rows first, then rows with failed files by their last attempt.
- * Only stores readings — never books. Without an opencode key or a Drive
- * connection nothing happens.
+ * Reads the receipts of open outgoing rows and stores their readings. Every row
+ * with a clear candidate is eligible, whether a rule already classifies it or
+ * not (the matched receipt is then attached when the row is booked). Order: no
+ * suggestion first, then rows without any stored reading, then failed retries.
+ * Only stores readings — never books. `opts.drive` lets the page use the
+ * logged-in user's Drive; the cron falls back to the settings owner.
  */
-export async function readOpenReceipts(now: Date, limit = RECEIPTS_PER_RUN): Promise<{ read: number }> {
-  const result = { read: 0 };
+export interface ReadQueueOptions {
+  /** Restrict to these fiscal years (on-demand action); default: every open year. */
+  years?: number[];
+  /** Drive client of the caller; default: the cron's settings owner. */
+  drive?: DriveFilesLike;
+}
+
+export async function readOpenReceipts(
+  now: Date,
+  limit = receiptsPerRun(),
+  opts: ReadQueueOptions = {},
+): Promise<{ read: number; available: boolean }> {
+  const result = { read: 0, available: false };
   const client = opencodeFromEnv();
   if (!client) return result;
-  const drive = await driveForCron();
+  const drive = opts.drive ?? (await driveForCron());
   if (!drive) return result;
+  result.available = true;
   const [folder, suppliers, history, accounts] = await Promise.all([
     getReceiptsFolder(),
     Supplier.find({ archived: false }),
@@ -189,24 +215,26 @@ export async function readOpenReceipts(now: Date, limit = RECEIPTS_PER_RUN): Pro
     return filesByYear.get(year)!;
   };
 
-  const due: { tx: HydratedDocument<BankTransactionDoc>; files: ReceiptFile[]; hints: (string | null | undefined)[]; retryAt: number }[] = [];
-  for (const year of await bookableYears(now)) {
+  const due: { tx: HydratedDocument<BankTransactionDoc>; files: ReceiptFile[]; hints: (string | null | undefined)[]; priority: number; retryAt: number }[] = [];
+  for (const year of opts.years ?? (await bookableYears(now))) {
     const open = (await openTransactions(year)).filter((t) => t.direction === 'out');
     for (const tx of open) {
+      // Already backed by a matched set: nothing left to read.
       if (tx.receiptMatch) continue;
       const suggestion = suggestWithHistory(tx, suppliers, history);
-      if (suggestion) continue;
       const files = receiptCandidates(tx, tx.receipt?.driveFileId ? [] : await receiptsFor(year));
       if (files.length === 0) continue;
       const cached = cachedReadings(tx);
       const pending = files.filter((f) => !isFinal(cached.get(f.id)));
       if (pending.length === 0) continue;
+      // 0: nothing else classifies it, 1: no reading yet, 2: a re-read after a failure
+      const priority = suggestion ? (cached.size === 0 ? 1 : 2) : 0;
       // never read: -1 sorts first; failed files: by the time of the last attempt
       const retryAt = Math.max(-1, ...pending.map((f) => (cached.get(f.id)?.readAt ? new Date(cached.get(f.id)!.readAt).getTime() : -1)));
-      due.push({ tx, files, hints: [tx.counterpartyName], retryAt });
+      due.push({ tx, files, hints: [suggestion?.supplierName, tx.counterpartyName], priority, retryAt });
     }
   }
-  due.sort((a, b) => a.retryAt - b.retryAt);
+  due.sort((a, b) => a.priority - b.priority || a.retryAt - b.retryAt);
   for (const { tx, files, hints } of due.slice(0, limit)) {
     await readTxReceipts(tx, files, { drive, client, accounts }, hints);
     result.read += 1;

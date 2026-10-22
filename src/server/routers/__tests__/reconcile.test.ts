@@ -397,9 +397,10 @@ describe('receipt reading in the daily reconcile (DB)', () => {
     return { id: `f${n}`, name: `Laden_2026-10-16_${number}.pdf`, link: `https://drive/f${n}` };
   }
 
-  it('reconcile reads at most 10 receipts and never books them', async (ctx) => {
+  it('reconcile reads the receipts of open outgoing rows — rule rows included — and never books them', async (ctx) => {
     skipIfNoDb(ctx);
     vi.stubEnv('QUEEN_RECEIPTS_FOLDER_ID', 'root');
+    vi.stubEnv('QUEEN_RECEIPTS_PER_RUN', '10');
     opencode.enabled = true;
     ask.mockResolvedValue({
       text: JSON.stringify({ vendor: 'Laden KG', totalCents: 1190, lines: [{ vatRate: 0.19, grossCents: 1190, account: '6837' }] }),
@@ -407,7 +408,7 @@ describe('receipt reading in the daily reconcile (DB)', () => {
     });
     const files = [];
     for (let n = 1; n <= 12; n++) files.push(await openWithReceipt(n));
-    // a rule suggestion means no reading is needed
+    // a rule classifies this row already; the receipt is still read (it has to end up on the posting)
     await Supplier.create({ kreditorNumber: 70001, name: 'Regel', namePatterns: ['Regel AG'], defaultAccount: '6820', defaultVatRate: 0.19 });
     files.push(await openWithReceipt(13, { counterpartyName: 'Regel AG' }));
     listReceiptFiles.mockResolvedValue(files);
@@ -417,15 +418,18 @@ describe('receipt reading in the daily reconcile (DB)', () => {
     expect(run.receiptsRead).toBe(10);
     expect(ask).toHaveBeenCalledTimes(10);
     expect(await JournalEntry.countDocuments({ 'source.kind': 'bank' })).toBe(0);
-    expect(await BankTransaction.countDocuments({ 'receiptReadings.status': 'ok' })).toBe(10);
-    expect((await BankTransaction.findOne({ counterpartyName: 'Regel AG' }))?.receiptReadings).toHaveLength(0);
 
+    // the remaining rows, including the rule row (no suggestion first, then classified rows)
     const second = await runReconcile({ skipSync: true, now: NOW });
-    expect(second.receiptsRead).toBe(2);
-    expect(ask).toHaveBeenCalledTimes(12);
+    expect(second.receiptsRead).toBe(3);
+    expect(ask).toHaveBeenCalledTimes(13);
     expect(await JournalEntry.countDocuments({ 'source.kind': 'bank' })).toBe(0);
+    expect(await BankTransaction.countDocuments({ 'receiptReadings.status': 'ok' })).toBe(13);
+    expect((await BankTransaction.findOne({ counterpartyName: 'Regel AG' }))?.receiptReadings).toHaveLength(1);
     const stream = await adminCaller().bookings.stream({ year: 2026 });
     expect(stream.filter((r) => r.state === 'open' && r.suggestion?.matchedBy === 'receipt')).toHaveLength(12);
+    expect((await runReconcile({ skipSync: true, now: NOW })).receiptsRead).toBe(0);
+    vi.unstubAllEnvs();
   });
 
   it('reading trouble never fails the run, and without a key nothing is read', async (ctx) => {
@@ -474,15 +478,18 @@ describe('receipt reading in the daily reconcile (DB)', () => {
     listReceiptFiles.mockResolvedValue(files);
 
     const run = await runReconcile({ skipSync: true, now: NOW });
-    expect(run.receiptsRead).toBe(10);
+    expect(run.receiptsRead).toBe(12);
     const status = async (n: number) => {
       const doc = await BankTransaction.findOne({ fireflyJournalId: `${800 + n}:0` });
       return doc?.receiptReadings?.find((r) => r.driveFileId === `f${n}`)?.status ?? doc?.receiptReading?.status;
     };
-    expect(await status(2)).toBe('ok');
-    expect(await status(1)).toBe('failed');
-    expect(await status(3)).toBe('failed');
-    for (let n = 4; n <= 12; n++) expect(await status(n)).toBe('ok');
+    for (let n = 1; n <= 12; n++) expect(await status(n)).toBe('ok');
+    // never-read files first, then the failed ones, oldest attempt first
+    const order = receiptText.mock.calls.map((c) => String(c[1]));
+    const at = (n: number) => order.indexOf(`f${n}`);
+    expect(Math.min(...[4, 5, 6, 7, 8, 9, 10, 11, 12].map(at))).toBeLessThan(at(2));
+    expect(at(2)).toBeLessThan(at(3));
+    expect(at(3)).toBeLessThan(at(1));
   });
 
   it('a total failure of the reading step is recorded as a warning, not an error', async (ctx) => {

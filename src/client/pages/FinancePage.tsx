@@ -30,6 +30,7 @@ interface StreamSuggestion {
   account?: string;
   vatRate?: number;
   mode: BankBookingMode;
+  conflict?: { account?: string; vatRate?: number; mode: BankBookingMode; split?: SplitPart[] };
 }
 
 interface StreamRow {
@@ -92,8 +93,8 @@ function signed(amountCents: number, direction: 'in' | 'out'): number {
 }
 
 /** A suggestion that can be booked without asking anything (same rule as bookBulk). */
-function complete(s: StreamSuggestion | null | undefined): s is StreamSuggestion {
-  if (!s) return false;
+function complete(s: StreamSuggestion | null | undefined): boolean {
+  if (!s || s.conflict) return false;
   if (s.split && s.split.length >= 2) return true;
   return s.vatRate !== undefined && (s.mode === 'vatOnly' || !!s.account);
 }
@@ -159,6 +160,7 @@ export function FinancePage() {
   const [reading, setReading] = useState<string | null>(null);
   const bookBulk = trpc.bookings.bookBulk.useMutation();
   const unbook = trpc.bookings.unbook.useMutation();
+  const readAllReceipts = trpc.bookings.readReceiptsNow.useMutation();
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -234,6 +236,19 @@ export function FinancePage() {
     await utils.ledger.invalidate();
   }
 
+  /** Read the receipts of this year's open outgoing rows on demand (same queue as the nightly run). */
+  async function readAllNow() {
+    setMenuOpen(false);
+    try {
+      const res = await readAllReceipts.mutateAsync({ year });
+      await refresh();
+      if (!res.available) toast.error(t('finance.readAllUnavailable'));
+      else toast.show(res.read > 0 ? t('finance.readAllDone').replace('{n}', String(res.read)) : t('finance.readAllNone'));
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
   async function undo(bankTxIds: string[]) {
     try {
       for (const bankTxId of bankTxIds) await unbook.mutateAsync({ bankTxId, reason: t('finance.undoReason') });
@@ -246,7 +261,7 @@ export function FinancePage() {
 
   async function bookOne(r: StreamRow) {
     const s = r.suggestion;
-    if (!complete(s)) return;
+    if (!s || !complete(s)) return;
     const match = matches[r.id];
     try {
       const res = await book.mutateAsync({
@@ -364,10 +379,23 @@ export function FinancePage() {
       </span>
     ) : null;
     const s = r.suggestion;
+    const label = (x: { account?: string; vatRate?: number; mode: BankBookingMode; split?: SplitPart[] }) =>
+      x.split && x.split.length > 1
+        ? t('finance.outcome.split').replace('{n}', String(x.split.length))
+        : x.mode === 'vatOnly'
+          ? t('finance.outcome.vatOnly')
+          : `${x.account ?? '—'} · ${Math.round((x.vatRate ?? 0) * 100)} %`;
     return (
       <>
         {r.direction === 'in' ? <div className="lbl" style={{ marginTop: 6 }}>{reason}</div> : null}
-        {s ? (
+        {s?.conflict ? (
+          <div className="outcome warn">
+            <span className="what">
+              {t('finance.outcome.conflict').replace('{rule}', label(s)).replace('{receipt}', label(s.conflict))}
+            </span>
+            {receiptLine}
+          </div>
+        ) : s ? (
           <div className="outcome ok">
             <span className="what">
               ✓ {s.split ? t('finance.outcome.split').replace('{n}', String(s.split.length)) : s.mode === 'vatOnly' ? t('finance.outcome.vatOnly') : `${s.account ?? '—'} ${accountNames.get(s.account ?? '') ?? ''}`.trim()}
@@ -445,7 +473,9 @@ export function FinancePage() {
             <button type="button" className="btn ghost sm" onClick={openDialog}>{t('finance.adjust')}</button>
           </>
         ) : r.suggestion ? (
-          <button type="button" className="btn sm" onClick={openDialog}>{t('finance.adjust')}</button>
+          <button type="button" className="btn sm" onClick={openDialog}>
+            {r.suggestion.conflict ? t('finance.conflictCheck') : t('finance.adjust')}
+          </button>
         ) : (
           <>
             {r.direction === 'out' && (matches[r.id] || r.receiptReading) && receiptMatches.data?.readingAvailable ? (
@@ -528,6 +558,9 @@ export function FinancePage() {
                   }}
                 >
                   {t('bank.runNow')}
+                </button>
+                <button type="button" role="menuitem" onClick={() => void readAllNow()}>
+                  {t('finance.readAllReceipts')}
                 </button>
                 <button type="button" role="menuitem" className="danger" onClick={() => { setMenuOpen(false); setResyncOpen(true); }}>
                   {t('bank.fullSync')} …

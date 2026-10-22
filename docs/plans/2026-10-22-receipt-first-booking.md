@@ -107,12 +107,16 @@ covers single, bulk, receipt-based and auto bookings. A confirmed **single-accou
 or extends a rule:
 
 - key: normalised **IBAN** when the transaction has one, else the **counterparty name** as a name
-  pattern, else a **purpose prefix** (first 40 characters of the Verwendungszweck);
+  pattern, else a **purpose prefix** (the leading part of the Verwendungszweck, cut before a URL or
+  a number run of six or more digits, separators trimmed, at most 40 characters — `Spesen-ChrisD-202601…`
+  teaches `Spesen-ChrisD`);
 - values: account, VAT rate, mode (the existing `rememberRule` semantics);
-- extending an existing rule updates those three values, exactly as today.
+- extending an existing rule updates those three values, exactly as today. The rule that matched the
+  row is found with the same `suggest()` logic, so learning extends a rule instead of duplicating it.
 
 The `rememberRule` checkbox in the dialog is removed; remembering becomes the default and not a
-choice. The admin role check stays: a non-admin still cannot change a rule that books automatically.
+choice. A non-admin booking against an `autoBook` rule still goes through, but leaves that rule
+untouched (only an admin changes a rule that books automatically).
 
 ### What is not learned
 
@@ -122,6 +126,8 @@ choice. The admin role check stays: a non-admin still cannot change a rule that 
   receipt suggestion or the receipt vendor agrees with the counterparty name. A partner
   reimbursement (vendor "Augustiner", counterparty "Christian Dähn") therefore teaches nothing.
 - **Rows where the counterparty has a manual rule:** the manual rule is extended, not duplicated.
+- **Incoming payments.** A learned rule only describes outgoing rows, so it never suggests a booking
+  for an incoming payment (that belongs to an invoice); manual rules keep matching both directions.
 
 ### Fallback for reimbursements without a receipt
 
