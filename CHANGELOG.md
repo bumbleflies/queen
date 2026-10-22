@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.24.2](https://github.com/bumbleflies/queen/compare/queen-v0.24.1...queen-v0.24.2) (2026-10-22)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @types/pdfkit to v0.17.7 ([#156](https://github.com/bumbleflies/queen/issues/156)) ([ab1cd18](https://github.com/bumbleflies/queen/commit/ab1cd1876193198ca5566dd03c7c4be60a2ad561))
+* **deps:** update dependency dotenv to v18.0.9 ([#157](https://github.com/bumbleflies/queen/issues/157)) ([94ed665](https://github.com/bumbleflies/queen/commit/94ed665c2fb73c9a1d36419c5f2cfae7cbc2d93c))
+
 ## [0.24.1](https://github.com/bumbleflies/queen/compare/queen-v0.24.0...queen-v0.24.1) (2026-10-22)
 
 
