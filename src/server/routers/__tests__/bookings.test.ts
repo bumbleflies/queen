@@ -477,6 +477,21 @@ describe('bookings', () => {
       delete process.env.QUEEN_RECEIPTS_FOLDER_ID;
     });
 
+    it('keeps a reusable legacy reading but fills in its file name', async (ctx) => {
+      skipIfNoDb(ctx);
+      const t = await tx({ amountCents: 5460, receipt: RECEIPT });
+      // a reading stored before the multi-receipt change had no file name
+      await BankTransaction.updateOne(
+        { _id: t._id },
+        { $set: { receiptReading: { driveFileId: RECEIPT.driveFileId, status: 'ok', readAt: new Date(), reading: SPLIT_READING } } },
+      );
+      const res = await adminCaller().bookings.readReceipt({ bankTxId: String(t._id) });
+      expect(res.status).toBe('ok');
+      expect(ask).not.toHaveBeenCalled();
+      const stored = await BankTransaction.findById(t._id);
+      expect(stored?.receiptReadings?.[0]).toMatchObject({ driveFileId: RECEIPT.driveFileId, fileName: RECEIPT.fileName });
+    });
+
     it('reports every receipt read when their totals do not add up', async (ctx) => {
       skipIfNoDb(ctx);
       process.env.QUEEN_RECEIPTS_FOLDER_ID = 'root';
