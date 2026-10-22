@@ -1,6 +1,7 @@
 import { router, authedProcedure } from '../trpcInit';
 import { Invoice } from '../models/Invoice';
 import { Client } from '../models/Client';
+import { matchableFrom, matchableInvoiceFilter, paymentMissing } from '../lib/invoiceOpen';
 
 function startOfToday(): Date {
   const d = new Date();
@@ -18,10 +19,17 @@ function paidCents(payments: { amountCents: number }[] | undefined): number {
  * "nach Zahlungseingang", not by invoice date.
  */
 export const reportsRouter = router({
-  /** Sent invoices with their computed overdue flag and open amount. */
+  /**
+   * Open invoices with their computed overdue flag and open amount, plus the
+   * ones imported as paid without a recorded payment (`paymentMissing`): those
+   * are offered for matching in the inbox, but they are not open receivables and
+   * therefore excluded from `totalOpenCents`/`totalOverdueCents` (their own sum
+   * is `totalPaymentMissingCents`).
+   */
   openItems: authedProcedure.query(async () => {
+    const from = await matchableFrom();
     const [invoices, clients] = await Promise.all([
-      Invoice.find({ status: 'sent' }),
+      Invoice.find(matchableInvoiceFilter(from)),
       Client.find({}).select('customerNumber name'),
     ]);
     const clientById = new Map(clients.map((c) => [String(c._id), c]));
@@ -31,9 +39,12 @@ export const reportsRouter = router({
       const gross = inv.totals?.grossCents ?? 0;
       const paid = paidCents(inv.payments);
       const open = gross - paid;
+      const missing = paymentMissing(inv);
       const due = inv.dueDate ? new Date(inv.dueDate) : null;
+      // A missing payment is not an overdue receivable: the money arrived, only
+      // its bank transaction is unknown. Overdue would distort aging and dunning.
       const overdue =
-        inv.kind !== 'credit_note' && due !== null && due.getTime() < today.getTime();
+        !missing && inv.kind !== 'credit_note' && due !== null && due.getTime() < today.getTime();
       const daysOverdue =
         overdue && due
           ? Math.floor((today.getTime() - due.getTime()) / (24 * 60 * 60 * 1000))
@@ -56,6 +67,7 @@ export const reportsRouter = router({
         openCents: open,
         overdue,
         daysOverdue,
+        paymentMissing: missing,
       };
     });
 
@@ -65,13 +77,18 @@ export const reportsRouter = router({
       return at - bt;
     });
 
+    const receivables = items.filter((i) => !i.paymentMissing);
+    const unassigned = items.filter((i) => i.paymentMissing);
+
     return {
       items,
       count: items.length,
-      totalOpenCents: items.reduce((sum, i) => sum + i.openCents, 0),
-      totalOverdueCents: items
+      totalOpenCents: receivables.reduce((sum, i) => sum + i.openCents, 0),
+      totalOverdueCents: receivables
         .filter((i) => i.overdue)
         .reduce((sum, i) => sum + i.openCents, 0),
+      countPaymentMissing: unassigned.length,
+      totalPaymentMissingCents: unassigned.reduce((sum, i) => sum + i.openCents, 0),
     };
   }),
 

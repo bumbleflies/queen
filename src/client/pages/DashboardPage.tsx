@@ -124,9 +124,15 @@ export function DashboardPage() {
   const run = (reconcile.data ?? null) as unknown as ReconcileRunRow | null;
   const openBankCount = openBank.data?.open ?? 0;
 
-  const items = ((openItems?.items ?? []) as unknown as OpenItem[]).filter(
+  const allItems = ((openItems?.items ?? []) as unknown as OpenItem[]).filter(
     (i) => i.kind !== 'credit_note',
   );
+  // Imported as paid without a recorded payment: matchable in the inbox, but not
+  // a receivable — it gets its own task and stays out of the open-items table and
+  // the aging/expected charts.
+  const unassigned = allItems.filter((i) => i.paymentMissing);
+  const items = allItems.filter((i) => !i.paymentMissing);
+  const unassignedCents = unassigned.reduce((s, i) => s + i.openCents, 0);
   const overdueItems = items.filter((i) => i.overdue);
   const notDueItems = items.filter((i) => !i.overdue);
 
@@ -174,6 +180,16 @@ export function DashboardPage() {
       sub: `${formatEUR(g.cents)} · ${g.items.map((i) => `${i.invoiceNumber} ${t('dash.since')} ${i.daysOverdue} ${t('dash.dayShort')}`).join(', ')}`,
       to: single ? `/invoices/${g.items[0].id}` : `/clients/${g.clientId}`,
       cta: single ? t('dash.openInvoice') : t('dash.openClient'),
+    });
+  }
+  if (unassigned.length > 0) {
+    tasks.push({
+      key: 'unassigned',
+      tone: 'warn',
+      title: `${plural(unassigned.length, t('dash.paymentMissingOne'), t('dash.paymentMissingMany'))}`,
+      sub: `${formatEUR(unassignedCents)} · ${t('dash.paymentMissingSub')}`,
+      to: '/reports',
+      cta: t('dash.view'),
     });
   }
   if (openBankCount > 0) {

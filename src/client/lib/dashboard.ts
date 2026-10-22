@@ -16,6 +16,12 @@ export interface OpenItem {
   openCents: number;
   overdue: boolean;
   daysOverdue: number;
+  /**
+   * Imported as paid without a recorded payment. Matchable in the inbox, but not
+   * a receivable: the dashboard keeps it out of aging, expected receipts and the
+   * open-items list (it shows its own "nicht zugeordnet" task instead).
+   */
+  paymentMissing?: boolean;
 }
 
 /** Whole days from `today` until `date` (negative = in the past). */
@@ -36,9 +42,13 @@ export interface AgingBucket {
   tone: 'due' | 'warn' | 'over';
 }
 
-/** Open receivables by age: not yet due, then days past due. */
+/**
+ * Open receivables by age: not yet due, then days past due. Invoices without a
+ * recorded payment are not receivables and stay out of the aging chart.
+ */
 export function agingBuckets(items: OpenItem[]): AgingBucket[] {
-  const bucket = (pred: (i: OpenItem) => boolean) => sum(items.filter(pred));
+  const receivables = items.filter((i) => !i.paymentMissing);
+  const bucket = (pred: (i: OpenItem) => boolean) => sum(receivables.filter(pred));
   return [
     { key: 'due', label: 'nicht fällig', cents: bucket((i) => !i.overdue), tone: 'due' },
     { key: '30', label: '1–30 T', cents: bucket((i) => i.overdue && i.daysOverdue <= 30), tone: 'warn' },

@@ -13,7 +13,13 @@ describe('invoiceActionKeys (visibility table)', () => {
 
   it('paid and canceled → read-only', () => {
     expect(invoiceActionKeys('paid')).toEqual([]);
+    expect(invoiceActionKeys('paid', 'invoice', false)).toEqual([]);
     expect(invoiceActionKeys('canceled')).toEqual([]);
+  });
+
+  it('paid but imported without a payment → assign payment', () => {
+    expect(invoiceActionKeys('paid', 'invoice', true)).toEqual(['assignPayment']);
+    expect(invoiceActionKeys('paid', 'credit_note', true)).toEqual([]);
   });
 
   it('credit notes are read-only even while stored as sent', () => {
@@ -43,6 +49,12 @@ describe('InvoiceActions rendering', () => {
     expect(screen.queryByText('Als bezahlt markieren')).not.toBeInTheDocument();
     expect(screen.queryByText('Stornieren')).not.toBeInTheDocument();
     expect(screen.getByText(/Abgeschlossen/)).toBeInTheDocument();
+  });
+
+  it('paid without a recorded payment still offers Zahlung zuordnen', () => {
+    render(<InvoiceActions status="paid" paymentMissing />);
+    expect(screen.getByText('Zahlung zuordnen')).toBeInTheDocument();
+    expect(screen.queryByText(/Abgeschlossen/)).not.toBeInTheDocument();
   });
 
   it('canceled is read-only', () => {

@@ -15,6 +15,8 @@ export interface OpenItem {
   clientName: string;
   openCents: number;
   dueDate?: string | Date | null;
+  /** Imported as paid without a recorded payment: the bank payment is missing. */
+  paymentMissing?: boolean;
 }
 
 export interface Suggestion {
@@ -32,29 +34,37 @@ function normalize(s: string): string {
 
 const BANK_TEXT: Record<Lang, {
   noRef: string;
+  recognizedNoOpen: (invoiceNumber: string) => string;
   mismatch: (customerNumber: number | null, invoiceNumber: string, actual: number) => string;
   recognized: string;
   whyRef: string;
   whyExact: string;
   whyPayer: string;
+  whyMissing: string;
 }> = {
   de: {
     noRef: 'Kein Verwendungszweck im Format Kundennr-Rechnungsnr erkannt.',
+    recognizedNoOpen: (invoiceNumber) =>
+      `Verwendungszweck ${invoiceNumber} erkannt, aber keine passende Rechnung gefunden.`,
     mismatch: (customerNumber, invoiceNumber, actual) =>
       `Kundennummer ${customerNumber} passt nicht zu Rechnung ${invoiceNumber} (Kunde ${actual}).`,
     recognized: 'Verwendungszweck erkannt, Betrag/Nummer prüfen.',
     whyRef: 'Rechnungsnr. passt',
     whyExact: 'Betrag exakt',
     whyPayer: 'Auftraggeber ≈ Kunde',
+    whyMissing: 'als bezahlt importiert · Bankzahlung nicht zugeordnet',
   },
   en: {
     noRef: 'No reference in customerNo-invoiceNo format found.',
+    recognizedNoOpen: (invoiceNumber) =>
+      `Reference ${invoiceNumber} recognized, but no matching invoice found.`,
     mismatch: (customerNumber, invoiceNumber, actual) =>
       `Customer number ${customerNumber} does not match invoice ${invoiceNumber} (customer ${actual}).`,
     recognized: 'Reference recognized, check amount/number.',
     whyRef: 'Invoice no. matches',
     whyExact: 'Exact amount',
     whyPayer: 'Payer ≈ customer',
+    whyMissing: 'imported as paid · bank payment not assigned',
   },
 };
 
@@ -70,6 +80,9 @@ export function suggestionsFor(tx: BankTxLite, openItems: OpenItem[], lang: Lang
       reason = txt.mismatch(parsed.customerNumber, parsed.invoiceNumber, candidate.customerNumber);
     } else if (candidate) {
       reason = txt.recognized;
+    } else {
+      // The reference itself is fine — saying "no reference recognized" would be wrong.
+      reason = txt.recognizedNoOpen(parsed.invoiceNumber);
     }
   }
 
@@ -88,6 +101,7 @@ export function suggestionsFor(tx: BankTxLite, openItems: OpenItem[], lang: Lang
     ) {
       whys.push(txt.whyPayer);
     }
+    if (item.paymentMissing) whys.push(txt.whyMissing);
     if (whys.length > 0) {
       out.push({
         id: item.id,

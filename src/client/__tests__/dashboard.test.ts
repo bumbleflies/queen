@@ -50,6 +50,15 @@ describe('dashboard helpers', () => {
     expect(b).toEqual({ due: 47840, '30': 0, '90': 57000, '365': 0, old: 38000 });
   });
 
+  it('agingBuckets keeps invoices without a recorded payment out of the receivables', () => {
+    const withMissing = [
+      ...items,
+      item({ id: 'm', openCents: 226576, dueDate: new Date(2026, 5, 28), paymentMissing: true }),
+    ];
+    const b = Object.fromEntries(agingBuckets(withMissing).map((x) => [x.key, x.cents]));
+    expect(b).toEqual({ due: 47840, '30': 0, '90': 57000, '365': 0, old: 38000 });
+  });
+
   it('expectedByMonth sums not-overdue amounts by due month', () => {
     const m = expectedByMonth(items, 3, today).map((x) => x.cents);
     expect(m).toEqual([42840, 0, 5000]);
