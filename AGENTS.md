@@ -2,7 +2,7 @@
 
 Finance & ops app for bumbleflies: clients, invoices, credit notes, Drive filing, GLS/Firefly III auto-reconcile, and a double-entry SKR04 ledger.
 
-**Status:** the first version is live on servyy-test (releases `queen-v0.2.0`–`0.10.0`). Production is gated. Accounting phase 1 (the ledger) shipped in `queen-v0.10.0`.
+**Status:** the first version is live on servyy-test (releases `queen-v0.2.0`–`0.10.0`). Production is live at `https://queen.bumbleflies.de` since 2026-10-06 and needs explicit approval per deploy. Accounting phase 1 (the ledger) shipped in `queen-v0.10.0`.
 
 **Where to read:**
 - [`CONTRIBUTING.md`](CONTRIBUTING.md): how to work (commands, checks, branching, releases).
@@ -40,6 +40,8 @@ TypeScript throughout:
 
 ## Invariants (enforce in code, do not relax)
 
+- **Sign-in:** Google OAuth for `@bumbleflies.de`, plus one-time invite links for people without a Google account (`users.invite`). The link's plaintext exists only in the response that created it; only `sha256` is stored. TTL 168 h (`INVITE_TTL_HOURS`), single use via one atomic `findOneAndUpdate`. Invited sessions carry a `tv` (tokenVersion) claim, last 30 days, and are checked against the user document on every request — `users.setDisabled` bumps `tokenVersion` and therefore ends them immediately. Google sessions stay 12 h with no per-request DB read. Users are disabled, never deleted: `createdBy` must stay resolvable.
+- **Drive for users without a Google token:** `driveForActor()` borrows the admin who last saved the Drive settings (the `driveForCron()` credential). It never falls back when the user's own token fails. `settings.browseDriveFolders` is admin-only for the same reason — the fallback token can see that admin's whole Drive.
 - **GoBD:** issued invoices are never deleted/reopened. Correction = Stornorechnung (credit note, own number, negative lines, `cancels: <invoiceId>`). `draft` delete is the only delete.
 - **Money = integer cents** everywhere. Parse German formats (`1.600,00 €`, `9329,6`, negative `-100,00 €`); VAT per line, half-up.
 - **Numbering:** queen owns `customerNumber` + `invoiceNumber`. New = `YYYYMMDD-NN` via atomic `Counter` (`findOneAndUpdate` `$inc`); date = draft-creation date, not invoice date. Legacy imports keep arbitrary numbers with `legacy: true`.
@@ -68,7 +70,7 @@ TypeScript throughout:
   - It uses the shared `mongo` (db `queen`) and `redis` (db `1`) from `shared/docker-compose.yml`.
   - Env comes from the Ansible template `templates/finance/queen.env.j2`.
   - Reconcile is an Ofelia `job-exec` at `0 30 7 * * *` running `node dist/src/server/cron/reconcile.js`, after the 06:00 GLS import.
-- **Deploy to servyy-test first** (`ansible ./servyy-test.sh`), then verify health and the Ofelia run. **Prod needs explicit approval**; prod is still gated off in `finance_services`.
+- **Deploy to servyy-test first** (`ansible ./servyy-test.sh`), then verify health and the Ofelia run. **Prod needs explicit approval** — queen runs in production at `https://queen.bumbleflies.de` (live since 2026-10-06, see `servyy-container/history/2026-10-06_queen-prod-enablement.md`), so every deploy needs that approval rather than a gate switch.
 - Until the leagues.finance integration ships (plan Task 11), the Sheet stays the source for LeagueSphere invoices. Do not cut over early.
 - **Ledger go-live order on an environment:**
   1. Check that the container honours TZ (`getTimezoneOffset()` is `-60` or `-120`).

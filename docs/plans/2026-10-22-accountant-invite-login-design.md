@@ -1,7 +1,8 @@
 # Accountant sign-in — Design
 
-> Status: decisions recorded 2026-10-22. Implementation planned in
-> `2026-10-22-accountant-invite-login-plan.md`.
+> Status: implemented 2026-10-22 in `feat/accountant-invite-login`; see
+> [`history/2026-10-22_accountant-invite-login.md`](../../history/2026-10-22_accountant-invite-login.md).
+> Plan: `2026-10-22-accountant-invite-login-plan.md`.
 
 ## Intent
 
