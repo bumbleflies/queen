@@ -40,6 +40,7 @@ export function EntryForm({ year, onDone }: { year: number; onDone: () => void }
   }
 
   async function submit() {
+    if (postManual.isPending) return;
     try {
       // Parse <input type="date"> as a LOCAL date — new Date('YYYY-MM-DD') would be UTC midnight.
       const [y, m, d] = date.split('-').map(Number);
@@ -50,12 +51,17 @@ export function EntryForm({ year, onDone }: { year: number; onDone: () => void }
         text,
         lines: parsed.lines,
       });
-      await utils.ledger.invalidate();
-      toast.show(t('ledger.posted'));
-      onDone();
     } catch (err) {
       toast.error((err as Error).message);
+      return;
     }
+    // The entry is posted: confirm right away and close the form. Refetching must not
+    // gate the feedback — `ledger.availableCash` asks Firefly live and can hang, which
+    // would leave the form open (and invite a duplicate second post).
+    toast.show(t('ledger.posted'));
+    onDone();
+    // Fire-and-forget: the queries render their own error state if a refetch fails.
+    void utils.ledger.invalidate().catch(() => {});
   }
 
   return (
