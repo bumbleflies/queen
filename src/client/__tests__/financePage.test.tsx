@@ -576,6 +576,34 @@ describe('FinancePage — receipt reading', () => {
     expect(shown).toEqual([]);
   });
 
+  it('on load, a stored reading without suggestion explains itself and offers a forced re-read', async () => {
+    state.rows = [{
+      ...(streamRows[0] as Record<string, unknown>),
+      suggestion: null,
+      receiptReading: { status: 'ok', reading: { vendor: 'Cloud Inc', totalCents: 10000, lines: [{ vatRate: 0, grossCents: 10000, account: '6837' }] } },
+    }];
+    openMatch();
+    renderPage();
+    const row = screen.getByRole('row', { name: /Miete März/ });
+    expect(within(row).getByText(/Beleg gelesen: Cloud Inc 100,00\s€ — Betrag passt nicht zum Umsatz \(119,00\s€\)/)).toBeInTheDocument();
+    fireEvent.click(within(row).getByRole('button', { name: 'Beleg auslesen' }));
+    await waitFor(() => expect(calls.readReceipt).toEqual([{ bankTxId: 'tx1', force: true }]));
+  });
+
+  it('on load, a failed or textless stored reading shows its hint and the re-read button', () => {
+    state.rows = [
+      { ...(streamRows[0] as Record<string, unknown>), suggestion: null, receiptReading: { status: 'failed' } },
+      { ...(streamRows[0] as Record<string, unknown>), id: 'tx9', description: 'Scan April', suggestion: null, receiptReading: { status: 'noText' } },
+    ];
+    // no Drive match needed: the stored reading itself makes the row re-readable
+    renderPage();
+    const failed = screen.getByRole('row', { name: /Miete März/ });
+    expect(within(failed).getByText('Beleg konnte nicht gelesen werden')).toBeInTheDocument();
+    expect(within(failed).getByRole('button', { name: 'Beleg auslesen' })).toBeInTheDocument();
+    const noText = screen.getByRole('row', { name: /Scan April/ });
+    expect(within(noText).getByText('Beleg hat keinen Text (Scan)')).toBeInTheDocument();
+  });
+
   it('the button is hidden when readingAvailable is false', () => {
     state.rows = [{ ...(streamRows[0] as Record<string, unknown>), suggestion: null }];
     openMatch();

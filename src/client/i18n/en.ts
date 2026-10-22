@@ -511,6 +511,7 @@ export const en: Dict = {
   'finance.readReceipt.noText': 'Receipt has no text (scan)',
   'finance.readReceipt.unavailable': 'Receipt reading currently unavailable',
   'finance.readReceipt.noReceipt': 'No clear receipt found',
+  'finance.readReceipt.mismatch': 'Receipt read: {vendor} {total} — amount does not match the transaction ({bank})',
   'bookings.dialog.useSplit': 'Use split from receipt',
   'finance.adjust': 'Adjust',
   'finance.manual': 'Book manually',

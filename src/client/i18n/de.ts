@@ -509,6 +509,7 @@ export const de = {
   'finance.readReceipt.noText': 'Beleg hat keinen Text (Scan)',
   'finance.readReceipt.unavailable': 'Beleg lesen derzeit nicht verfügbar',
   'finance.readReceipt.noReceipt': 'Kein eindeutiger Beleg gefunden',
+  'finance.readReceipt.mismatch': 'Beleg gelesen: {vendor} {total} — Betrag passt nicht zum Umsatz ({bank})',
   'bookings.dialog.useSplit': 'Aufteilung aus Beleg übernehmen',
   'finance.adjust': 'Anpassen',
   'finance.manual': 'Manuell buchen',

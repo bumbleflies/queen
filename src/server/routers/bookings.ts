@@ -10,7 +10,7 @@ import { BookingError, bookBankTransaction, unbookBankTransaction } from '../lib
 import { BANK_VAT_RATES, PostingError } from '../lib/accounting/postingRules';
 import { LedgerError } from '../lib/accounting/ledger';
 import { loadHistory } from '../lib/accounting/history';
-import { suggestForTx, type ReceiptReading } from '../lib/accounting/receiptReading';
+import { cachedReading, suggestForTx, type ReceiptReading } from '../lib/accounting/receiptReading';
 import type { Suggestion } from '../lib/accounting/suggest';
 import { loadYear, openTransactions } from '../lib/accounting/bankCoverage';
 import { AUTO_BOOK_USER } from '../lib/accounting/autoBook';
@@ -53,6 +53,21 @@ function row(tx: HydratedDocument<BankTransactionDoc>) {
     receipt: tx.receipt ?? null,
     receiptMissingReason: tx.receiptMissingReason ?? null,
   };
+}
+
+/**
+ * The stored reading of the row's receipt (the attached one, else the Drive
+ * match it was read from), so the client can explain a reading that gave no
+ * suggestion (amount mismatch, failed, no text). Null when never read or read
+ * for a file that is no longer attached.
+ */
+function readingState(tx: HydratedDocument<BankTransactionDoc>): { status: ReadStatus; reading?: ReceiptReading } | null {
+  const cache = tx.receiptReading;
+  const status = cache?.status;
+  if (status !== 'ok' && status !== 'failed' && status !== 'noText') return null;
+  if (tx.receipt?.driveFileId && cache?.driveFileId !== tx.receipt.driveFileId) return null;
+  const reading = cachedReading(cache);
+  return reading ? { status, reading } : { status };
 }
 
 const splitPart = z.object({
@@ -110,7 +125,7 @@ export const bookingsRouter = router({
             supplierName: t.supplierId ? (names.get(String(t.supplierId)) ?? null) : null,
           };
         }
-        return { ...row(t), state: 'open' as const, suggestion: suggestForTx(t, suppliers, history) };
+        return { ...row(t), state: 'open' as const, suggestion: suggestForTx(t, suppliers, history), receiptReading: readingState(t) };
       })
       .reverse();
   }),
@@ -119,7 +134,7 @@ export const bookingsRouter = router({
     const [{ txs, coverage }, suppliers, history] = await Promise.all([loadYear(input.year), Supplier.find({ archived: false }), loadHistory()]);
     return txs
       .filter((t) => !t.matchedInvoiceId && !coverage.has(t.fireflyJournalId))
-      .map((t) => ({ ...row(t), suggestion: suggestForTx(t, suppliers, history) }));
+      .map((t) => ({ ...row(t), suggestion: suggestForTx(t, suppliers, history), receiptReading: readingState(t) }));
   }),
 
   /** Clear receipt match per open row (inbox hint). Drive trouble → `available: false`, never an error. */

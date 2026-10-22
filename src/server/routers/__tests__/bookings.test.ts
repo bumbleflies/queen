@@ -452,6 +452,36 @@ describe('bookings', () => {
       expect(ask).toHaveBeenCalledTimes(3);
     });
 
+    it('stream and inbox rows expose the stored reading state, also when it gives no suggestion', async (ctx) => {
+      skipIfNoDb(ctx);
+      const caller = adminCaller();
+      const mismatch = await tx({ amountCents: 4999, receipt: RECEIPT });
+      const failed = await tx({ amountCents: 5460, receipt: { ...RECEIPT, driveFileId: 'r2' } });
+      const stale = await tx({ amountCents: 5460, receipt: { ...RECEIPT, driveFileId: 'r3' } });
+      const unread = await tx({ amountCents: 5460 });
+      const readAt = new Date(2026, 1, 1);
+      // a foreign-currency invoice: read fine, but the total is not the bank amount
+      await BankTransaction.updateOne({ _id: mismatch._id }, { $set: { receiptReading: { driveFileId: 'r1', status: 'ok', readAt, reading: SPLIT_READING } } });
+      await BankTransaction.updateOne({ _id: failed._id }, { $set: { receiptReading: { driveFileId: 'r2', status: 'failed', readAt, error: 'timeout' } } });
+      // read for a file that is no longer attached: not this receipt's state
+      await BankTransaction.updateOne({ _id: stale._id }, { $set: { receiptReading: { driveFileId: 'old', status: 'failed', readAt } } });
+
+      const inbox = new Map((await caller.bookings.inbox({ year: 2026 })).map((r) => [r.id, r]));
+      expect(inbox.get(String(mismatch._id))).toMatchObject({
+        suggestion: null,
+        receiptReading: { status: 'ok', reading: { vendor: 'Muster Café', totalCents: 5460 } },
+      });
+      expect(inbox.get(String(failed._id))?.receiptReading).toEqual({ status: 'failed' });
+      expect(inbox.get(String(stale._id))?.receiptReading).toBeNull();
+      expect(inbox.get(String(unread._id))?.receiptReading).toBeNull();
+
+      const stream = new Map((await caller.bookings.stream({ year: 2026 })).map((r) => [r.id, r]));
+      const row = stream.get(String(mismatch._id));
+      expect(row?.state === 'open' && row.receiptReading).toMatchObject({ status: 'ok', reading: { totalCents: 5460 } });
+      const failedRow = stream.get(String(failed._id));
+      expect(failedRow?.state === 'open' && failedRow.receiptReading).toEqual({ status: 'failed' });
+    });
+
     it('a PDF without text sets noText', async (ctx) => {
       skipIfNoDb(ctx);
       const caller = adminCaller();

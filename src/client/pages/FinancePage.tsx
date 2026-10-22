@@ -48,6 +48,8 @@ interface StreamRow {
   matchMethod?: string;
   state: 'open' | 'invoice' | 'booked';
   suggestion?: StreamSuggestion | null;
+  /** The stored reading of the row's receipt (open rows only). */
+  receiptReading?: { status: 'ok' | 'failed' | 'noText'; reading?: { vendor: string; totalCents: number } } | null;
   invoice?: { invoiceNumber: string; status: string } | null;
   entry?: {
     entryId: string;
@@ -91,7 +93,15 @@ function complete(s: StreamSuggestion | null | undefined): s is StreamSuggestion
   return s.vatRate !== undefined && (s.mode === 'vatOnly' || !!s.account);
 }
 
-type ReadHint = 'failed' | 'noText' | 'unavailable' | 'noReceipt';
+type ReadHint = 'failed' | 'noText' | 'unavailable' | 'noReceipt' | 'mismatch';
+
+/** What the stored reading says about a row without suggestion: failed, no text, or read but not the bank amount. */
+function storedHint(r: StreamRow): ReadHint | null {
+  const rr = r.receiptReading;
+  if (!rr) return null;
+  if (rr.status === 'failed' || rr.status === 'noText') return rr.status;
+  return rr.reading && rr.reading.totalCents !== r.amountCents ? 'mismatch' : null;
+}
 
 /** Firefly placeholders like "(unknown destination)" are not a counterparty. */
 function counterparty(name: string | null | undefined): string | null {
@@ -248,10 +258,13 @@ export function FinancePage() {
     }
   }
 
+  const hintFor = (r: StreamRow): ReadHint | null => readHints[r.id] ?? storedHint(r);
+
   async function readOne(r: StreamRow) {
     setReading(r.id);
+    const hint = hintFor(r);
     try {
-      const res = await readReceipt.mutateAsync(readHints[r.id] === 'failed' || readHints[r.id] === 'noText' ? { bankTxId: r.id, force: true } : { bankTxId: r.id });
+      const res = await readReceipt.mutateAsync(hint === 'failed' || hint === 'noText' || hint === 'mismatch' ? { bankTxId: r.id, force: true } : { bankTxId: r.id });
       setReadHints((h) => {
         const next = { ...h };
         if (res.status === 'ok') delete next[r.id];
@@ -371,11 +384,28 @@ export function FinancePage() {
           <div className="outcome warn">
             <span className="what">{t('finance.outcome.noRule')}</span>
             {receiptLine}
-            {readHints[r.id] ? <span className="rc">{t(`finance.readReceipt.${readHints[r.id]}`)}</span> : null}
+            {readHintText(r)}
           </div>
         )}
       </>
     );
+  }
+
+  function readHintText(r: StreamRow) {
+    const hint = hintFor(r);
+    if (!hint) return null;
+    const read = r.receiptReading?.reading;
+    if (hint === 'mismatch') {
+      return (
+        <span className="rc">
+          {t('finance.readReceipt.mismatch')
+            .replace('{vendor}', read?.vendor ?? '')
+            .replace('{total}', formatEUR(read?.totalCents ?? 0))
+            .replace('{bank}', formatEUR(r.amountCents))}
+        </span>
+      );
+    }
+    return <span className="rc">{t(`finance.readReceipt.${hint}`)}</span>;
   }
 
   function rowActions(r: StreamRow) {
@@ -392,7 +422,7 @@ export function FinancePage() {
           <button type="button" className="btn sm" onClick={openDialog}>{t('finance.adjust')}</button>
         ) : (
           <>
-            {matches[r.id] && receiptMatches.data?.readingAvailable ? (
+            {(matches[r.id] || r.receiptReading) && receiptMatches.data?.readingAvailable ? (
               <button type="button" className="btn ghost sm" disabled={reading === r.id} onClick={() => readOne(r)}>{t('finance.readReceipt')}</button>
             ) : null}
             {isAdmin ? (
