@@ -201,6 +201,28 @@ describe('suppliers.importJson', () => {
     expect(await Supplier.findOne({ name: 'Hoster GmbH' })).toMatchObject({ autoBook: false });
   });
 
+  it('§13b rules must keep 19 %: create, update and import reject other rates', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    const msg = /§13b.*19 %/;
+    await expect(caller.suppliers.create({ name: 'Cloud Ltd', defaultAccount: '6837', defaultVatRate: 0, defaultMode: 'reverseCharge' }))
+      .rejects.toMatchObject({ code: 'BAD_REQUEST', message: expect.stringMatching(msg) });
+    const ok = await caller.suppliers.create({ name: 'Cloud Ltd', defaultAccount: '6837', defaultVatRate: 0.19, defaultMode: 'reverseCharge' });
+    await expect(caller.suppliers.update({ id: String(ok._id), defaultVatRate: 0.07 }))
+      .rejects.toMatchObject({ code: 'BAD_REQUEST', message: expect.stringMatching(msg) });
+    const plain = await caller.suppliers.create({ name: 'Laden', defaultAccount: '6837', defaultVatRate: 0.07 });
+    await expect(caller.suppliers.update({ id: String(plain._id), defaultMode: 'reverseCharge' }))
+      .rejects.toMatchObject({ code: 'BAD_REQUEST', message: expect.stringMatching(msg) });
+    expect((await Supplier.findById(plain._id))?.defaultMode).not.toBe('reverseCharge');
+
+    const res = await caller.suppliers.importJson({
+      json: JSON.stringify([{ name: 'Ausland Ltd', defaultAccount: '6837', defaultVatRate: 0, defaultMode: 'reverseCharge' }]),
+      dryRun: false,
+    });
+    expect(res.errors).toEqual([expect.stringMatching(/^Eintrag 1: .*§13b.*19 %/)]);
+    expect(await Supplier.countDocuments({ name: 'Ausland Ltd' })).toBe(0);
+  });
+
   it('create and update set autoBook', async (ctx) => {
     skipIfNoDb(ctx);
     const caller = adminCaller();

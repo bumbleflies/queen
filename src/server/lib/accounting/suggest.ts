@@ -1,4 +1,4 @@
-import type { BankBookingMode, SplitPart } from './postingRules';
+import { REVERSE_CHARGE_RATE, type BankBookingMode, type SplitPart } from './postingRules';
 
 export interface SuggestTx {
   counterpartyName?: string | null;
@@ -67,13 +67,15 @@ export function suggest(tx: SuggestTx, suppliers: SuggestSupplier[]): Suggestion
   for (const [matchedBy, test] of checks) {
     const hit = active.find(test);
     if (hit) {
+      const mode: BankBookingMode = hit.defaultMode === 'vatOnly' || hit.defaultMode === 'reverseCharge' ? hit.defaultMode : 'normal';
       return {
         supplierId: String(hit._id),
         kreditorNumber: hit.kreditorNumber,
         supplierName: hit.name,
         account: hit.defaultAccount ?? undefined,
-        vatRate: hit.defaultVatRate ?? undefined,
-        mode: hit.defaultMode === 'vatOnly' || hit.defaultMode === 'reverseCharge' ? hit.defaultMode : 'normal',
+        // §13b always books 19 %, whatever an older rule stored
+        vatRate: mode === 'reverseCharge' ? REVERSE_CHARGE_RATE : (hit.defaultVatRate ?? undefined),
+        mode,
         matchedBy,
       };
     }

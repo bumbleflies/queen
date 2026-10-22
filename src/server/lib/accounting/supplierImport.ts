@@ -3,7 +3,14 @@ import { Supplier } from '../../models/Supplier';
 import { Account } from '../../models/Account';
 import { allocateSupplierNumber, raiseSupplierCounter } from '../numbering';
 import { normalizeIban } from './suggest';
-import { BANK_VAT_RATES, type BankBookingMode } from './postingRules';
+import { BANK_VAT_RATES, REVERSE_CHARGE_RATE, type BankBookingMode } from './postingRules';
+
+export const REVERSE_CHARGE_RATE_MESSAGE = 'Bei §13b ist der USt-Satz immer 19 %';
+
+/** A §13b rule with a stored VAT rate other than 19 % would fail every booking. */
+export function isBadReverseChargeRate(mode: string | null | undefined, vatRate: number | null | undefined): boolean {
+  return mode === 'reverseCharge' && typeof vatRate === 'number' && vatRate !== REVERSE_CHARGE_RATE;
+}
 
 /** One rule as exported/imported. Missing fields leave an existing supplier's value alone. */
 export const supplierRuleSchema = z
@@ -23,7 +30,8 @@ export const supplierRuleSchema = z
     archived: z.boolean().optional(),
     autoBook: z.boolean().optional(),
   })
-  .strict();
+  .strict()
+  .refine((r) => !isBadReverseChargeRate(r.defaultMode, r.defaultVatRate), { message: REVERSE_CHARGE_RATE_MESSAGE, path: ['defaultVatRate'] });
 
 export type SupplierRule = z.infer<typeof supplierRuleSchema>;
 
