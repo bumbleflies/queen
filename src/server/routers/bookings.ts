@@ -6,7 +6,7 @@ import { BankTransaction, type BankTransactionDoc } from '../models/BankTransact
 import { JournalEntry } from '../models/JournalEntry';
 import { Invoice } from '../models/Invoice';
 import { Supplier } from '../models/Supplier';
-import { BookingError, bookBankTransaction, unbookBankTransaction } from '../lib/accounting/bankBooking';
+import { BookingError, bookBankTransaction, findCoverage, unbookBankTransaction } from '../lib/accounting/bankBooking';
 import { BANK_VAT_RATES, PostingError } from '../lib/accounting/postingRules';
 import { LedgerError } from '../lib/accounting/ledger';
 import { loadHistory } from '../lib/accounting/history';
@@ -165,6 +165,7 @@ export const bookingsRouter = router({
    * re-read. Never books. Returns the row's effective suggestion (rule →
    * history → reading) and the reading itself.
    * Without OPENCODE_API_KEY or Drive: 'unavailable'; no receipt: 'noReceipt'.
+   * Incoming or no longer open rows: BAD_REQUEST before any Drive/opencode call.
    */
   readReceipt: authedProcedure
     .input(z.object({ bankTxId: z.string().min(1), force: z.boolean().optional() }))
@@ -178,6 +179,10 @@ export const bookingsRouter = router({
       if (!client) return result('unavailable');
       const tx = await BankTransaction.findById(input.bankTxId);
       if (!tx) throw new TRPCError({ code: 'NOT_FOUND', message: 'Banktransaktion nicht gefunden' });
+      if (tx.direction !== 'out') throw new TRPCError({ code: 'BAD_REQUEST', message: 'Belege werden nur für Ausgaben gelesen' });
+      if (tx.matchedInvoiceId || tx.ignored || (await findCoverage(tx.fireflyJournalId))) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Transaktion ist nicht mehr offen' });
+      }
       const [suppliers, history] = await Promise.all([Supplier.find({ archived: false }), loadHistory()]);
       let drive: DriveFilesLike;
       let files: ReceiptFile[] = [];

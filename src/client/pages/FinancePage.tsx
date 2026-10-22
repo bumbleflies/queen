@@ -422,7 +422,7 @@ export function FinancePage() {
           <button type="button" className="btn sm" onClick={openDialog}>{t('finance.adjust')}</button>
         ) : (
           <>
-            {(matches[r.id] || r.receiptReading) && receiptMatches.data?.readingAvailable ? (
+            {r.direction === 'out' && (matches[r.id] || r.receiptReading) && receiptMatches.data?.readingAvailable ? (
               <button type="button" className="btn ghost sm" disabled={reading === r.id} onClick={() => readOne(r)}>{t('finance.readReceipt')}</button>
             ) : null}
             {isAdmin ? (

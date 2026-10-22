@@ -504,6 +504,22 @@ describe('bookings', () => {
       expect(failedRow?.state === 'open' && failedRow.receiptReading).toEqual({ status: 'failed' });
     });
 
+    it('readReceipt rejects incoming and non-open rows before touching Drive or opencode', async (ctx) => {
+      skipIfNoDb(ctx);
+      const caller = adminCaller();
+      const incoming = await tx({ direction: 'in', receipt: RECEIPT });
+      const booked = await tx({ receipt: RECEIPT });
+      await caller.bookings.book({ bankTxId: String(booked._id), account: '6837', vatRate: 0.19, mode: 'normal' });
+      const matched = await tx({ receipt: RECEIPT, matchedInvoiceId: new mongoose.Types.ObjectId() });
+      const ignored = await tx({ receipt: RECEIPT, ignored: true });
+      for (const t of [incoming, booked, matched, ignored]) {
+        await expect(caller.bookings.readReceipt({ bankTxId: String(t._id) })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      }
+      expect(listReceiptFiles).not.toHaveBeenCalled();
+      expect(receiptText).not.toHaveBeenCalled();
+      expect(ask).not.toHaveBeenCalled();
+    });
+
     it('a PDF without text sets noText', async (ctx) => {
       skipIfNoDb(ctx);
       const caller = adminCaller();
