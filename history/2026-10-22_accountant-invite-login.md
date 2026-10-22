@@ -91,6 +91,9 @@ afterwards) with `MONGO_URI=… NODE_ENV=development npx vitest run --no-file-pa
 
 ## Known issues
 
+- There is no second factor: the link is a bearer credential for its whole TTL, so
+  whoever holds it is the user. Anyone forwarding it hands over the session. The TTL
+  and single use are the only limits — revoke and re-invite if a link leaks.
 - The link has to be delivered by hand (chat, mail client); queen sends nothing.
 - If the Drive-settings admin's Google token dies, receipt filing fails for invited
   users with "Zugang abgelaufen — bitte in den Einstellungen neu verbinden" until an
