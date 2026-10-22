@@ -110,6 +110,20 @@ describe('RulesSection', () => {
     expect(within(vat).getByText('0 offen')).toBeInTheDocument();
   });
 
+  it('marks §13b rules in the account and VAT columns', () => {
+    rules.push({ ...rules[0], id: 's3', kreditorNumber: 70002, name: 'Cloud Ltd', ibans: [], namePatterns: ['Cloud'], defaultAccount: '6837', defaultVatRate: 0.19, defaultMode: 'reverseCharge', openHits: 0 });
+    try {
+      renderSection();
+      const row = screen.getByRole('row', { name: /Cloud Ltd/ });
+      expect(within(row).getByText('6837 · §13b')).toBeInTheDocument();
+      expect(within(row).getByText('19 %')).toBeInTheDocument();
+      // plain rules keep the bare account
+      expect(within(screen.getByRole('row', { name: /Hoster GmbH/ })).getByText('6837')).toBeInTheDocument();
+    } finally {
+      rules.pop();
+    }
+  });
+
   it('show archived asks the server for archived rules', () => {
     renderSection();
     fireEvent.click(screen.getByRole('checkbox', { name: 'Archivierte zeigen' }));

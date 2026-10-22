@@ -488,9 +488,15 @@ export function RulesSection({ year }: { year: number }) {
                 </td>
                 <td data-l={t('rules.col.match')} className="w"><MatchChips rule={r} /></td>
                 <td data-l={t('rules.col.account')} className="num">
-                  {r.defaultMode === 'vatOnly' ? t('rules.vatOnly') : (r.defaultAccount ?? '—')}
+                  {r.defaultMode === 'vatOnly'
+                    ? t('rules.vatOnly')
+                    : r.defaultMode === 'reverseCharge'
+                      ? `${r.defaultAccount ?? '—'} · ${t('rules.reverseCharge')}`
+                      : (r.defaultAccount ?? '—')}
                 </td>
-                <td data-l={t('rules.col.vat')} className="num">{vatLabel(r.defaultVatRate)}</td>
+                <td data-l={t('rules.col.vat')} className="num">
+                  {vatLabel(r.defaultMode === 'reverseCharge' ? REVERSE_CHARGE_RATE : r.defaultVatRate)}
+                </td>
                 <td data-l={t('rules.col.hits')} className="num right">{t('rules.hits').replace('{n}', String(r.openHits))}</td>
                 <td>
                   {isAdmin ? (

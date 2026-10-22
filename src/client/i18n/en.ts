@@ -555,6 +555,7 @@ export const en: Dict = {
   'rules.match.name': 'Name',
   'rules.match.none': 'no matching',
   'rules.vatOnly': 'VAT only',
+  'rules.reverseCharge': '§13b',
   'rules.hits': '{n} open',
   'rules.edit': 'Edit',
   'rules.archive': 'Archive',

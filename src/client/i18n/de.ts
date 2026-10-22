@@ -553,6 +553,7 @@ export const de = {
   'rules.match.name': 'Name',
   'rules.match.none': 'keine Erkennung',
   'rules.vatOnly': 'nur USt',
+  'rules.reverseCharge': '§13b',
   'rules.hits': '{n} offen',
   'rules.edit': 'Bearbeiten',
   'rules.archive': 'Archivieren',
