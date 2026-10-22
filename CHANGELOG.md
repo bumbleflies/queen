@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.24.1](https://github.com/bumbleflies/queen/compare/queen-v0.24.0...queen-v0.24.1) (2026-10-22)
+
+
+### Bug Fixes
+
+* **receipts:** keep the file name when reusing a stored reading ([#154](https://github.com/bumbleflies/queen/issues/154)) ([54005de](https://github.com/bumbleflies/queen/commit/54005de88cf3dc387ad674df770d0a2e15d90d54))
+
 ## [0.24.0](https://github.com/bumbleflies/queen/compare/queen-v0.23.0...queen-v0.24.0) (2026-10-22)
 
 
