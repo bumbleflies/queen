@@ -7,7 +7,7 @@ import { ReconcileRun } from '../models/ReconcileRun';
 import { FireflyClient } from '../services/FireflyClient';
 import { computeSyncWindow, syncBankTransactions } from '../lib/bankSync';
 import { findLastSuccessfulRun, readFireflyEnv } from '../lib/fireflyEnv';
-import { assignBankTransactionToInvoice, reversePayment } from '../lib/reconcile';
+import { assignBankTransactionToInvoice, reconcilePendingTransactions, reversePayment } from '../lib/reconcile';
 import { findActiveBySource } from '../lib/accounting/ledger';
 
 export interface BankListFilterInput {
@@ -107,8 +107,10 @@ export const bankRouter = router({
 
   /**
    * Fetch GLS deposits since the last successful run (or QUEEN_BANK_START) and
-   * upsert them. Errors are recorded on the ReconcileRun and returned as
-   * `{ ok: false }` — never thrown into the CRUD path. Matching is Task 7.
+   * upsert them, then match invoices on the fresh rows. Matching here keeps a
+   * manual sync (and a full resync) from leaving referenced payments unassigned
+   * until the next nightly run. Errors are recorded on the ReconcileRun and
+   * returned as `{ ok: false }` — never thrown into the CRUD path.
    */
   syncNow: authedProcedure
     .input(z.object({ full: z.boolean().optional() }).optional())
@@ -126,10 +128,14 @@ export const bankRouter = router({
         });
         const client = new FireflyClient({ baseUrl, pat, glsAccountId });
         const { fetched } = await syncBankTransactions({ client, from, to, now });
+        const counts = await reconcilePendingTransactions();
         run.fetched = fetched;
+        run.matched = counts.matched;
+        run.partial = counts.partial;
+        run.unmatched = counts.unmatched;
         run.finishedAt = new Date();
         await run.save();
-        return { ok: true as const, fetched, from, to, run };
+        return { ok: true as const, fetched, from, to, run, ...counts };
       } catch (err) {
         run.error = (err as Error).message;
         run.finishedAt = new Date();

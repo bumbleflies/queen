@@ -6,7 +6,7 @@ import { MemoryRouter } from 'react-router-dom';
 
 const q = vi.hoisted(() => (data: unknown) => ({ useQuery: () => ({ data, isError: false }) }));
 const receiptRows = vi.hoisted(() => ({ current: [] as { id: string; name: string; link: string; score: number }[] }));
-const state = vi.hoisted(() => ({ role: 'admin', rows: null as unknown[] | null, matches: {} as Record<string, unknown>, readingAvailable: true, readResult: { status: 'ok', suggestion: null, reading: null } as unknown }));
+const state = vi.hoisted(() => ({ role: 'admin', rows: null as unknown[] | null, matches: {} as Record<string, unknown>, readingAvailable: true, readResult: { status: 'ok', suggestion: null, reading: null } as unknown, openItems: { items: [] } as unknown }));
 const calls: Record<string, unknown[]> = {};
 const shown: string[] = [];
 const actions: { label: string; onClick: () => void }[] = [];
@@ -123,7 +123,7 @@ vi.mock('../lib/trpc', () => ({
       importJson: mut('importJson', async () => ({})),
     },
     receipts: { list: { useQuery: () => ({ data: receiptRows.current, isError: false }) } },
-    reports: { openItems: q({ items: [] }) },
+    reports: { openItems: { useQuery: () => ({ data: state.openItems, isError: false }) } },
     reconcile: {
       status: q({ finishedAt: '2026-03-04T06:10:00.000Z', fetched: 3, matched: 1, partial: 0, unmatched: 1, autoBooked: 2, error: null }),
       runNow: mut('runNow', async () => ({})),
@@ -231,6 +231,7 @@ beforeEach(() => {
   state.matches = {};
   state.readingAvailable = true;
   state.readResult = { status: 'ok', suggestion: null, reading: null };
+  state.openItems = { items: [] };
 });
 
 function renderPage(url = '/finance') {
@@ -275,11 +276,44 @@ describe('FinancePage — inbox', () => {
     expect(screen.getByRole('row', { name: /Steuererstattung/ })).toBeInTheDocument();
   });
 
-  it('incoming rows explain the missing invoice reference', () => {
+  it('incoming rows explain a recognized reference without a matching invoice', () => {
     renderPage();
     const row = screen.getByRole('row', { name: /10009-20260809-01/ });
-    expect(within(row).getByText(/Kein Verwendungszweck im Format/)).toBeInTheDocument();
+    expect(
+      within(row).getByText(/Verwendungszweck 20260809-01 erkannt, aber keine passende Rechnung/),
+    ).toBeInTheDocument();
     expect(within(row).getByText('⚠ Keine Regel')).toBeInTheDocument();
+  });
+
+  it('offers to assign an invoice imported as paid without a recorded payment', () => {
+    state.openItems = {
+      items: [
+        {
+          id: 'inv9',
+          invoiceNumber: '20260529-01',
+          customerNumber: 10010,
+          clientName: 'AFCV NRW',
+          openCents: 226576,
+          paymentMissing: true,
+        },
+      ],
+    };
+    state.rows = [
+      {
+        ...(streamRows[1] as Record<string, unknown>),
+        id: 'tx9',
+        amountCents: 226576,
+        counterpartyName: 'American Football und Cheerleading Verband Nordrhein-W',
+        description: '10010-20260529-01 ANAM: American Football und Cheerleading Verband Nordrhein-Westfalen e.V.',
+      },
+    ];
+    renderPage();
+    const row = screen.getByRole('row', { name: /20260529-01/ });
+    expect(
+      within(row).getByText(/als bezahlt importiert · Bankzahlung nicht zugeordnet/),
+    ).toBeInTheDocument();
+    fireEvent.click(within(row).getByRole('button', { name: 'Zuordnen' }));
+    expect(calls.assign).toEqual([{ bankTxId: 'tx9', invoiceId: 'inv9' }]);
   });
 
   it('books a complete suggestion in one click with the matched receipt, and can undo it', async () => {

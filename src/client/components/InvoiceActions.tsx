@@ -4,10 +4,16 @@ import type { DictKey } from '../i18n/de';
 export type InvoiceActionKey = 'edit' | 'delete' | 'send' | 'markPaid' | 'cancel' | 'assignPayment';
 
 /** Action visibility by status (plan Task 8 / UI mocks). */
-export function invoiceActionKeys(status: string, kind?: string | null): InvoiceActionKey[] {
+export function invoiceActionKeys(
+  status: string,
+  kind?: string | null,
+  paymentMissing?: boolean,
+): InvoiceActionKey[] {
   if (kind === 'credit_note') return [];
   if (status === 'draft') return ['edit', 'delete', 'send'];
   if (status === 'sent') return ['markPaid', 'cancel', 'assignPayment'];
+  // Imported as paid, but the bank payment was never recorded: still assignable.
+  if (status === 'paid' && paymentMissing) return ['assignPayment'];
   return [];
 }
 
@@ -32,14 +38,16 @@ const CLASSES: Record<InvoiceActionKey, string> = {
 export interface InvoiceActionsProps {
   status: string;
   kind?: string | null;
+  /** Imported as paid without a recorded payment (see `lib/format.paymentMissing`). */
+  paymentMissing?: boolean;
   disabled?: boolean;
   handlers?: Partial<Record<InvoiceActionKey, () => void>>;
 }
 
 /** Presentational action bar — no router/tRPC so it is trivially testable. */
-export function InvoiceActions({ status, kind, disabled, handlers }: InvoiceActionsProps) {
+export function InvoiceActions({ status, kind, paymentMissing, disabled, handlers }: InvoiceActionsProps) {
   const { t } = useLanguage();
-  const keys = invoiceActionKeys(status, kind);
+  const keys = invoiceActionKeys(status, kind, paymentMissing);
   if (keys.length === 0) {
     return <span className="muted">{t('actions.done')}</span>;
   }

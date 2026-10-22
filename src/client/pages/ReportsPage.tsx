@@ -28,6 +28,13 @@ export function ReportsPage() {
             {formatEUR(openItems.data?.totalOpenCents ?? 0)}
           </span>
         </div>
+        {(openItems.data?.countPaymentMissing ?? 0) > 0 ? (
+          <p className="muted" style={{ margin: '0 16px 12px', fontSize: 13 }}>
+            {t('reports.paymentUnassignedLine')
+              .replace('{amount}', formatEUR(openItems.data?.totalPaymentMissingCents ?? 0))
+              .replace('{n}', String(openItems.data?.countPaymentMissing ?? 0))}
+          </p>
+        ) : null}
         <div className="table-wrap">
           <table className="resp">
             <thead>
@@ -49,8 +56,14 @@ export function ReportsPage() {
                   <td data-l={t('tbl.due')} className="num">{formatDate(item.dueDate)}</td>
                   <td data-l={t('tbl.open')} className="num right">{formatEUR(item.openCents)}</td>
                   <td data-l={t('tbl.status')}>
-                    <span className={`badge ${item.overdue ? 'b-over' : 'b-sent'}`}>
-                      {item.overdue ? `${t('status.overdue')} · ${item.daysOverdue} ${t('reports.dayShort')}` : t('status.sent')}
+                    <span
+                      className={`badge ${item.paymentMissing ? 'b-draft' : item.overdue ? 'b-over' : 'b-sent'}`}
+                    >
+                      {item.paymentMissing
+                        ? t('reports.paymentUnassigned')
+                        : item.overdue
+                          ? `${t('status.overdue')} · ${item.daysOverdue} ${t('reports.dayShort')}`
+                          : t('status.sent')}
                     </span>
                   </td>
                 </tr>

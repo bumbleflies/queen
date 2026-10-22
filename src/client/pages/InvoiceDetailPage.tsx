@@ -10,6 +10,7 @@ import {
   formatDateTime,
   formatEUR,
   overdueDays,
+  paymentMissing,
   toDate,
 } from '../lib/format';
 import { vatBreakdown, type EditorLine } from '../lib/lineTotals';
@@ -198,6 +199,7 @@ export function InvoiceDetailPage() {
   const openCents = (invoice.totals?.grossCents ?? 0) - paidCents;
   const overdue = overdueDays(invoice);
   const filing = filingState(invoice);
+  const unassigned = paymentMissing(invoice);
 
   const statusExtra = (() => {
     if (invoice.status === 'sent' && overdue > 0)
@@ -226,6 +228,11 @@ export function InvoiceDetailPage() {
             ) : (
               <StatusBadge invoice={invoice} />
             )}
+            {unassigned ? (
+              <span className="badge b-draft" title={t('detail.paymentMissingHint')}>
+                {t('detail.paymentMissing')}
+              </span>
+            ) : null}
             {invoice.kind !== 'credit_note' && statusExtra ? (
               <span className="muted">{statusExtra}</span>
             ) : null}
@@ -246,6 +253,7 @@ export function InvoiceDetailPage() {
         <InvoiceActions
           status={invoice.status}
           kind={invoice.kind}
+          paymentMissing={unassigned}
           handlers={{
             edit: () => navigate(`/invoices/${invoiceId}/edit`),
             delete: handleDelete,

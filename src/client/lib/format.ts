@@ -16,6 +16,20 @@ export interface InvoiceLike {
   kind?: InvoiceKind | string | null;
   dueDate?: string | Date | null;
   payments?: PaymentLike[] | null;
+  importedPaid?: boolean | null;
+}
+
+/**
+ * Imported from the Sheet as paid, but no payment was ever recorded: the bank
+ * payment is still missing (mirrors the server's `lib/invoiceOpen.paymentMissing`).
+ */
+export function paymentMissing(inv: InvoiceLike): boolean {
+  return (
+    inv.kind !== 'credit_note' &&
+    inv.status === 'paid' &&
+    inv.importedPaid === true &&
+    (inv.payments?.length ?? 0) === 0
+  );
 }
 
 export type DisplayStatusKey =

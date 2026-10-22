@@ -324,7 +324,9 @@ export function FinancePage() {
       const result = await syncNow.mutateAsync(full ? { full: true } : undefined);
       await utils.invalidate();
       if (result.ok) {
-        toast.show(`${t('bank.synced')} ${result.fetched} ${t('bank.bookings')}.`);
+        const matched = result.matched ?? 0;
+        const suffix = matched > 0 ? ` · ${matched} ${t('bank.syncedMatched')}` : '';
+        toast.show(`${t('bank.synced')} ${result.fetched} ${t('bank.bookings')}.${suffix}`);
         setResyncOpen(false);
       } else toast.error(result.error ?? t('bank.syncFail'));
     } catch (err) {

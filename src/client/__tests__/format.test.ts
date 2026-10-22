@@ -5,6 +5,7 @@ import {
   formatEUR,
   matchesChip,
   overdueDays,
+  paymentMissing,
   type InvoiceLike,
 } from '../lib/format';
 
@@ -89,5 +90,19 @@ describe('matchesChip', () => {
     expect(matchesChip(credit, 'cancel', TODAY)).toBe(true);
     expect(matchesChip(canceled, 'cancel', TODAY)).toBe(true);
     expect(matchesChip(sent, 'cancel', TODAY)).toBe(false);
+  });
+});
+
+describe('paymentMissing', () => {
+  it('is true only for an invoice imported as paid with no payment record', () => {
+    expect(paymentMissing({ status: 'paid', importedPaid: true, payments: [] })).toBe(true);
+    expect(paymentMissing({ status: 'paid', importedPaid: true })).toBe(true);
+  });
+
+  it('is false once a payment is recorded, or for other statuses and kinds', () => {
+    expect(paymentMissing({ status: 'paid', importedPaid: true, payments: [{ amountCents: 1 }] })).toBe(false);
+    expect(paymentMissing({ status: 'paid', importedPaid: false })).toBe(false);
+    expect(paymentMissing({ status: 'sent' })).toBe(false);
+    expect(paymentMissing({ status: 'paid', importedPaid: true, payments: [], kind: 'credit_note' })).toBe(false);
   });
 });
