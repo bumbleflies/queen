@@ -1,7 +1,7 @@
 # Accountant sign-in — Design
 
-> Status: decisions recorded 2026-10-22. No implementation yet. This document is the
-> input for an implementation plan; it is not a plan itself.
+> Status: decisions recorded 2026-10-22. Implementation planned in
+> `2026-10-22-accountant-invite-login-plan.md`.
 
 ## Intent
 
