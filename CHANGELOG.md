@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.24.0](https://github.com/bumbleflies/queen/compare/queen-v0.23.0...queen-v0.24.0) (2026-10-22)
+
+
+### Features
+
+* **finance:** match invoices imported as paid without a bank payment ([d698d87](https://github.com/bumbleflies/queen/commit/d698d87db5783ba3750d67f11b1c10ad96a9f90c))
+
 ## [0.23.0](https://github.com/bumbleflies/queen/compare/queen-v0.22.2...queen-v0.23.0) (2026-10-22)
 
 
