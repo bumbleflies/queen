@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.23.0](https://github.com/bumbleflies/queen/compare/queen-v0.22.2...queen-v0.23.0) (2026-10-22)
+
+
+### Features
+
+* **receipts:** read several receipts for one transaction ([#151](https://github.com/bumbleflies/queen/issues/151)) ([a65a642](https://github.com/bumbleflies/queen/commit/a65a6424ce202504e37ec0328d6f1f384a8f7188))
+
 ## [0.22.2](https://github.com/bumbleflies/queen/compare/queen-v0.22.1...queen-v0.22.2) (2026-10-22)
 
 
