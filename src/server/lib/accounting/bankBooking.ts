@@ -7,7 +7,7 @@ import { findActiveBySource, post, reverse } from './ledger';
 import { bankPosting, bankPostingSplit, type BankBookingMode, type SplitPart } from './postingRules';
 import { normalizeIban } from './suggest';
 
-export type BookingErrorCode = 'NOT_FOUND' | 'MATCHED' | 'ALREADY_BOOKED' | 'NOT_BOOKED' | 'SUPPLIER_NOT_FOUND';
+export type BookingErrorCode = 'NOT_FOUND' | 'MATCHED' | 'ALREADY_BOOKED' | 'NOT_BOOKED' | 'SUPPLIER_NOT_FOUND' | 'FORBIDDEN';
 
 export class BookingError extends Error {
   readonly code: BookingErrorCode;
@@ -50,6 +50,8 @@ export interface BookBankInput {
   receipt?: { driveFileId: string; fileName: string; link: string } | null;
   receiptMissingReason?: string | null;
   createdBy: string;
+  /** The caller's role: only an admin may change a rule that books automatically via `rememberRule`. */
+  role?: string;
 }
 
 export async function bookBankTransaction(input: BookBankInput) {
@@ -63,6 +65,9 @@ export async function bookBankTransaction(input: BookBankInput) {
   }
   let supplier = input.supplierId ? await Supplier.findById(input.supplierId) : null;
   if (input.supplierId && !supplier) throw new BookingError('SUPPLIER_NOT_FOUND', 'Kreditor nicht gefunden');
+  if (input.rememberRule && !input.split && supplier?.autoBook && input.role !== 'admin') {
+    throw new BookingError('FORBIDDEN', 'Regel mit automatischer Buchung kann nur ein Admin ändern');
+  }
 
   const direction = tx.direction === 'out' ? 'out' : 'in';
   const lines = input.split

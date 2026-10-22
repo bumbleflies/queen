@@ -30,7 +30,8 @@ const receiptInput = z.object({ driveFileId: z.string().min(1), fileName: z.stri
 function toTrpc(err: unknown): never {
   if (err instanceof BookingError) {
     const code = err.code === 'NOT_FOUND' || err.code === 'SUPPLIER_NOT_FOUND' ? 'NOT_FOUND'
-      : err.code === 'MATCHED' || err.code === 'ALREADY_BOOKED' ? 'CONFLICT' : 'BAD_REQUEST';
+      : err.code === 'MATCHED' || err.code === 'ALREADY_BOOKED' ? 'CONFLICT'
+        : err.code === 'FORBIDDEN' ? 'FORBIDDEN' : 'BAD_REQUEST';
     throw new TRPCError({ code, message: err.message });
   }
   if (err instanceof LedgerError || err instanceof PostingError) {
@@ -227,7 +228,7 @@ export const bookingsRouter = router({
     .input(z.object({ bankTxId: z.string().min(1), ...bookFields }))
     .mutation(async ({ input, ctx }) => {
       try {
-        const { entry } = await bookBankTransaction({ ...input, createdBy: ctx.user.sub });
+        const { entry } = await bookBankTransaction({ ...input, createdBy: ctx.user.sub, role: ctx.user.role });
         return { entryNumber: entry.entryNumber, entryId: String(entry._id) };
       } catch (err) {
         toTrpc(err);

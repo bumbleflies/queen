@@ -7,6 +7,7 @@ import { Counter } from '../../models/Counter';
 import { trialBalance } from '../../lib/accounting/balances';
 import { loadHistory } from '../../lib/accounting/history';
 import { defaultBookingText } from '../../lib/accounting/bankBooking';
+import { appRouter } from '../../trpc';
 import { adminCaller, initLedgerModels, resetLedgerDb, sentInvoice, skipIfNoDb } from './helpers/ledgerFixtures';
 
 vi.mock('../../jobs/queue', () => ({ enqueueFileInvoice: vi.fn(async () => {}) }));
@@ -168,6 +169,27 @@ describe('bookings', () => {
     await tx({ counterpartyIban: 'IE29AIBK93115212345678', date: new Date(2026, 1, 28) });
     const [row] = await caller.bookings.inbox({ year: 2026 });
     expect(row.suggestion).toMatchObject({ kreditorNumber: 70000, account: '6837', matchedBy: 'iban' });
+  });
+
+  it('rememberRule on an autoBook rule needs an admin; plain bookings and admins pass', async (ctx) => {
+    skipIfNoDb(ctx);
+    const admin = adminCaller();
+    const user = appRouter.createCaller({ user: { sub: 'u1', email: 'u@example.de', role: 'user' }, serviceAuth: false });
+    const rule = await admin.suppliers.create({ name: 'Hoster', namePatterns: ['Software Ltd'], defaultAccount: '6837', defaultVatRate: 0.19, autoBook: true });
+    const supplierId = String(rule._id);
+    const t = await tx();
+    await expect(
+      user.bookings.book({ bankTxId: String(t._id), account: '6640', vatRate: 0.19, mode: 'normal', supplierId, rememberRule: true }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN', message: 'Regel mit automatischer Buchung kann nur ein Admin ändern' });
+    // rejected before posting, the rule untouched
+    expect(await JournalEntry.countDocuments({ 'source.kind': 'bank' })).toBe(0);
+    expect((await Supplier.findById(supplierId))?.defaultAccount).toBe('6837');
+
+    // booking against the rule without remembering is fine for anyone
+    await user.bookings.book({ bankTxId: String(t._id), account: '6640', vatRate: 0.19, mode: 'normal', supplierId });
+    const t2 = await tx();
+    await admin.bookings.book({ bankTxId: String(t2._id), account: '6640', vatRate: 0.19, mode: 'normal', supplierId, rememberRule: true });
+    expect((await Supplier.findById(supplierId))?.defaultAccount).toBe('6640');
   });
 
   it('bookBulk books items with a suggestion and reports the others without stopping', async (ctx) => {
