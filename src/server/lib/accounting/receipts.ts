@@ -80,3 +80,55 @@ export function strongReceipt<T extends { score: number }>(ranked: T[]): T | nul
   if (!top || top.score < 5) return null;
   return next && next.score >= top.score ? null : top;
 }
+
+/**
+ * A file name with the copy marker after the month removed, so `… 08_2/2026.pdf`
+ * and `… 08/2026.pdf` are siblings while `… 09/2026.pdf` is not.
+ */
+export function siblingKey(name: string): string {
+  return name
+    .replace(/\.pdf$/i, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[_-]\d{1,2}(?=[_./-]|$)/g, '');
+}
+
+/**
+ * The files worth reading for one transaction: the attached receipt, then the
+ * clearly matching Drive candidate and its siblings (same month, same expense,
+ * copied as `_2`/`-2`), then further clear matches — at most `max`.
+ * Without a clear match the list is empty (nothing to read).
+ */
+export function receiptCandidates(
+  tx: {
+    receipt?: { driveFileId?: string | null; fileName?: string | null } | null;
+    date: Date;
+    amountCents: number;
+    counterpartyName?: string | null;
+    description?: string | null;
+  },
+  files: ReceiptFile[],
+  supplierName?: string | null,
+  max = 3,
+): ReceiptFile[] {
+  const out: ReceiptFile[] = [];
+  const seen = new Set<string>();
+  const add = (file: ReceiptFile) => {
+    if (seen.has(file.id) || out.length >= max) return;
+    seen.add(file.id);
+    out.push(file);
+  };
+
+  if (tx.receipt?.driveFileId) add({ id: tx.receipt.driveFileId, name: tx.receipt.fileName ?? '', link: '' });
+
+  const ranked = rankReceipts(files, tx, supplierName ?? undefined);
+  const [seed] = ranked;
+  if (seed && seed.score >= 5) {
+    add(seed);
+    const key = siblingKey(seed.name);
+    for (const f of ranked) if (siblingKey(f.name) === key) add(f);
+    for (const f of ranked) if (f.score >= 5) add(f);
+  }
+  return out;
+}

@@ -417,8 +417,8 @@ describe('receipt reading in the daily reconcile (DB)', () => {
     expect(run.receiptsRead).toBe(10);
     expect(ask).toHaveBeenCalledTimes(10);
     expect(await JournalEntry.countDocuments({ 'source.kind': 'bank' })).toBe(0);
-    expect(await BankTransaction.countDocuments({ 'receiptReading.status': 'ok' })).toBe(10);
-    expect((await BankTransaction.findOne({ counterpartyName: 'Regel AG' }))?.receiptReading).toBeUndefined();
+    expect(await BankTransaction.countDocuments({ 'receiptReadings.status': 'ok' })).toBe(10);
+    expect((await BankTransaction.findOne({ counterpartyName: 'Regel AG' }))?.receiptReadings).toHaveLength(0);
 
     const second = await runReconcile({ skipSync: true, now: NOW });
     expect(second.receiptsRead).toBe(2);
@@ -441,7 +441,7 @@ describe('receipt reading in the daily reconcile (DB)', () => {
     const run = await runReconcile({ skipSync: true, now: NOW });
     expect(run.error ?? null).toBeNull();
     expect(run.receiptsRead).toBe(1);
-    expect((await BankTransaction.findOne({}))?.receiptReading?.status).toBe('failed');
+    expect((await BankTransaction.findOne({}))?.receiptReadings?.[0]?.status).toBe('failed');
 
     // a failed reading is retried on the next run
     ask.mockResolvedValue({
@@ -450,7 +450,7 @@ describe('receipt reading in the daily reconcile (DB)', () => {
     });
     const retry = await runReconcile({ skipSync: true, now: NOW });
     expect(retry.receiptsRead).toBe(1);
-    expect((await BankTransaction.findOne({}))?.receiptReading?.status).toBe('ok');
+    expect((await BankTransaction.findOne({}))?.receiptReadings?.[0]?.status).toBe('ok');
     expect((await runReconcile({ skipSync: true, now: NOW })).receiptsRead).toBe(0);
 
     listReceiptFiles.mockRejectedValue(new Error('invalid_grant'));
@@ -475,7 +475,10 @@ describe('receipt reading in the daily reconcile (DB)', () => {
 
     const run = await runReconcile({ skipSync: true, now: NOW });
     expect(run.receiptsRead).toBe(10);
-    const status = async (n: number) => (await BankTransaction.findOne({ fireflyJournalId: `${800 + n}:0` }))?.receiptReading?.status;
+    const status = async (n: number) => {
+      const doc = await BankTransaction.findOne({ fireflyJournalId: `${800 + n}:0` });
+      return doc?.receiptReadings?.find((r) => r.driveFileId === `f${n}`)?.status ?? doc?.receiptReading?.status;
+    };
     expect(await status(2)).toBe('ok');
     expect(await status(1)).toBe('failed');
     expect(await status(3)).toBe('failed');

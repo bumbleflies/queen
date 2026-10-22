@@ -590,6 +590,38 @@ describe('FinancePage — receipt reading', () => {
     await waitFor(() => expect(calls.readReceipt).toEqual([{ bankTxId: 'tx1', force: true }]));
   });
 
+  it('a suggestion read from two receipts says so', () => {
+    state.rows = [{
+      ...receiptRow(),
+      suggestion: {
+        ...(receiptRow().suggestion as Record<string, unknown>),
+        reading: { vendor: 'Augustiner Keller', totalCents: 5040, files: 2, lines: [{ vatRate: 0.19, grossCents: 5040, account: '6640' }] },
+      },
+    }];
+    renderPage();
+    const row = screen.getByRole('row', { name: /Miete März/ });
+    expect(within(row).getByText(/aus 2 Belegen gelesen: Augustiner Keller/)).toBeInTheDocument();
+  });
+
+  it('lists every receipt read when their totals do not add up', () => {
+    state.rows = [{
+      ...(streamRows[0] as Record<string, unknown>),
+      suggestion: null,
+      receiptReading: {
+        status: 'ok',
+        fileCount: 2,
+        files: [
+          { fileName: 'Spesen - Chris - Augustiner - 08/2026.pdf', status: 'ok', vendor: 'Augustiner Keller', totalCents: 2520 },
+          { fileName: 'Spesen - Chris - Augustiner - 08_2/2026.pdf', status: 'ok', vendor: 'Augustiner Keller', totalCents: 2520 },
+        ],
+      },
+    }];
+    openMatch();
+    renderPage();
+    const row = screen.getByRole('row', { name: /Miete März/ });
+    expect(within(row).getByText(/2 Belege gelesen: 25,20\s€ \+ 25,20\s€ = 50,40\s€ — Betrag passt nicht zum Umsatz \(119,00\s€\)/)).toBeInTheDocument();
+  });
+
   it('on load, a failed or textless stored reading shows its hint and the re-read button', () => {
     state.rows = [
       { ...(streamRows[0] as Record<string, unknown>), suggestion: null, receiptReading: { status: 'failed' } },

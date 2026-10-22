@@ -411,7 +411,9 @@ describe('bookings', () => {
       expect(prompt).toContain('6640');
 
       const stored = await BankTransaction.findById(t._id);
-      expect(stored?.receiptReading).toMatchObject({ driveFileId: 'r1', status: 'ok', model: 'free:m1' });
+      expect(stored?.receiptReadings?.[0]).toMatchObject({ driveFileId: 'r1', status: 'ok', model: 'free:m1' });
+      expect(stored?.receiptMatch).toMatchObject({ driveFileIds: ['r1'], reading: { totalCents: 5460 } });
+      expect(stored?.receiptReading).toBeUndefined();
 
       // cached: no second request
       expect((await caller.bookings.readReceipt({ bankTxId: String(t._id) })).status).toBe('ok');
@@ -432,6 +434,85 @@ describe('bookings', () => {
       expect(bal('1800')).toBe(-5460);
       expect(bal('6640')).toBe(3000);
       expect(bal('6837')).toBe(1891);
+    });
+
+    it('combines the sibling receipts that add up and stops as soon as the set matches', async (ctx) => {
+      skipIfNoDb(ctx);
+      process.env.QUEEN_RECEIPTS_FOLDER_ID = 'root';
+      const files = [
+        { id: 'a1', name: 'Spesen - Chris - Augustiner - 08/2026.pdf', link: 'https://drive/a1' },
+        { id: 'a2', name: 'Spesen - Chris - Augustiner - 08_2/2026.pdf', link: 'https://drive/a2' },
+        { id: 'a3', name: 'Spesen - Chris - Augustiner - 09/2026.pdf', link: 'https://drive/a3' },
+      ];
+      listReceiptFiles.mockResolvedValue(files);
+      const caller = adminCaller();
+      const t = await tx({
+        amountCents: 5040,
+        date: new Date(2026, 8, 3),
+        counterpartyName: 'Christian Dähn',
+        description: '2x Spesen - Chris - Augustiner - 08/2026 + Spesen - Chris - Augustiner - 08.2/2026',
+      });
+      receiptText.mockResolvedValue('Augustiner Keller\nSumme 25,20 EUR');
+      const part = { vendor: 'Augustiner Keller', country: 'DE', date: '2026-08-29', totalCents: 2520, reverseCharge: false, lines: [{ vatRate: 0.19, grossCents: 2520, account: '6640' }] };
+      ask.mockResolvedValue(replyWith(part));
+
+      const res = await caller.bookings.readReceipt({ bankTxId: String(t._id) });
+      expect(res.status).toBe('ok');
+      expect(res.suggestion).toMatchObject({ matchedBy: 'receipt', reading: { vendor: 'Augustiner Keller', totalCents: 5040, files: 2 } });
+      expect(res.suggestion).toMatchObject({ account: '6640', vatRate: 0.19 });
+      // two reads, and the September sibling is never touched
+      expect(receiptText.mock.calls.map((c) => c[1])).toEqual(['a1', 'a2']);
+
+      const stored = await BankTransaction.findById(t._id);
+      expect(stored?.receiptReadings).toHaveLength(2);
+      expect(stored?.receiptMatch).toMatchObject({ driveFileIds: ['a1', 'a2'], reading: { totalCents: 5040 } });
+
+      const [row] = await caller.bookings.stream({ year: 2026 });
+      expect(row.state === 'open' && row.suggestion?.reading?.files).toBe(2);
+      expect(row.state === 'open' && row.receiptReading?.fileCount).toBe(2);
+
+      // a stored match means no second read
+      expect((await caller.bookings.readReceipt({ bankTxId: String(t._id) })).status).toBe('ok');
+      expect(ask).toHaveBeenCalledTimes(2);
+      delete process.env.QUEEN_RECEIPTS_FOLDER_ID;
+    });
+
+    it('reports every receipt read when their totals do not add up', async (ctx) => {
+      skipIfNoDb(ctx);
+      process.env.QUEEN_RECEIPTS_FOLDER_ID = 'root';
+      listReceiptFiles.mockResolvedValue([
+        { id: 'a1', name: 'Spesen - Chris - Augustiner - 08/2026.pdf', link: 'https://drive/a1' },
+        { id: 'a2', name: 'Spesen - Chris - Augustiner - 08_2/2026.pdf', link: 'https://drive/a2' },
+      ]);
+      const caller = adminCaller();
+      const t = await tx({
+        amountCents: 5460,
+        date: new Date(2026, 8, 3),
+        counterpartyName: 'Christian Dähn',
+        description: 'Spesen - Chris - Augustiner - 08/2026',
+      });
+      receiptText.mockResolvedValue('Augustiner Keller\nSumme 25,20 EUR');
+      ask.mockResolvedValue(replyWith({
+        vendor: 'Augustiner Keller', totalCents: 2520, reverseCharge: false,
+        lines: [{ vatRate: 0.19, grossCents: 2520, account: '6640' }],
+      }));
+
+      const res = await caller.bookings.readReceipt({ bankTxId: String(t._id) });
+      expect(res.status).toBe('ok');
+      expect(res.suggestion).toBeNull();
+      expect(res.reading).toBeNull();
+
+      const [row] = await caller.bookings.stream({ year: 2026 });
+      expect(row.state === 'open' && row.receiptReading).toMatchObject({
+        status: 'ok',
+        fileCount: 2,
+        files: [
+          { fileName: 'Spesen - Chris - Augustiner - 08/2026.pdf', totalCents: 2520 },
+          { fileName: 'Spesen - Chris - Augustiner - 08_2/2026.pdf', totalCents: 2520 },
+        ],
+      });
+      expect(row.state === 'open' && row.receiptReading?.reading).toBeUndefined();
+      delete process.env.QUEEN_RECEIPTS_FOLDER_ID;
     });
 
     it('reads the clearly matching Drive receipt when none is attached', async (ctx) => {
@@ -460,7 +541,7 @@ describe('bookings', () => {
       receiptText.mockResolvedValue('Muster Café Summe 54,60 EUR');
       ask.mockRejectedValue(new Error('opencode reply timed out after 120s'));
       expect(await caller.bookings.readReceipt({ bankTxId: String(t._id) })).toEqual({ status: 'failed', suggestion: null, reading: null });
-      expect((await BankTransaction.findById(t._id))?.receiptReading).toMatchObject({ status: 'failed', error: expect.stringMatching(/timed out/) });
+      expect((await BankTransaction.findById(t._id))?.receiptReadings?.[0]).toMatchObject({ status: 'failed', error: expect.stringMatching(/timed out/) });
 
       // a failed reading is not cached: the next click reads again; an unusable answer fails too
       ask.mockResolvedValue(replyWith({ ...SPLIT_READING, totalCents: 9999 }));
@@ -491,9 +572,9 @@ describe('bookings', () => {
       const inbox = new Map((await caller.bookings.inbox({ year: 2026 })).map((r) => [r.id, r]));
       expect(inbox.get(String(mismatch._id))).toMatchObject({
         suggestion: null,
-        receiptReading: { status: 'ok', reading: { vendor: 'Muster Café', totalCents: 5460 } },
+        receiptReading: { status: 'ok', reading: { vendor: 'Muster Café', totalCents: 5460 }, fileCount: 1 },
       });
-      expect(inbox.get(String(failed._id))?.receiptReading).toEqual({ status: 'failed' });
+      expect(inbox.get(String(failed._id))?.receiptReading).toMatchObject({ status: 'failed', files: [{ status: 'failed' }] });
       expect(inbox.get(String(stale._id))?.receiptReading).toBeNull();
       expect(inbox.get(String(unread._id))?.receiptReading).toBeNull();
 
@@ -501,7 +582,7 @@ describe('bookings', () => {
       const row = stream.get(String(mismatch._id));
       expect(row?.state === 'open' && row.receiptReading).toMatchObject({ status: 'ok', reading: { totalCents: 5460 } });
       const failedRow = stream.get(String(failed._id));
-      expect(failedRow?.state === 'open' && failedRow.receiptReading).toEqual({ status: 'failed' });
+      expect(failedRow?.state === 'open' && failedRow.receiptReading).toMatchObject({ status: 'failed', files: [{ status: 'failed' }] });
     });
 
     it('readReceipt rejects incoming and non-open rows before touching Drive or opencode', async (ctx) => {
@@ -527,7 +608,7 @@ describe('bookings', () => {
       receiptText.mockResolvedValue('  \n ');
       expect(await caller.bookings.readReceipt({ bankTxId: String(t._id) })).toEqual({ status: 'noText', suggestion: null, reading: null });
       expect(ask).not.toHaveBeenCalled();
-      expect((await BankTransaction.findById(t._id))?.receiptReading?.status).toBe('noText');
+      expect((await BankTransaction.findById(t._id))?.receiptReadings?.[0]?.status).toBe('noText');
       // noText is cached
       await caller.bookings.readReceipt({ bankTxId: String(t._id) });
       expect(receiptText).toHaveBeenCalledTimes(1);
@@ -539,7 +620,7 @@ describe('bookings', () => {
       expect(await adminCaller().bookings.readReceipt({ bankTxId: String(t._id) })).toEqual({ status: 'noText', suggestion: null, reading: null });
       expect(receiptText).not.toHaveBeenCalled();
       expect(ask).not.toHaveBeenCalled();
-      expect((await BankTransaction.findById(t._id))?.receiptReading).toMatchObject({ driveFileId: 'img1', status: 'noText' });
+      expect((await BankTransaction.findById(t._id))?.receiptReadings?.[0]).toMatchObject({ driveFileId: 'img1', status: 'noText' });
     });
 
     it('without OPENCODE_API_KEY reading is unavailable, not an error', async (ctx) => {

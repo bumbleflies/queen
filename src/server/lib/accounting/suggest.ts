@@ -35,7 +35,7 @@ export interface Suggestion {
   /** Receipt readings across several accounts / VAT rates; `account`/`vatRate` are then absent. */
   split?: SplitPart[];
   /** The extracted receipt figures, always shown with a receipt suggestion. */
-  reading?: { vendor: string; totalCents: number; lines: { vatRate: number; grossCents: number; account: string }[] };
+  reading?: { vendor: string; totalCents: number; lines: { vatRate: number; grossCents: number; account: string }[]; files?: number };
 }
 
 export function normalizeIban(s: string): string {

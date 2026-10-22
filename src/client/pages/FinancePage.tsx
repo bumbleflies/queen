@@ -25,7 +25,7 @@ interface StreamSuggestion {
   matchedBy: 'iban' | 'purpose' | 'name' | 'history' | 'receipt';
   lastBookedAt?: string | Date;
   split?: SplitPart[];
-  reading?: { vendor: string; totalCents: number; lines: { vatRate: number; grossCents: number; account: string }[] };
+  reading?: { vendor: string; totalCents: number; lines: { vatRate: number; grossCents: number; account: string }[]; files?: number };
   supplierName: string;
   account?: string;
   vatRate?: number;
@@ -48,8 +48,13 @@ interface StreamRow {
   matchMethod?: string;
   state: 'open' | 'invoice' | 'booked';
   suggestion?: StreamSuggestion | null;
-  /** The stored reading of the row's receipt (open rows only). */
-  receiptReading?: { status: 'ok' | 'failed' | 'noText'; reading?: { vendor: string; totalCents: number } } | null;
+  /** The stored reading of the row's receipts (open rows only). */
+  receiptReading?: {
+    status: 'ok' | 'failed' | 'noText';
+    reading?: { vendor: string; totalCents: number; files?: number };
+    files?: { fileName: string | null; status: 'ok' | 'failed' | 'noText'; vendor?: string; totalCents?: number }[];
+    fileCount?: number;
+  } | null;
   invoice?: { invoiceNumber: string; status: string } | null;
   entry?: {
     entryId: string;
@@ -100,7 +105,10 @@ function storedHint(r: StreamRow): ReadHint | null {
   const rr = r.receiptReading;
   if (!rr) return null;
   if (rr.status === 'failed' || rr.status === 'noText') return rr.status;
-  return rr.reading && rr.reading.totalCents !== r.amountCents ? 'mismatch' : null;
+  const read = (rr.files ?? []).filter((f) => f.totalCents !== undefined);
+  const total = rr.reading?.totalCents ?? read.reduce((s, f) => s + (f.totalCents ?? 0), 0);
+  if (rr.reading || read.length > 0) return total !== r.amountCents ? 'mismatch' : null;
+  return rr.files?.length ? 'noText' : null;
 }
 
 /** Firefly placeholders like "(unknown destination)" are not a counterparty. */
@@ -366,7 +374,9 @@ export function FinancePage() {
             </span>
             <span className="rc">
               {s.matchedBy === 'receipt'
-                ? t('finance.outcome.receipt.read').replace('{vendor}', s.reading?.vendor ?? s.supplierName)
+                ? (s.reading?.files && s.reading.files > 1
+                    ? t('finance.outcome.receipt.readMany').replace('{n}', String(s.reading.files)).replace('{vendor}', s.reading.vendor || s.supplierName)
+                    : t('finance.outcome.receipt.read').replace('{vendor}', s.reading?.vendor ?? s.supplierName))
                 : s.matchedBy === 'history' && s.lastBookedAt
                   ? t('finance.outcome.history').replace('{date}', formatDate(s.lastBookedAt))
                   : t('finance.outcome.rule').replace('{name}', s.supplierName)}
@@ -396,11 +406,25 @@ export function FinancePage() {
     if (!hint) return null;
     const read = r.receiptReading?.reading;
     if (hint === 'mismatch') {
+      const files = (r.receiptReading?.files ?? []).filter((f) => f.totalCents !== undefined);
+      if (files.length > 1) {
+        const total = files.reduce((s, f) => s + (f.totalCents ?? 0), 0);
+        return (
+          <span className="rc">
+            {t('finance.readReceipt.mismatchMany')
+              .replace('{n}', String(files.length))
+              .replace('{parts}', files.map((f) => formatEUR(f.totalCents ?? 0)).join(' + '))
+              .replace('{total}', formatEUR(total))
+              .replace('{bank}', formatEUR(r.amountCents))}
+          </span>
+        );
+      }
+      const single = files[0];
       return (
         <span className="rc">
           {t('finance.readReceipt.mismatch')
-            .replace('{vendor}', read?.vendor ?? '')
-            .replace('{total}', formatEUR(read?.totalCents ?? 0))
+            .replace('{vendor}', read?.vendor ?? single?.vendor ?? '')
+            .replace('{total}', formatEUR(read?.totalCents ?? single?.totalCents ?? 0))
             .replace('{bank}', formatEUR(r.amountCents))}
         </span>
       );

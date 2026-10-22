@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   buildReceiptPrompt,
   maskBankData,
+  matchReceiptSet,
+  mergeReceiptReadings,
   parseReceiptReply,
   readingToSuggestion,
   type ReceiptReading,
@@ -149,5 +151,73 @@ describe('readingToSuggestion', () => {
 
   it('returns null when the total differs from the bank amount', () => {
     expect(readingToSuggestion(reading(), { ...outTx, amountCents: 5400 })).toBeNull();
+  });
+});
+
+describe('mergeReceiptReadings', () => {
+  it('adds the totals and merges lines per account and rate', () => {
+    const a = reading({ totalCents: 2520, lines: [{ vatRate: 0.19, grossCents: 2520, account: '6640' }] });
+    const b = reading({ totalCents: 2520, date: '2026-08-29', lines: [{ vatRate: 0.19, grossCents: 2000, account: '6640' }, { vatRate: 0.07, grossCents: 520, account: '6837' }] });
+    expect(mergeReceiptReadings([a, b])).toEqual({
+      vendor: 'Muster Café',
+      country: 'DE',
+      date: '2026-10-01',
+      totalCents: 5040,
+      reverseCharge: false,
+      lines: [
+        { vatRate: 0.19, grossCents: 4520, account: '6640' },
+        { vatRate: 0.07, grossCents: 520, account: '6837' },
+      ],
+    });
+  });
+});
+
+describe('matchReceiptSet', () => {
+  const entry = (fileId: string, over: Partial<ReceiptReading> = {}) => ({ fileId, fileName: `${fileId}.pdf`, reading: reading(over) });
+  const part = (fileId: string, over: Partial<ReceiptReading> = {}) =>
+    entry(fileId, { totalCents: 2520, lines: [{ vatRate: 0.19, grossCents: 2520, account: '6640' }], ...over });
+
+  it('accepts a single receipt that equals the amount', () => {
+    const match = matchReceiptSet([entry('a')], 5460, ['Muster Café']);
+    expect(match).toMatchObject({ fileIds: ['a'], reading: { totalCents: 5460 } });
+  });
+
+  it('accepts two receipts whose totals add up and whose vendors agree', () => {
+    const match = matchReceiptSet([part('a'), part('b', { vendor: 'MUSTER CAFÉ' })], 5040, ['Muster Café']);
+    expect(match?.fileIds).toEqual(['a', 'b']);
+    expect(match?.reading.totalCents).toBe(5040);
+    expect(match?.reading.lines).toEqual([{ vatRate: 0.19, grossCents: 5040, account: '6640' }]);
+  });
+
+  it('accepts a set when the vendors agree with the transaction hint', () => {
+    const match = matchReceiptSet([part('a', { vendor: 'Augustiner Keller' }), part('b', { vendor: 'Augustiner-Keller GmbH' })], 5040, ['Augustiner Keller']);
+    expect(match?.reading.totalCents).toBe(5040);
+  });
+
+  it('rejects a set whose vendors disagree with each other and the hint', () => {
+    expect(matchReceiptSet([part('a', { vendor: 'Augustiner Keller' }), part('b', { vendor: 'Muster Café' })], 5040, ['Taxi Berlin'])).toBeNull();
+  });
+
+  it('ignores an empty vendor when checking agreement', () => {
+    expect(matchReceiptSet([part('a', { vendor: '' }), part('b', { vendor: 'Muster Café' })], 5040, [])?.fileIds).toHaveLength(2);
+  });
+
+  it('rejects mixed reverse-charge readings', () => {
+    expect(matchReceiptSet([part('a'), part('b', { reverseCharge: true })], 5040, ['Muster Café'])).toBeNull();
+  });
+
+  it('rejects sets that do not add up', () => {
+    expect(matchReceiptSet([part('a'), part('b')], 5460, ['Muster Café'])).toBeNull();
+  });
+
+  it('prefers the smallest set', () => {
+    const whole = entry('whole', { totalCents: 5040, lines: [{ vatRate: 0.19, grossCents: 5040, account: '6640' }] });
+    const match = matchReceiptSet([part('a'), part('b'), whole], 5040, ['Muster Café']);
+    expect(match?.fileIds).toEqual(['whole']);
+  });
+
+  it('never returns more than three files', () => {
+    const parts = [part('a'), part('b'), part('c'), part('d')];
+    expect(matchReceiptSet(parts, 10080, ['Muster Café'])).toBeNull();
   });
 });

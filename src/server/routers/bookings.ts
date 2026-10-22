@@ -14,12 +14,12 @@ import { cachedReading, suggestForTx, type ReceiptReading } from '../lib/account
 import type { Suggestion } from '../lib/accounting/suggest';
 import { loadYear, openTransactions } from '../lib/accounting/bankCoverage';
 import { AUTO_BOOK_USER } from '../lib/accounting/autoBook';
-import { rankReceipts, strongReceipt, type ReceiptFile } from '../lib/accounting/receipts';
+import { rankReceipts, receiptCandidates, strongReceipt, type ReceiptFile } from '../lib/accounting/receipts';
 import { listReceiptFiles, type DriveFilesLike } from '../services/receiptsDrive';
 import { driveForUser } from '../services/driveForUser';
 import { getReceiptsFolder } from '../services/appSettings';
 import { opencodeFromEnv } from '../services/OpencodeClient';
-import { readTxReceipt, receiptFileFor, receiptPromptAccounts, type ReadStatus } from '../services/receiptReader';
+import { readTxReceipts, receiptPromptAccounts, type ReadStatus, type ReceiptFileReading } from '../services/receiptReader';
 import { FireflyClient } from '../services/FireflyClient';
 import { readFireflyEnv } from '../lib/fireflyEnv';
 
@@ -56,19 +56,61 @@ function row(tx: HydratedDocument<BankTransactionDoc>) {
   };
 }
 
+/** One read receipt file as the client shows it: what was read and what it says. */
+export interface ReadingFileInfo {
+  fileName: string | null;
+  status: ReadStatus;
+  vendor?: string;
+  totalCents?: number;
+}
+
+export interface ReadingState {
+  /** 'ok' also when every file was read but no set adds up (amount mismatch). */
+  status: ReadStatus;
+  files: ReadingFileInfo[];
+  /** The merged reading of the set that adds up; absent when the totals don't match. */
+  reading?: ReceiptReading;
+  fileCount: number;
+}
+
+function fileInfo(r: ReceiptFileReading): ReadingFileInfo {
+  return {
+    fileName: r.fileName ?? null,
+    status: r.status,
+    vendor: r.reading?.vendor,
+    totalCents: r.reading?.totalCents,
+  };
+}
+
 /**
- * The stored reading of the row's receipt (the attached one, else the Drive
- * match it was read from), so the client can explain a reading that gave no
- * suggestion (amount mismatch, failed, no text). Null when never read or read
- * for a file that is no longer attached.
+ * What was read for the row (one entry per receipt file) and the matched set.
+ * Null when nothing was read. A match is hidden when the attachment changed to
+ * a file that is not part of it, exactly as the old single reading was.
  */
-function readingState(tx: HydratedDocument<BankTransactionDoc>): { status: ReadStatus; reading?: ReceiptReading } | null {
-  const cache = tx.receiptReading;
-  const status = cache?.status;
-  if (status !== 'ok' && status !== 'failed' && status !== 'noText') return null;
-  if (tx.receipt?.driveFileId && cache?.driveFileId !== tx.receipt.driveFileId) return null;
-  const reading = cachedReading(cache);
-  return reading ? { status, reading } : { status };
+function readingState(tx: HydratedDocument<BankTransactionDoc>): ReadingState | null {
+  // Legacy single reading: shown until the row is re-read, then removed.
+  if ((tx.receiptReadings ?? []).length === 0) {
+    const legacy = tx.receiptReading;
+    if (!legacy || (tx.receipt?.driveFileId && legacy.driveFileId !== tx.receipt.driveFileId)) return null;
+    const reading = cachedReading(legacy);
+    return {
+      status: legacy.status as ReadStatus,
+      files: [fileInfo(legacy as ReceiptFileReading)],
+      reading: reading ?? undefined,
+      fileCount: 1,
+    };
+  }
+  const files = (tx.receiptReadings ?? []).map((r) => fileInfo(r as ReceiptFileReading));
+  const match = cachedReading(tx.receiptMatch);
+  const matchValid = !!match && (!tx.receipt?.driveFileId || (tx.receiptMatch?.driveFileIds ?? []).includes(tx.receipt.driveFileId));
+  const status: ReadStatus = matchValid
+    ? 'ok'
+    : files.some((f) => f.status === 'failed')
+      ? 'failed'
+      : files.every((f) => f.status === 'noText')
+        ? 'noText'
+        : 'ok';
+  return { status, files, reading: matchValid ? match : undefined, fileCount: matchValid ? (tx.receiptMatch?.driveFileIds.length ?? 1) : files.length };
 }
 
 const splitPart = z.object({
@@ -160,10 +202,11 @@ export const bookingsRouter = router({
   }),
 
   /**
-   * Reads the row's receipt (attached, else the clearly matching Drive file)
-   * with opencode and stores the result; `force` re-reads, 'failed' is always
-   * re-read. Never books. Returns the row's effective suggestion (rule →
-   * history → reading) and the reading itself.
+   * Reads the row's receipts (the attached one, the clearly matching Drive file
+   * and its siblings) with opencode and stores the per-file readings plus the
+   * set whose totals add up; `force` re-reads, 'failed' is always re-read.
+   * Never books. Returns the row's effective suggestion (rule → history →
+   * receipts) and what was read.
    * Without OPENCODE_API_KEY or Drive: 'unavailable'; no receipt: 'noReceipt'.
    * Incoming or no longer open rows: BAD_REQUEST before any Drive/opencode call.
    */
@@ -193,11 +236,18 @@ export const bookingsRouter = router({
       } catch {
         return result('unavailable', suggestForTx(tx, suppliers, history));
       }
-      const file = receiptFileFor(tx, files, suggestForTx(tx, suppliers, history)?.supplierName);
-      if (!file) return result('noReceipt', suggestForTx(tx, suppliers, history));
-      const { status, reading } = await readTxReceipt(tx, file, { drive, client, accounts: await receiptPromptAccounts() }, input.force);
-      // readTxReceipt updated tx.receiptReading, so this is rule → history → the new reading
-      return result(status, suggestForTx(tx, suppliers, history), reading);
+      const supplierName = suggestForTx(tx, suppliers, history)?.supplierName;
+      const candidates = receiptCandidates(tx, files, supplierName);
+      if (candidates.length === 0) return result('noReceipt', suggestForTx(tx, suppliers, history));
+      const read = await readTxReceipts(
+        tx,
+        candidates,
+        { drive, client, accounts: await receiptPromptAccounts() },
+        [supplierName, tx.counterpartyName],
+        input.force,
+      );
+      // readTxReceipts stored the readings, so this is rule → history → the new match
+      return result(read.status, suggestForTx(tx, suppliers, history), read.match?.reading ?? null);
     }),
 
   booked: authedProcedure.input(yearInput).query(async ({ input }) => {

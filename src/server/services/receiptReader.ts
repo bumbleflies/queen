@@ -4,12 +4,13 @@ import { BankTransaction, type BankTransactionDoc } from '../models/BankTransact
 import { Supplier } from '../models/Supplier';
 import {
   buildReceiptPrompt,
-  cachedReading,
+  matchReceiptSet,
   parseReceiptReply,
   receiptAccounts,
+  type ReadingEntry,
   type ReceiptReading,
 } from '../lib/accounting/receiptReading';
-import { rankReceipts, strongReceipt, type ReceiptFile } from '../lib/accounting/receipts';
+import { receiptCandidates, type ReceiptFile } from '../lib/accounting/receipts';
 import { loadHistory, suggestWithHistory } from '../lib/accounting/history';
 import { openTransactions } from '../lib/accounting/bankCoverage';
 import { bookableYears } from '../lib/accounting/autoBook';
@@ -27,9 +28,35 @@ export interface ReadDeps {
   accounts: { number: string; name: string }[];
 }
 
+/** One receipt file that was read (cached on the transaction). */
+export interface ReceiptFileReading {
+  driveFileId: string;
+  fileName?: string | null;
+  status: ReadStatus;
+  reading?: ReceiptReading | null;
+  model?: string | null;
+  readAt: Date;
+  error?: string | null;
+}
+
+/** The receipts whose totals add up to the transaction amount. */
+export interface ReceiptMatch {
+  driveFileIds: string[];
+  reading: ReceiptReading;
+  model?: string | null;
+  readAt: Date;
+}
+
+export interface ReadTxResult {
+  /** Row-level outcome: 'ok' once a set matches, else the worst file outcome. */
+  status: ReadStatus;
+  readings: ReceiptFileReading[];
+  match: ReceiptMatch | null;
+}
+
 /** Fewer visible characters than this means a scan without a text layer. */
 const MIN_TEXT_CHARS = 10;
-/** Receipts the daily reconcile reads per run at most. */
+/** Transactions the daily reconcile reads per run at most. */
 export const RECEIPTS_PER_RUN = 10;
 
 /** Active, non-archived accounts a receipt line may be booked to (numbers and names only). */
@@ -38,84 +65,97 @@ export async function receiptPromptAccounts(): Promise<{ number: string; name: s
   return receiptAccounts(accounts.map((a) => ({ number: a.number, name: a.name })));
 }
 
-export interface ReceiptRef {
-  id: string;
-  name?: string | null;
-}
-
-/** The attached receipt, else the clearly matching one among `files`. */
-export function receiptFileFor(
-  tx: {
-    receipt?: { driveFileId?: string | null; fileName?: string | null } | null;
-    date: Date;
-    amountCents: number;
-    counterpartyName?: string | null;
-    description?: string | null;
-  },
-  files: ReceiptFile[],
-  supplierName?: string,
-): ReceiptRef | null {
-  if (tx.receipt?.driveFileId) return { id: tx.receipt.driveFileId, name: tx.receipt.fileName };
-  const best = strongReceipt(rankReceipts(files, tx, supplierName));
-  return best ? { id: best.id, name: best.name } : null;
-}
-
 /** A file name with an extension other than .pdf (photo, image scan) has no text layer to read. */
 function isNonPdfName(name: string | null | undefined): boolean {
   const ext = name?.match(/\.([a-z0-9]+)$/i)?.[1];
   return !!ext && ext.toLowerCase() !== 'pdf';
 }
 
-/** Only 'ok' and 'noText' are final for a file; 'failed' is read again. */
-function isCachedFor(cache: { driveFileId?: string | null; status?: string | null } | null | undefined, fileId: string): boolean {
-  return cache?.driveFileId === fileId && (cache.status === 'ok' || cache.status === 'noText');
-}
-
-/**
- * Reads one receipt (download → text → opencode → validation) and stores the
- * outcome on the transaction. An 'ok' or 'noText' result for the same file is
- * returned as is unless `force`; 'failed' is always read again. Non-PDF files
- * are 'noText' without a download. Never throws for reading trouble: that is 'failed'.
- */
-export async function readTxReceipt(
-  tx: HydratedDocument<BankTransactionDoc>,
-  file: ReceiptRef,
-  deps: ReadDeps,
-  force = false,
-): Promise<{ status: ReadStatus; reading: ReceiptReading | null }> {
-  const driveFileId = file.id;
-  const cache = tx.receiptReading;
-  if (!force && cache && isCachedFor(cache, driveFileId)) {
-    return { status: cache.status as ReadStatus, reading: cachedReading(cache) };
-  }
-  let result: { status: ReadStatus; reading?: ReceiptReading; model?: string; error?: string };
+/** One file through the whole path: download → text → opencode → validation. Never throws. */
+async function readOne(file: ReceiptFile, deps: ReadDeps): Promise<ReceiptFileReading> {
+  const base = { driveFileId: file.id, fileName: file.name, readAt: new Date() };
   try {
-    const text = isNonPdfName(file.name) ? '' : await receiptText(deps.drive, driveFileId);
-    if (text.replace(/\s+/g, '').length < MIN_TEXT_CHARS) {
-      result = { status: 'noText' };
-    } else {
-      const { text: reply, model } = await deps.client.ask(buildReceiptPrompt(text, deps.accounts));
-      const reading = parseReceiptReply(reply, new Set(deps.accounts.map((a) => a.number)));
-      const modelKey = `${model.providerID}:${model.id}`;
-      result = reading
-        ? { status: 'ok', reading, model: modelKey }
-        : { status: 'failed', model: modelKey, error: 'Antwort nicht verwertbar' };
-    }
+    const text = isNonPdfName(file.name) ? '' : await receiptText(deps.drive, file.id);
+    if (text.replace(/\s+/g, '').length < MIN_TEXT_CHARS) return { ...base, status: 'noText' };
+    const { text: reply, model } = await deps.client.ask(buildReceiptPrompt(text, deps.accounts));
+    const reading = parseReceiptReply(reply, new Set(deps.accounts.map((a) => a.number)));
+    const modelKey = `${model.providerID}:${model.id}`;
+    return reading
+      ? { ...base, status: 'ok', reading, model: modelKey }
+      : { ...base, status: 'failed', model: modelKey, error: 'Antwort nicht verwertbar' };
   } catch (err) {
-    result = { status: 'failed', error: (err as Error).message.slice(0, 500) };
+    return { ...base, status: 'failed', error: (err as Error).message.slice(0, 500) };
   }
-  const receiptReading = { driveFileId, readAt: new Date(), ...result };
-  await BankTransaction.updateOne({ _id: tx._id }, { $set: { receiptReading } });
-  tx.receiptReading = receiptReading as BankTransactionDoc['receiptReading'];
-  return { status: result.status, reading: result.reading ?? null };
+}
+
+const isFinal = (r: ReceiptFileReading | undefined): boolean => r?.status === 'ok' || r?.status === 'noText';
+
+/** Readings already stored for the transaction, keyed by Drive file (legacy single reading included). */
+function cachedReadings(tx: HydratedDocument<BankTransactionDoc>): Map<string, ReceiptFileReading> {
+  const map = new Map<string, ReceiptFileReading>();
+  const legacy = tx.receiptReading as ReceiptFileReading | null | undefined;
+  if ((tx.receiptReadings ?? []).length === 0 && legacy) map.set(legacy.driveFileId, legacy);
+  for (const r of tx.receiptReadings ?? []) map.set(r.driveFileId, r as ReceiptFileReading);
+  return map;
+}
+
+function entriesOf(readings: ReceiptFileReading[]): ReadingEntry[] {
+  return readings
+    .filter((r): r is ReceiptFileReading & { reading: ReceiptReading } => r.status === 'ok' && !!r.reading)
+    .map((r) => ({ fileId: r.driveFileId, fileName: r.fileName ?? '', reading: r.reading }));
 }
 
 /**
- * Daily reconcile step: reads up to `limit` receipts of open outgoing rows that
- * have no rule or history suggestion but a receipt (attached or clearly
- * matching in Drive) without a final reading — never-read ones first, then
- * failed ones by oldest attempt. Only stores readings — never books.
- * Without an opencode key or a Drive connection nothing happens.
+ * Reads the candidate receipts of one transaction and stores the per-file
+ * readings plus the set whose totals add up to the bank amount. A final
+ * ('ok'/'noText') reading is reused unless `force`; 'failed' is re-read. Stops
+ * as soon as a set matches. Never books and never throws for reading trouble.
+ */
+export async function readTxReceipts(
+  tx: HydratedDocument<BankTransactionDoc>,
+  files: ReceiptFile[],
+  deps: ReadDeps,
+  hints: (string | null | undefined)[] = [],
+  force = false,
+): Promise<ReadTxResult> {
+  const cached = cachedReadings(tx);
+  const readings: ReceiptFileReading[] = [];
+  let match: ReceiptMatch | null = null;
+
+  for (const file of files) {
+    const previous = cached.get(file.id);
+    readings.push(!force && isFinal(previous) ? previous! : await readOne(file, deps));
+    const found = matchReceiptSet(entriesOf(readings), tx.amountCents, hints);
+    if (found) {
+      const model = readings.find((r) => found.fileIds.includes(r.driveFileId) && r.model)?.model ?? null;
+      match = { driveFileIds: found.fileIds, reading: found.reading, model, readAt: new Date() };
+      break;
+    }
+  }
+
+  const status: ReadStatus = match
+    ? 'ok'
+    : readings.some((r) => r.status === 'failed')
+      ? 'failed'
+      : readings.every((r) => r.status === 'noText') && readings.length > 0
+        ? 'noText'
+        : 'ok';
+
+  await BankTransaction.updateOne(
+    { _id: tx._id },
+    { $set: { receiptReadings: readings, receiptMatch: match ?? null }, $unset: { receiptReading: 1 } },
+  );
+  tx.receiptReadings = readings as BankTransactionDoc['receiptReadings'];
+  tx.receiptMatch = match as BankTransactionDoc['receiptMatch'];
+  return { status, readings, match };
+}
+
+/**
+ * Daily reconcile step: reads the receipts of up to `limit` open outgoing rows
+ * that have no rule or history suggestion and no matching receipt set yet —
+ * never-read rows first, then rows with failed files by their last attempt.
+ * Only stores readings — never books. Without an opencode key or a Drive
+ * connection nothing happens.
  */
 export async function readOpenReceipts(now: Date, limit = RECEIPTS_PER_RUN): Promise<{ read: number }> {
   const result = { read: 0 };
@@ -136,21 +176,26 @@ export async function readOpenReceipts(now: Date, limit = RECEIPTS_PER_RUN): Pro
     return filesByYear.get(year)!;
   };
 
-  const due: { tx: HydratedDocument<BankTransactionDoc>; file: ReceiptRef; retryAt: number }[] = [];
+  const due: { tx: HydratedDocument<BankTransactionDoc>; files: ReceiptFile[]; hints: (string | null | undefined)[]; retryAt: number }[] = [];
   for (const year of await bookableYears(now)) {
-    const candidates = (await openTransactions(year)).filter((t) => t.direction === 'out');
-    for (const tx of candidates) {
-      if (suggestWithHistory(tx, suppliers, history)) continue;
-      const file = receiptFileFor(tx, tx.receipt?.driveFileId ? [] : await receiptsFor(new Date(tx.date).getFullYear()));
-      if (!file || isCachedFor(tx.receiptReading, file.id)) continue;
-      const failedBefore = tx.receiptReading?.driveFileId === file.id && tx.receiptReading.status === 'failed';
-      // never read: -1 sorts first; failed: by the time of the last attempt
-      due.push({ tx, file, retryAt: failedBefore ? new Date(tx.receiptReading!.readAt).getTime() : -1 });
+    const open = (await openTransactions(year)).filter((t) => t.direction === 'out');
+    for (const tx of open) {
+      if (tx.receiptMatch) continue;
+      const suggestion = suggestWithHistory(tx, suppliers, history);
+      if (suggestion) continue;
+      const files = receiptCandidates(tx, tx.receipt?.driveFileId ? [] : await receiptsFor(year));
+      if (files.length === 0) continue;
+      const cached = cachedReadings(tx);
+      const pending = files.filter((f) => !isFinal(cached.get(f.id)));
+      if (pending.length === 0) continue;
+      // never read: -1 sorts first; failed files: by the time of the last attempt
+      const retryAt = Math.max(-1, ...pending.map((f) => (cached.get(f.id)?.readAt ? new Date(cached.get(f.id)!.readAt).getTime() : -1)));
+      due.push({ tx, files, hints: [tx.counterpartyName], retryAt });
     }
   }
   due.sort((a, b) => a.retryAt - b.retryAt);
-  for (const { tx, file } of due.slice(0, limit)) {
-    await readTxReceipt(tx, file, { drive, client, accounts });
+  for (const { tx, files, hints } of due.slice(0, limit)) {
+    await readTxReceipts(tx, files, { drive, client, accounts }, hints);
     result.read += 1;
   }
   return result;

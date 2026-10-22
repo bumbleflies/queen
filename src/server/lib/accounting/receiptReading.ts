@@ -105,11 +105,12 @@ export function parseReceiptReply(reply: string, accounts: Set<string>): Receipt
 /**
  * A reading as a booking suggestion: one account/rate → plain suggestion,
  * several → `split`. §13b always books 19 % and only outgoing. Null when the
- * receipt total is not the bank amount.
+ * receipt total is not the bank amount. `files` > 1 marks a set of receipts.
  */
 export function readingToSuggestion(
   reading: ReceiptReading,
   tx: { amountCents: number; direction?: string | null; counterpartyName?: string | null },
+  files = 1,
 ): Suggestion | null {
   if (reading.totalCents !== tx.amountCents) return null;
   if (reading.reverseCharge && tx.direction === 'in') return null;
@@ -125,15 +126,98 @@ export function readingToSuggestion(
     supplierName: reading.vendor || (tx.counterpartyName ?? '').trim(),
     mode,
     matchedBy: 'receipt' as const,
-    reading: { vendor: reading.vendor, totalCents: reading.totalCents, lines: reading.lines },
+    reading: { vendor: reading.vendor, totalCents: reading.totalCents, lines: reading.lines, files: files > 1 ? files : undefined },
   };
   if (parts.length === 1) return { ...base, account: parts[0].account, vatRate: parts[0].vatRate };
   return { ...base, split: parts };
 }
 
+/** Vendors compared case- and punctuation-insensitively ("Augustiner-Keller GmbH" vs "Augustiner Keller"). */
+export function normalizeVendor(vendor: string | null | undefined): string {
+  return (vendor ?? '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N} ]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** One parsed reading together with the file it came from. */
+export interface ReadingEntry {
+  fileId: string;
+  fileName: string;
+  reading: ReceiptReading;
+}
+
+/** Several readings as one: totals add up, lines merge per account and VAT rate. */
+export function mergeReceiptReadings(readings: ReceiptReading[]): ReceiptReading {
+  const lines: ReceiptLine[] = [];
+  for (const r of readings) {
+    for (const l of r.lines) {
+      const same = lines.find((x) => x.account === l.account && x.vatRate === l.vatRate);
+      if (same) same.grossCents += l.grossCents;
+      else lines.push({ ...l });
+    }
+  }
+  const [first] = readings;
+  return {
+    vendor: first?.vendor ?? '',
+    country: first?.country ?? null,
+    date: first?.date ?? null,
+    totalCents: readings.reduce((s, r) => s + r.totalCents, 0),
+    reverseCharge: first?.reverseCharge ?? false,
+    lines,
+  };
+}
+
+function* combinations<T>(items: T[], size: number, start = 0, acc: T[] = []): Generator<T[]> {
+  if (acc.length === size) {
+    yield acc;
+    return;
+  }
+  for (let i = start; i <= items.length - (size - acc.length); i++) {
+    yield* combinations(items, size, i + 1, [...acc, items[i]]);
+  }
+}
+
+/** At most three receipts make one transaction: more would be a data problem, not a booking. */
+export const MAX_RECEIPTS = 3;
+
+/**
+ * The smallest set of readings whose totals are exactly the bank amount, with
+ * one VAT treatment and vendors that agree with each other or with a hint
+ * (transaction counterparty, suggestion supplier). Empty vendor = unknown.
+ */
+export function matchReceiptSet(
+  entries: ReadingEntry[],
+  amountCents: number,
+  hints: (string | null | undefined)[] = [],
+): { fileIds: string[]; reading: ReceiptReading } | null {
+  const hintKeys = hints.map(normalizeVendor).filter((h) => h.length > 0);
+  const vendorsAgree = (readings: ReceiptReading[]): boolean => {
+    const keys = readings.map((r) => normalizeVendor(r.vendor)).filter((k) => k.length > 0);
+    if (keys.length < 2) return true;
+    const matchesHint = (k: string) => hintKeys.some((h) => k === h || k.includes(h) || h.includes(k));
+    if (hintKeys.length > 0 && keys.every(matchesHint)) return true;
+    return keys.every((k) => k === keys[0]);
+  };
+
+  for (let size = 1; size <= Math.min(entries.length, MAX_RECEIPTS); size++) {
+    for (const combo of combinations(entries, size)) {
+      const readings = combo.map((e) => e.reading);
+      if (readings.reduce((s, r) => s + r.totalCents, 0) !== amountCents) continue;
+      if (readings.some((r) => r.reverseCharge !== readings[0].reverseCharge)) continue;
+      if (!vendorsAgree(readings)) continue;
+      return { fileIds: combo.map((e) => e.fileId), reading: mergeReceiptReadings(readings) };
+    }
+  }
+  return null;
+}
+
 /** What `BankTransaction.receiptReading` holds (Mongoose arrays included). */
 export interface CachedReceiptReading {
   status?: string | null;
+  /** Drive ids of the matched set (multi-receipt); absent for a legacy single reading. */
+  driveFileIds?: string[] | null;
   reading?: {
     vendor?: string | null;
     country?: string | null;
@@ -146,7 +230,8 @@ export interface CachedReceiptReading {
 
 /** The cached reading of a transaction, when it was read successfully. */
 export function cachedReading(cache: CachedReceiptReading | null | undefined): ReceiptReading | null {
-  const r = cache?.status === 'ok' ? cache.reading : null;
+  // A receiptMatch carries no status: the reading itself is the success.
+  const r = cache?.status === 'ok' || (cache?.status == null && cache?.reading) ? cache.reading : null;
   if (!r || typeof r.totalCents !== 'number') return null;
   return {
     vendor: r.vendor ?? '',
@@ -161,13 +246,17 @@ export function cachedReading(cache: CachedReceiptReading | null | undefined): R
 export type ReadableTx = SuggestTx & {
   amountCents: number;
   direction?: string | null;
+  /** The matched set of receipts (multi-receipt). */
+  receiptMatch?: CachedReceiptReading | null;
+  /** Legacy single reading. */
   receiptReading?: CachedReceiptReading | null;
 };
 
-/** Suggestion order: rule → history → cached receipt reading. */
+/** Suggestion order: rule → history → matched receipts (else a legacy single reading). */
 export function suggestForTx(tx: ReadableTx, suppliers: SuggestSupplier[], history: BookingHistory): Suggestion | null {
   const fromRules = suggestWithHistory(tx, suppliers, history);
   if (fromRules) return fromRules;
-  const reading = cachedReading(tx.receiptReading);
-  return reading ? readingToSuggestion(reading, tx) : null;
+  const reading = cachedReading(tx.receiptMatch) ?? cachedReading(tx.receiptReading);
+  const files = tx.receiptMatch?.driveFileIds?.length ?? 1;
+  return reading ? readingToSuggestion(reading, tx, files) : null;
 }
