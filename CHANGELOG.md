@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.22.0](https://github.com/bumbleflies/queen/compare/queen-v0.21.1...queen-v0.22.0) (2026-10-22)
+
+
+### Features
+
+* booking automation — §13b, history suggestions, available cash, auto-booking, receipt reading ([0bffa39](https://github.com/bumbleflies/queen/commit/0bffa39896e72e5825f753c3cff09c8efb008dda))
+* **bookings:** §13b mode in booking dialog, rules and import ([7d901e5](https://github.com/bumbleflies/queen/commit/7d901e5292149c9d39a8b348e7aa1e6c884b275f))
+* **bookings:** opt-in automatic booking for IBAN/purpose rules in the daily reconcile ([1e78378](https://github.com/bumbleflies/queen/commit/1e7837821337365af7efcec8e940e0f33086e8a0))
+* **bookings:** suggest from booking history when no rule matches ([e34e8f9](https://github.com/bumbleflies/queen/commit/e34e8f9b2664ed209a4922014118cf1d27613c33))
+* **finance:** frei verfügbar card, dashboard tile and tax-rate setting ([486f381](https://github.com/bumbleflies/queen/commit/486f381407644c3493e2a141f72a8d3316961ef9))
+* **finance:** receipt-read suggestions and Beleg auslesen ([00678e1](https://github.com/bumbleflies/queen/commit/00678e1e43b0a7e0b680309f319994391854b116))
+* **finance:** show history suggestions ([d369ae4](https://github.com/bumbleflies/queen/commit/d369ae4f3090513a261fdd81c7ff01f973ee9002))
+* **ledger:** §13b reverse-charge bank posting with accounts 1407/3837 ([c119f3d](https://github.com/bumbleflies/queen/commit/c119f3d85a0d1ce635c599c087a4c5eb4f694e56))
+* **ledger:** available cash after taxes and liabilities ([8941da4](https://github.com/bumbleflies/queen/commit/8941da4f1554e3b834944ff4aac3445ed5473ae6))
+* **ledger:** split bank postings across accounts and VAT rates ([a232edd](https://github.com/bumbleflies/queen/commit/a232edd3f1b9427b257b6ef1811f47d0e0b427de))
+* **receipts:** opencode client with free-model tiers, backoff and one paid fallback ([41ce449](https://github.com/bumbleflies/queen/commit/41ce4494190ee770e1a3fe70162332e3e81eb092))
+* **receipts:** read receipts via opencode into suggestions, incl. split and §13b ([3c26f6d](https://github.com/bumbleflies/queen/commit/3c26f6d6ad624f9e88cc62f45ce399fb94876093))
+
+
+### Bug Fixes
+
+* **bookings:** keep suggest pure, bound history to 3 years, test newest-3 selection ([87addec](https://github.com/bumbleflies/queen/commit/87addecf21f7591fe9f6c50c13fbf2656edbddc2))
+* **bookings:** never auto-book reversed or incoming transactions ([4ad960a](https://github.com/bumbleflies/queen/commit/4ad960a4db1f476c2b099ed046f4593db2095358))
+* **i18n:** estimated tax tooltip names only the prepayment accounts ([39c0c0a](https://github.com/bumbleflies/queen/commit/39c0c0a2946c0c7b03a936a841e36ad250e088ca))
+* **ledger:** §13b rules always use 19 % ([c4be1ff](https://github.com/bumbleflies/queen/commit/c4be1ffd3fbc43de73263e789e08ba9081677b51))
+* **ledger:** keep booking history apart per transaction direction ([f3011ca](https://github.com/bumbleflies/queen/commit/f3011ca656846e7ae9fd81fd14764eb2878fb6f6))
+* **ledger:** load requested year and surface Firefly errors in availableCash ([2fd6de1](https://github.com/bumbleflies/queen/commit/2fd6de1ad960fc5a14c3938c6abd5a9d945c4735))
+* **ledger:** only admins may change an autoBook rule via rememberRule ([b5ca089](https://github.com/bumbleflies/queen/commit/b5ca0890b7bdf6ee016e4d8e581d5bda89cf1b2a))
+* **ledger:** verify derived bookings by re-posting; require two split parts ([76cbf1d](https://github.com/bumbleflies/queen/commit/76cbf1d57378bb905f92db119f9f5e50430c0901))
+* **receipts:** bound receipt reading time; runNow skips reading ([4fe7f55](https://github.com/bumbleflies/queen/commit/4fe7f55fd75f000091d339688a0a3e7ecf98bf05))
+* **receipts:** readReceipt only for open outgoing rows ([a7e2028](https://github.com/bumbleflies/queen/commit/a7e2028488011bb99489a444ee025aff2d958983))
+* **receipts:** retry failed readings, wider bank-data masking, effective suggestion ([7f2de23](https://github.com/bumbleflies/queen/commit/7f2de230f18d9ec18a613fb204404975b6d8fab8))
+* **receipts:** show stored reading state on load, incl. amount mismatch ([9951369](https://github.com/bumbleflies/queen/commit/99513695692cb6957e8754d16b98a52063006a63))
+* **receipts:** type the skipped receipt-reading result in runReconcile ([86ffaf5](https://github.com/bumbleflies/queen/commit/86ffaf5f2e48b7b10a891cf83c3d21868e07baae))
+* **rules:** mark §13b rules in the rules table ([27dae36](https://github.com/bumbleflies/queen/commit/27dae367a74c623f4757832e40a72c1b45d4728d))
+
 ## [0.21.1](https://github.com/bumbleflies/queen/compare/queen-v0.21.0...queen-v0.21.1) (2026-10-21)
 
 
