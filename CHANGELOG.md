@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.24.5](https://github.com/bumbleflies/queen/compare/queen-v0.24.4...queen-v0.24.5) (2026-10-23)
+
+
+### Bug Fixes
+
+* **deps:** update dependency react-hook-form to v7.91.0 ([#165](https://github.com/bumbleflies/queen/issues/165)) ([d9264e4](https://github.com/bumbleflies/queen/commit/d9264e4e071bb32f8744d027d28f14886a94169b))
+
 ## [0.24.4](https://github.com/bumbleflies/queen/compare/queen-v0.24.3...queen-v0.24.4) (2026-10-23)
 
 
