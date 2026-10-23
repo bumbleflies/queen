@@ -16,7 +16,7 @@ import { loadYear, openTransactions } from '../lib/accounting/bankCoverage';
 import { AUTO_BOOK_USER } from '../lib/accounting/autoBook';
 import { rankReceipts, receiptCandidates, strongReceipt, type ReceiptFile } from '../lib/accounting/receipts';
 import { listReceiptFiles, type DriveFilesLike } from '../services/receiptsDrive';
-import { driveForUser } from '../services/driveForUser';
+import { driveForActor } from '../services/driveForUser';
 import { getReceiptsFolder } from '../services/appSettings';
 import { opencodeFromEnv } from '../services/OpencodeClient';
 import { readTxReceipts, receiptPromptAccounts, type ReadStatus, type ReceiptFileReading } from '../services/receiptReader';
@@ -188,8 +188,10 @@ export const bookingsRouter = router({
     if (!folder) return none;
     let files: ReceiptFile[];
     try {
-      files = await listReceiptFiles(await driveForUser(ctx.user.sub), folder.id, input.year);
-    } catch {
+      files = await listReceiptFiles(await driveForActor(ctx.user.sub), folder.id, input.year);
+    } catch (err) {
+      // A missing Drive connection is a configuration problem, not "no receipts".
+      if (err instanceof TRPCError && err.code === 'PRECONDITION_FAILED') throw err;
       return none;
     }
     const [open, suppliers, history] = await Promise.all([openTransactions(input.year), Supplier.find({ archived: false }), loadHistory()]);
@@ -230,10 +232,11 @@ export const bookingsRouter = router({
       let drive: DriveFilesLike;
       let files: ReceiptFile[] = [];
       try {
-        drive = await driveForUser(ctx.user.sub);
+        drive = await driveForActor(ctx.user.sub);
         const folder = tx.receipt?.driveFileId ? null : await getReceiptsFolder();
         if (folder) files = await listReceiptFiles(drive, folder.id, new Date(tx.date).getFullYear());
-      } catch {
+      } catch (err) {
+        if (err instanceof TRPCError && err.code === 'PRECONDITION_FAILED') throw err;
         return result('unavailable', suggestForTx(tx, suppliers, history));
       }
       const supplierName = suggestForTx(tx, suppliers, history)?.supplierName;
@@ -300,7 +303,15 @@ export const bookingsRouter = router({
       const receiptsFor = (year: number) => {
         if (!folder) return Promise.resolve([]);
         if (!filesByYear.has(year)) {
-          filesByYear.set(year, driveForUser(ctx.user.sub).then((d) => listReceiptFiles(d, folder.id, year)).catch(() => []));
+          filesByYear.set(
+            year,
+            driveForActor(ctx.user.sub)
+              .then((d) => listReceiptFiles(d, folder.id, year))
+              .catch((err) => {
+                if (err instanceof TRPCError && err.code === 'PRECONDITION_FAILED') throw err;
+                return [];
+              }),
+          );
         }
         return filesByYear.get(year)!;
       };

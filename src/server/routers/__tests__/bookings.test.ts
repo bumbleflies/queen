@@ -13,7 +13,10 @@ import { adminCaller, initLedgerModels, resetLedgerDb, sentInvoice, skipIfNoDb }
 vi.mock('../../jobs/queue', () => ({ enqueueFileInvoice: vi.fn(async () => {}) }));
 const listReceiptFiles = vi.hoisted(() => vi.fn(async (): Promise<{ id: string; name: string; link: string }[]> => []));
 vi.mock('../../services/receiptsDrive', () => ({ listReceiptFiles }));
-vi.mock('../../services/driveForUser', () => ({ driveForUser: vi.fn(async () => ({})) }));
+vi.mock('../../services/driveForUser', () => ({
+  driveForUser: vi.fn(async () => ({})),
+  driveForActor: vi.fn(async () => ({})),
+}));
 const ask = vi.hoisted(() => vi.fn(async (_prompt: string): Promise<{ text: string; model: { providerID: string; id: string } }> => ({ text: '', model: { providerID: 'free', id: 'm1' } })));
 const opencode = vi.hoisted(() => ({ enabled: true }));
 vi.mock('../../services/OpencodeClient', () => ({ opencodeFromEnv: () => (opencode.enabled ? { ask } : null) }));

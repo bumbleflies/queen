@@ -8,6 +8,15 @@ const userSchema = new Schema(
     googleId: { type: String },
     // TODO: encrypt refreshToken at rest (e.g. AES-GCM with a KMS key) — plain for now. Follow-up before prod.
     refreshToken: { type: String },
+    /** sha256 of the live one-time invite token; the plaintext is never stored. */
+    inviteTokenHash: { type: String, index: true },
+    inviteExpiresAt: { type: Date },
+    invitedBy: { type: String },
+    /** Disabled, never deleted: `createdBy` on entries must stay resolvable. */
+    disabled: { type: Boolean },
+    lastLoginAt: { type: Date },
+    /** Bumped to kill live sessions; carried as `tv` by invite-redeemed tokens. */
+    tokenVersion: { type: Number, default: 0 },
   },
   { timestamps: true },
 );

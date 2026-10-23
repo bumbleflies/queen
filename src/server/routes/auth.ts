@@ -2,18 +2,20 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import passport from 'passport';
 import { Strategy as GoogleStrategy, type VerifyCallback } from 'passport-google-oauth20';
 import { User } from '../models/User';
-import { isAdmin, parseBearerToken, signToken, verifyToken } from '../services/AuthService';
+import { isAdmin, parseBearerToken, signToken, verifyToken, assertSessionValid, SESSION_HOURS, INVITE_SESSION_DAYS } from '../services/AuthService';
 import { userRoleSchema } from '../../shared/schemas/user';
+import type { JwtPayload } from '../../shared/types';
+import { hashInviteToken } from '../lib/inviteToken';
 
 export const AUTH_COOKIE = 'queen_token';
 
-function authCookieOptions() {
+function authCookieOptions(maxAgeMs: number = SESSION_HOURS * 60 * 60 * 1000) {
   return {
     httpOnly: true,
     sameSite: 'lax' as const,
     secure: process.env.NODE_ENV === 'production',
     path: '/',
-    maxAge: 12 * 60 * 60 * 1000,
+    maxAge: maxAgeMs,
   };
 }
 
@@ -97,7 +99,7 @@ async function upsertUserFromProfile(profile: GoogleProfile, refreshToken?: stri
   });
 }
 
-export function requireAuth(req: Request, res: Response, next: NextFunction): void {
+export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const bearer = parseBearerToken(req.headers.authorization);
   const token = bearer ?? req.cookies?.[AUTH_COOKIE];
   if (!token) {
@@ -105,7 +107,9 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     return;
   }
   try {
-    res.locals.user = verifyToken(token);
+    const payload = verifyToken(token);
+    await assertSessionValid(payload);
+    res.locals.user = payload;
     next();
   } catch {
     res.status(401).json({ error: 'unauthorized' });
@@ -167,6 +171,51 @@ export function createAuthRouter() {
       }
     },
   );
+
+  /**
+   * Redeem a one-time invite. The token arrives in the request body (the browser
+   * read it from the URL fragment), so it never lands in a proxy log or referer.
+   * `findOneAndUpdate` keeps this single-use even under concurrent clicks.
+   */
+  router.post('/invite/redeem', async (req: Request, res: Response) => {
+    const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
+    if (!token) {
+      res.status(400).json({ error: 'invalid invite' });
+      return;
+    }
+    try {
+      const now = new Date();
+      const user = await User.findOneAndUpdate(
+        {
+          inviteTokenHash: hashInviteToken(token),
+          inviteExpiresAt: { $gt: now },
+          disabled: { $ne: true },
+        },
+        { $unset: { inviteTokenHash: 1, inviteExpiresAt: 1 }, $set: { lastLoginAt: now } },
+        { returnDocument: 'after' },
+      );
+      if (!user) {
+        res.status(400).json({ error: 'invalid invite' });
+        return;
+      }
+      const roleParsed = userRoleSchema.safeParse(user.get('role'));
+      const payload: JwtPayload = {
+        sub: String(user._id),
+        email: String(user.get('email')),
+        role: roleParsed.success ? roleParsed.data : 'user',
+        tv: Number(user.get('tokenVersion') ?? 0),
+      };
+      const maxAgeMs = INVITE_SESSION_DAYS * 24 * 60 * 60 * 1000;
+      res.cookie(
+        AUTH_COOKIE,
+        signToken(payload, { expiresInSeconds: maxAgeMs / 1000 }),
+        authCookieOptions(maxAgeMs),
+      );
+      res.json({ ok: true });
+    } catch {
+      res.status(500).json({ error: 'login failed' });
+    }
+  });
 
   router.post('/logout', (_req: Request, res: Response) => {
     const cookieOptions = authCookieOptions();

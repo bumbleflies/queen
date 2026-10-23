@@ -12,6 +12,10 @@ export function getJwtSecret(): string {
   return secret;
 }
 
+/** Google sessions stay short and unchecked; invited sessions carry `tv` and are checked. */
+export const SESSION_HOURS = 12;
+export const INVITE_SESSION_DAYS = 30;
+
 export function parseBearerToken(authHeader: string | undefined): string | undefined {
   if (!authHeader) {
     return undefined;
@@ -66,8 +70,8 @@ export function isAdmin(email: string): boolean {
   return admins.some((entry) => matchesEntry(entry, email));
 }
 
-export function signToken(payload: JwtPayload): string {
-  return jwt.sign(payload, getJwtSecret(), { expiresIn: '12h' });
+export function signToken(payload: JwtPayload, opts: { expiresInSeconds?: number } = {}): string {
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: opts.expiresInSeconds ?? SESSION_HOURS * 3600 });
 }
 
 export interface GoogleAccess {
@@ -96,10 +100,27 @@ export function verifyToken(token: string): JwtPayload {
   if (typeof decoded === 'string' || !decoded) {
     throw new Error('invalid token payload');
   }
-  const { sub, email, role } = decoded as Partial<JwtPayload>;
+  const { sub, email, role, tv } = decoded as Partial<JwtPayload>;
   const roleParsed = userRoleSchema.safeParse(role);
   if (typeof sub !== 'string' || typeof email !== 'string' || !roleParsed.success) {
     throw new Error('invalid token payload');
   }
-  return { sub, email, role: roleParsed.data };
+  if (tv !== undefined && (typeof tv !== 'number' || !Number.isInteger(tv) || tv < 0)) {
+    throw new Error('invalid token payload');
+  }
+  return { sub, email, role: roleParsed.data, ...(tv !== undefined ? { tv } : {}) };
+}
+
+/**
+ * A token that carries `tv` (invite-redeemed, long-lived) is checked against the
+ * user document on every request, so disabling bites immediately. A Google token
+ * has no `tv` and keeps the original zero-read fast path.
+ */
+export async function assertSessionValid(payload: JwtPayload): Promise<void> {
+  if (payload.tv === undefined) return;
+  const user = await User.findById(payload.sub).select('disabled tokenVersion');
+  const version = Number(user?.get('tokenVersion') ?? 0);
+  if (!user || user.get('disabled') === true || version !== payload.tv) {
+    throw new Error('session revoked');
+  }
 }

@@ -5,7 +5,7 @@ import { BankTransaction } from '../models/BankTransaction';
 import { Supplier } from '../models/Supplier';
 import { rankReceipts } from '../lib/accounting/receipts';
 import { listReceiptFiles } from '../services/receiptsDrive';
-import { driveForUser } from '../services/driveForUser';
+import { driveForActor } from '../services/driveForUser';
 import { getReceiptsFolder } from '../services/appSettings';
 
 export const receiptsRouter = router({
@@ -22,7 +22,7 @@ export const receiptsRouter = router({
       const year = tx ? new Date(tx.date).getFullYear() : input.year;
       let files;
       try {
-        files = await listReceiptFiles(await driveForUser(ctx.user.sub), folder.id, year);
+        files = await listReceiptFiles(await driveForActor(ctx.user.sub), folder.id, year);
       } catch (err) {
         throw new TRPCError({ code: 'BAD_GATEWAY', message: `Drive nicht erreichbar: ${(err as Error).message}` });
       }

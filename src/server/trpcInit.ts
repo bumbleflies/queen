@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { initTRPC, TRPCError } from '@trpc/server';
 import type { JwtPayload } from '../shared/types';
-import { parseBearerToken, verifyToken } from './services/AuthService';
+import { parseBearerToken, verifyToken, assertSessionValid } from './services/AuthService';
 
 export interface Context {
   user?: JwtPayload;
@@ -25,12 +25,13 @@ export function isServiceTokenValid(
 }
 
 // Pure, unit-testable context builder. The bearer token is either the
-// QUEEN_SERVICE_TOKEN (→ serviceAuth) or a user JWT (→ user).
-export function buildContext(options: {
+// QUEEN_SERVICE_TOKEN (→ serviceAuth) or a user JWT (→ user). Async because a
+// token carrying `tv` is checked against the user document (see assertSessionValid).
+export async function buildContext(options: {
   authHeader?: string;
   cookieToken?: string;
   serviceToken?: string;
-}): Context {
+}): Promise<Context> {
   const bearer = parseBearerToken(options.authHeader);
   if (bearer && isServiceTokenValid(bearer, options.serviceToken)) {
     return { user: undefined, serviceAuth: true };
@@ -38,7 +39,9 @@ export function buildContext(options: {
   const token = bearer ?? options.cookieToken;
   if (token) {
     try {
-      return { user: verifyToken(token), serviceAuth: false };
+      const user = verifyToken(token);
+      await assertSessionValid(user);
+      return { user, serviceAuth: false };
     } catch {
       return { user: undefined, serviceAuth: false };
     }
