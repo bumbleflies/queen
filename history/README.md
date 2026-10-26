@@ -28,3 +28,4 @@ The plans in `docs/plans/` say what was intended. These logs say what actually s
 | 2026-10-21 | [Finanzen inbox UX](2026-10-21_finance-inbox-ux.md) | pending |
 | 2026-10-22 | [Booking automation and available money](2026-10-22_booking-automation.md) | pending |
 | 2026-10-22 | [Invoices imported as paid without a bank payment](2026-10-22_unassigned-payments.md) | pending |
+| 2026-10-22 | [Sign-in links for people without a Google account](2026-10-22_accountant-invite-login.md) | pending |

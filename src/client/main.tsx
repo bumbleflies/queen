@@ -9,6 +9,7 @@ import { Layout } from './components/Layout';
 import { LanguageProvider } from './i18n/LanguageContext';
 import { ThemeProvider } from './theme/ThemeContext';
 import { LoginPage } from './pages/LoginPage';
+import { InvitePage } from './pages/InvitePage';
 import { DashboardPage } from './pages/DashboardPage';
 import { InvoicesPage } from './pages/InvoicesPage';
 import { InvoiceFormPage } from './pages/InvoiceFormPage';
@@ -36,6 +37,7 @@ function App() {
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/invite" element={<InvitePage />} />
               <Route
                 element={
                   <ProtectedRoute>

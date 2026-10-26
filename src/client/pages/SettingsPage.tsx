@@ -4,6 +4,7 @@ import { trpc } from '../lib/trpc';
 import { useToast } from '../components/Toast';
 import { LanguageToggle } from '../components/LanguageToggle';
 import { FolderPicker, type PickerFolder, type PickerScope } from '../components/FolderPicker';
+import { UsersSection } from '../components/UsersSection';
 import { useLanguage } from '../i18n/LanguageContext';
 import type { DictKey } from '../i18n/de';
 import { useTheme } from '../theme/ThemeContext';
@@ -110,6 +111,8 @@ export function SettingsPage() {
       ) : null}
 
       {user?.role === 'admin' ? <TaxRateSection /> : null}
+
+      {user?.role === 'admin' ? <UsersSection /> : null}
 
       <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h2 style={{ margin: 0, fontSize: 18 }}>{t('settings.theme')}</h2>

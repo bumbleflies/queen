@@ -97,7 +97,7 @@ describe('tRPC auth procedures', () => {
     ['empty bearer', 'Bearer '],
     ['mismatched length', 'Bearer short'],
   ])('buildContext with %s → serviceAuth false + servicePing UNAUTHORIZED', async (_label, authHeader) => {
-    const ctx = buildContext({ authHeader, serviceToken: 'correct-token-long-enough' });
+    const ctx = await buildContext({ authHeader, serviceToken: 'correct-token-long-enough' });
     expect(ctx.serviceAuth).toBe(false);
     const caller = appRouter.createCaller(ctx);
     await expectTrpcCode(caller.servicePing(), 'UNAUTHORIZED');

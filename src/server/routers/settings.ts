@@ -22,8 +22,8 @@ export const settingsRouter = router({
     return { invoices, receipts };
   }),
 
-  /** Live subfolder listing for the folder picker. Uses the current user's Drive auth. */
-  browseDriveFolders: authedProcedure
+  /** Live subfolder listing for the folder picker. Admin-only: it acts on the caller's Drive. */
+  browseDriveFolders: adminProcedure
     .input(z.object({ parentId: z.string().min(1).max(512).default('root') }))
     .query(async ({ input, ctx }) => {
       const drive = await driveForUser(ctx.user.sub);
