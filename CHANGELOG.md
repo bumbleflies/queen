@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.26.0](https://github.com/bumbleflies/queen/compare/queen-v0.25.0...queen-v0.26.0) (2026-10-26)
+
+
+### Features
+
+* **bookings:** receipt-first suggestions with learned rules ([#170](https://github.com/bumbleflies/queen/issues/170)) ([5d79625](https://github.com/bumbleflies/queen/commit/5d7962506b8d7694652209ce9fcd790c46425e7e))
+
 ## [0.25.0](https://github.com/bumbleflies/queen/compare/queen-v0.24.6...queen-v0.25.0) (2026-10-26)
 
 
