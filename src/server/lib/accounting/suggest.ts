@@ -19,6 +19,8 @@ export interface SuggestSupplier {
   defaultVatRate?: number | null;
   defaultMode?: string | null;
   archived?: boolean | null;
+  /** Learned rules only ever describe outgoing payments; manual ones keep matching both ways. */
+  origin?: string | null;
 }
 
 export interface Suggestion {
@@ -36,6 +38,16 @@ export interface Suggestion {
   split?: SplitPart[];
   /** The extracted receipt figures, always shown with a receipt suggestion. */
   reading?: { vendor: string; totalCents: number; lines: { vatRate: number; grossCents: number; account: string }[]; files?: number };
+  /** The receipt disagrees with the rule/history suggestion: booking needs a decision. */
+  conflict?: SuggestionConflict;
+}
+
+/** The receipt side of a disagreement, ready to be booked instead of the suggestion. */
+export interface SuggestionConflict {
+  account?: string;
+  vatRate?: number;
+  mode: BankBookingMode;
+  split?: SplitPart[];
 }
 
 export function normalizeIban(s: string): string {
@@ -54,6 +66,8 @@ function containsAny(haystack: string, patterns: string[]): boolean {
 export function suggest(tx: SuggestTx, suppliers: SuggestSupplier[]): Suggestion | null {
   const active = suppliers
     .filter((s) => !s.archived)
+    // A learned rule comes from an outgoing booking; an incoming payment may belong to an invoice.
+    .filter((s) => !(s.origin === 'learned' && tx.direction === 'in'))
     .sort((a, b) => a.kreditorNumber - b.kreditorNumber);
   const iban = tx.counterpartyIban ? normalizeIban(tx.counterpartyIban) : '';
   const purpose = norm(tx.description);

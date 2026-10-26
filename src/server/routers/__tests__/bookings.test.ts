@@ -82,7 +82,6 @@ describe('bookings', () => {
       account: '',
       vatRate: 0,
       mode: 'normal',
-      rememberRule: true,
       split: [
         { account: '6640', vatRate: 0.07, grossCents: 3210, mode: 'normal' },
         { account: '6837', vatRate: 0.19, grossCents: 2250, mode: 'normal' },
@@ -161,38 +160,98 @@ describe('bookings', () => {
     expect(ids).toContain(String(ignored._id));
   });
 
-  it('rememberRule creates a supplier that suggests the same booking next time', async (ctx) => {
+  it('learns a rule from every confirmed booking (IBAN, account, rate, mode)', async (ctx) => {
     skipIfNoDb(ctx);
     const caller = adminCaller();
     const first = await tx({ counterpartyIban: 'IE29 AIBK 9311 5212 3456 78' });
-    await caller.bookings.book({ bankTxId: String(first._id), account: '6837', vatRate: 0, mode: 'normal', rememberRule: true });
+    await caller.bookings.book({ bankTxId: String(first._id), account: '6837', vatRate: 0, mode: 'normal' });
     const supplier = await Supplier.findOne({});
-    expect(supplier).toMatchObject({ kreditorNumber: 70000, name: 'Software Ltd', defaultAccount: '6837', defaultVatRate: 0 });
+    expect(supplier).toMatchObject({
+      kreditorNumber: 70000,
+      name: 'Software Ltd',
+      defaultAccount: '6837',
+      defaultVatRate: 0,
+      origin: 'learned',
+      archived: false,
+    });
+    expect(supplier?.learnedAt).toBeInstanceOf(Date);
     expect(supplier?.ibans).toEqual(['IE29AIBK93115212345678']);
     await tx({ counterpartyIban: 'IE29AIBK93115212345678', date: new Date(2026, 1, 28) });
     const [row] = await caller.bookings.inbox({ year: 2026 });
     expect(row.suggestion).toMatchObject({ kreditorNumber: 70000, account: '6837', matchedBy: 'iban' });
   });
 
-  it('rememberRule on an autoBook rule needs an admin; plain bookings and admins pass', async (ctx) => {
+  it('extends the rule that suggested the booking instead of creating a second one', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    const rule = await caller.suppliers.create({ name: 'Hoster', purposePatterns: ['Lizenz'], defaultAccount: '6837', defaultVatRate: 0 });
+    const t = await tx({ description: 'Lizenz Januar' });
+    await caller.bookings.book({ bankTxId: String(t._id), account: '6640', vatRate: 0.19, mode: 'normal', supplierId: String(rule._id) });
+    expect(await Supplier.countDocuments({})).toBe(1);
+    expect(await Supplier.findById(rule._id)).toMatchObject({ defaultAccount: '6640', defaultVatRate: 0.19, origin: 'manual' });
+  });
+
+  it('does not learn from incoming payments', async (ctx) => {
+    skipIfNoDb(ctx);
+    const t = await tx({ direction: 'in', counterpartyIban: 'DE02120300000000202051' });
+    await adminCaller().bookings.book({ bankTxId: String(t._id), account: '4930', vatRate: 0, mode: 'normal' });
+    expect(await Supplier.countDocuments({})).toBe(0);
+  });
+
+  it('does not learn when the receipt vendor contradicts the counterparty', async (ctx) => {
+    skipIfNoDb(ctx);
+    const reading = { vendor: 'Augustiner Keller', totalCents: 11900, reverseCharge: false, lines: [{ vatRate: 0.07, grossCents: 11900, account: '6640' }] };
+    const t = await tx({
+      counterpartyName: 'Christian Dähn',
+      counterpartyIban: 'DE89370400440532013000',
+      receiptMatch: { driveFileIds: ['f1'], reading, readAt: new Date() },
+    });
+    await adminCaller().bookings.book({ bankTxId: String(t._id), account: '6640', vatRate: 0.07, mode: 'normal' });
+    expect(await Supplier.countDocuments({})).toBe(0);
+  });
+
+  it('attaches the matched receipt set of the row to the posting', async (ctx) => {
+    skipIfNoDb(ctx);
+    const reading = { vendor: 'Software Ltd', totalCents: 11900, reverseCharge: false, lines: [{ vatRate: 0.19, grossCents: 11900, account: '6837' }] };
+    const t = await tx({
+      receiptMatch: { driveFileIds: ['f1', 'f2'], reading, readAt: new Date() },
+      receiptReadings: [
+        { driveFileId: 'f1', fileName: 'lizenz.pdf', status: 'ok', readAt: new Date(), link: 'https://drive.google.com/file/d/f1/view', reading },
+        { driveFileId: 'f2', fileName: 'lizenz_2.pdf', status: 'ok', readAt: new Date(), link: 'https://drive.google.com/file/d/f2/view', reading: { ...reading, totalCents: 4760 } },
+      ],
+    });
+    await adminCaller().bookings.book({ bankTxId: String(t._id), account: '6837', vatRate: 0.19, mode: 'normal' });
+    const saved = await BankTransaction.findById(t._id);
+    expect(saved?.receipt).toMatchObject({ driveFileId: 'f1', fileName: 'lizenz.pdf', link: 'https://drive.google.com/file/d/f1/view' });
+  });
+
+  it('a non-admin booking against an autoBook rule keeps the booking but not the rule change', async (ctx) => {
     skipIfNoDb(ctx);
     const admin = adminCaller();
     const user = appRouter.createCaller({ user: { sub: 'u1', email: 'u@example.de', role: 'user' }, serviceAuth: false });
     const rule = await admin.suppliers.create({ name: 'Hoster', namePatterns: ['Software Ltd'], defaultAccount: '6837', defaultVatRate: 0.19, autoBook: true });
     const supplierId = String(rule._id);
     const t = await tx();
-    await expect(
-      user.bookings.book({ bankTxId: String(t._id), account: '6640', vatRate: 0.19, mode: 'normal', supplierId, rememberRule: true }),
-    ).rejects.toMatchObject({ code: 'FORBIDDEN', message: 'Regel mit automatischer Buchung kann nur ein Admin ändern' });
-    // rejected before posting, the rule untouched
-    expect(await JournalEntry.countDocuments({ 'source.kind': 'bank' })).toBe(0);
+    await user.bookings.book({ bankTxId: String(t._id), account: '6640', vatRate: 0.19, mode: 'normal', supplierId });
+    expect(await JournalEntry.countDocuments({ 'source.kind': 'bank' })).toBe(1);
     expect((await Supplier.findById(supplierId))?.defaultAccount).toBe('6837');
 
-    // booking against the rule without remembering is fine for anyone
-    await user.bookings.book({ bankTxId: String(t._id), account: '6640', vatRate: 0.19, mode: 'normal', supplierId });
     const t2 = await tx();
-    await admin.bookings.book({ bankTxId: String(t2._id), account: '6640', vatRate: 0.19, mode: 'normal', supplierId, rememberRule: true });
+    await admin.bookings.book({ bankTxId: String(t2._id), account: '6640', vatRate: 0.19, mode: 'normal', supplierId });
     expect((await Supplier.findById(supplierId))?.defaultAccount).toBe('6640');
+  });
+
+  it('bookBulk refuses rows where the rule and the receipt disagree', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    await caller.suppliers.create({ name: 'Software', namePatterns: ['Software Ltd'], defaultAccount: '6820', defaultVatRate: 0.19 });
+    const reading = { vendor: 'Software Ltd', totalCents: 11900, reverseCharge: false, lines: [{ vatRate: 0.19, grossCents: 11900, account: '6837' }] };
+    const conflict = await tx({ receiptMatch: { driveFileIds: ['f1'], reading, readAt: new Date() } });
+    const plain = await tx();
+    const results = await caller.bookings.bookBulk({ bankTxIds: [String(conflict._id), String(plain._id)] });
+    expect(results.map((r) => r.ok)).toEqual([false, true]);
+    expect(results[0].error).toMatch(/widersprechen/);
+    expect((await BankTransaction.findById(conflict._id))?.receipt).toBeUndefined();
   });
 
   it('bookBulk books items with a suggestion and reports the others without stopping', async (ctx) => {
@@ -217,6 +276,8 @@ describe('bookings', () => {
       const a = await tx({ counterpartyIban: IBAN });
       const b = await tx({ counterpartyIban: IBAN });
       await caller.bookings.book({ bankTxId: String(a._id), account: '6837', vatRate: 0.19, mode: 'normal' });
+      // learning would give an IBAN rule; archive it so this tests the history fallback
+      await Supplier.updateMany({}, { archived: true });
       const row = (await caller.bookings.stream({ year: 2026 })).find((r) => r.id === String(b._id));
       expect(row).toMatchObject({ state: 'open', suggestion: { matchedBy: 'history', account: '6837', vatRate: 0.19, mode: 'normal' } });
     });
@@ -226,6 +287,7 @@ describe('bookings', () => {
       const caller = adminCaller();
       const a = await tx({ counterpartyIban: IBAN });
       await caller.bookings.book({ bankTxId: String(a._id), account: '6837', vatRate: 0.19, mode: 'normal' });
+      await Supplier.updateMany({}, { archived: true });
       const incoming = await tx({ counterpartyIban: IBAN, direction: 'in' });
       const outgoing = await tx({ counterpartyIban: IBAN });
       const inbox = await caller.bookings.inbox({ year: 2026 });
@@ -240,6 +302,7 @@ describe('bookings', () => {
       const b = await tx({ counterpartyIban: IBAN });
       await caller.bookings.book({ bankTxId: String(a._id), account: '6837', vatRate: 0.19, mode: 'normal' });
       await caller.bookings.unbook({ bankTxId: String(a._id), reason: 'falsch' });
+      await Supplier.updateMany({}, { archived: true });
       const inbox = await caller.bookings.inbox({ year: 2026 });
       expect(inbox.find((r) => r.id === String(b._id))?.suggestion).toBeNull();
     });
@@ -250,13 +313,17 @@ describe('bookings', () => {
       const a = await tx({ counterpartyIban: IBAN });
       const b = await tx({ counterpartyIban: IBAN });
       await caller.bookings.book({ bankTxId: String(a._id), account: '6640', vatRate: 0.19, mode: 'normal' });
+      await Supplier.updateMany({}, { archived: true });
       await caller.suppliers.create({ name: 'Hoster', ibans: [IBAN], defaultAccount: '6837', defaultVatRate: 0.19 });
       const inbox = await caller.bookings.inbox({ year: 2026 });
       expect(inbox.find((r) => r.id === String(b._id))?.suggestion).toMatchObject({ matchedBy: 'iban', account: '6837' });
     });
 
-    const bookTo = (caller: ReturnType<typeof adminCaller>, id: unknown, account: string) =>
-      caller.bookings.book({ bankTxId: String(id), account, vatRate: 0.19, mode: 'normal' });
+    const bookTo = async (caller: ReturnType<typeof adminCaller>, id: unknown, account: string) => {
+      await caller.bookings.book({ bankTxId: String(id), account, vatRate: 0.19, mode: 'normal' });
+      // keep the history fallback under test: drop the rule learning created
+      await Supplier.updateMany({}, { archived: true });
+    };
     const suggestionOf = async (caller: ReturnType<typeof adminCaller>, id: unknown) =>
       (await caller.bookings.inbox({ year: 2026 })).find((r) => r.id === String(id))?.suggestion;
 
@@ -307,15 +374,17 @@ describe('bookings', () => {
       expect((await loadHistory(new Date(2029, 5, 1))).size).toBe(0);
     });
 
-    it('bookBulk books history suggestions without supplierId', async (ctx) => {
+    it('bookBulk books history suggestions and learns a rule from them', async (ctx) => {
       skipIfNoDb(ctx);
       const caller = adminCaller();
       const a = await tx({ counterpartyIban: IBAN });
       const b = await tx({ counterpartyIban: IBAN });
       await caller.bookings.book({ bankTxId: String(a._id), account: '6837', vatRate: 0.19, mode: 'normal' });
+      await Supplier.updateMany({}, { archived: true });
       const [res] = await caller.bookings.bookBulk({ bankTxIds: [String(b._id)] });
       expect(res.ok).toBe(true);
-      expect((await BankTransaction.findById(b._id))?.supplierId).toBeUndefined();
+      expect((await BankTransaction.findById(b._id))?.supplierId).toBeDefined();
+      expect(await Supplier.findOne({ archived: false, ibans: IBAN, origin: 'learned' })).toMatchObject({ defaultAccount: '6837' });
       const booked = (await caller.bookings.booked({ year: 2026 })).find((r) => r.id === String(b._id));
       expect(booked?.lines.map((x) => x.account).sort()).toEqual(['1406', '1800', '6837']);
     });
@@ -649,7 +718,7 @@ describe('bookings', () => {
       expect(receiptText).not.toHaveBeenCalled();
     });
 
-    it('rules win over a receipt reading', async (ctx) => {
+    it('rules win over a receipt reading and the receipt is reported as a conflict', async (ctx) => {
       skipIfNoDb(ctx);
       const caller = adminCaller();
       await caller.suppliers.create({ name: 'Software', namePatterns: ['Software Ltd'], defaultAccount: '6820', defaultVatRate: 0.19 });
@@ -659,11 +728,49 @@ describe('bookings', () => {
       const res = await caller.bookings.readReceipt({ bankTxId: String(t._id) });
       expect(res.status).toBe('ok');
       expect(res.suggestion).toMatchObject({ matchedBy: 'name', account: '6820' });
+      expect(res.suggestion?.conflict?.split).toHaveLength(2);
       expect(res.reading).toMatchObject({ vendor: 'Muster Café', totalCents: 5460 });
       const [row] = await caller.bookings.inbox({ year: 2026 });
       expect(row.suggestion).toMatchObject({ matchedBy: 'name', account: '6820' });
+      expect(row.suggestion?.conflict?.split).toHaveLength(2);
       const [streamRow] = await caller.bookings.stream({ year: 2026 });
       expect(streamRow.state === 'open' && streamRow.suggestion?.matchedBy).toBe('name');
+    });
+
+    it('readReceiptsNow reads receipts for rows that a rule already classifies', async (ctx) => {
+      skipIfNoDb(ctx);
+      const caller = adminCaller();
+      await caller.suppliers.create({ name: 'Muster Cafe', namePatterns: ['Muster Cafe'], defaultAccount: '6640', defaultVatRate: 0.19 });
+      const t = await tx({ amountCents: 5460, counterpartyName: 'Muster Cafe', date: new Date(2026, 0, 30), receipt: RECEIPT });
+      receiptText.mockResolvedValue('Muster Café Summe 54,60 EUR');
+      ask.mockResolvedValue(replyWith(SPLIT_READING));
+
+      expect(await caller.bookings.readReceiptsNow({ year: 2026 })).toEqual({ read: 1, available: true });
+      expect((await BankTransaction.findById(t._id))?.receiptMatch?.driveFileIds).toEqual(['r1']);
+      // a matched row is not read a second time
+      expect(await caller.bookings.readReceiptsNow({ year: 2026 })).toEqual({ read: 0, available: true });
+    });
+
+    it('readReceiptsNow caps the rows per run and skips incoming ones', async (ctx) => {
+      skipIfNoDb(ctx);
+      vi.stubEnv('QUEEN_RECEIPTS_PER_RUN', '2');
+      const caller = adminCaller();
+      await tx({ amountCents: 5460, receipt: RECEIPT });
+      await tx({ amountCents: 5460, receipt: { ...RECEIPT, driveFileId: 'r2' } });
+      await tx({ amountCents: 5460, receipt: { ...RECEIPT, driveFileId: 'r3' } });
+      await tx({ amountCents: 5460, direction: 'in', receipt: { ...RECEIPT, driveFileId: 'r4' } });
+      receiptText.mockResolvedValue('Muster Café Summe 54,60 EUR');
+      ask.mockResolvedValue(replyWith(SPLIT_READING));
+      expect(await caller.bookings.readReceiptsNow({ year: 2026 })).toEqual({ read: 2, available: true });
+      expect(await BankTransaction.countDocuments({ 'receiptMatch.driveFileIds': { $exists: true } })).toBe(2);
+      vi.unstubAllEnvs();
+    });
+
+    it('readReceiptsNow is unavailable without opencode or Drive', async (ctx) => {
+      skipIfNoDb(ctx);
+      const caller = adminCaller();
+      opencode.enabled = false;
+      expect(await caller.bookings.readReceiptsNow({ year: 2026 })).toEqual({ read: 0, available: false });
     });
   });
 

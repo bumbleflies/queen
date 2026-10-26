@@ -1,6 +1,6 @@
 import { BANK, BANK_VAT_RATES, REVERSE_CHARGE_RATE, type SplitPart } from './postingRules';
 import { suggestWithHistory, type BookingHistory } from './history';
-import type { SuggestSupplier, SuggestTx, Suggestion } from './suggest';
+import type { SuggestSupplier, SuggestTx, Suggestion, SuggestionConflict } from './suggest';
 
 export interface ReceiptLine {
   vatRate: number;
@@ -252,11 +252,45 @@ export type ReadableTx = SuggestTx & {
   receiptReading?: CachedReceiptReading | null;
 };
 
-/** Suggestion order: rule → history → matched receipts (else a legacy single reading). */
+const sameRate = (a: number | undefined, b: number | undefined): boolean => a !== undefined && b !== undefined && Math.abs(a - b) < 0.0005;
+
+function splitKey(parts: SplitPart[]): string {
+  return parts
+    .map((p) => `${p.account}:${p.vatRate}:${p.grossCents}:${p.mode}`)
+    .sort()
+    .join('|');
+}
+
+/**
+ * Where a matched receipt contradicts what the rule/history says. The totals
+ * already agree (the reading is a match), so only account, VAT rate, mode or the
+ * split shape can differ. Null when they agree or the receipt is no suggestion.
+ */
+export function suggestionConflict(booked: Suggestion, receipt: Suggestion): SuggestionConflict | null {
+  if (receipt.matchedBy !== 'receipt') return null;
+  const side: SuggestionConflict = { account: receipt.account, vatRate: receipt.vatRate, mode: receipt.mode, split: receipt.split };
+  if (booked.split || receipt.split) {
+    if (booked.split && receipt.split && splitKey(booked.split) === splitKey(receipt.split)) return null;
+    return side;
+  }
+  if (booked.mode !== receipt.mode) return side;
+  if (!sameRate(booked.vatRate, receipt.vatRate)) return side;
+  if (booked.mode !== 'vatOnly' && (booked.account ?? '') !== (receipt.account ?? '')) return side;
+  return null;
+}
+
+/**
+ * Suggestion order: rule → history → matched receipts (else a legacy single
+ * reading). A receipt that contradicts the winning suggestion does not replace
+ * it: it is attached as `conflict` so the row needs a decision.
+ */
 export function suggestForTx(tx: ReadableTx, suppliers: SuggestSupplier[], history: BookingHistory): Suggestion | null {
   const fromRules = suggestWithHistory(tx, suppliers, history);
-  if (fromRules) return fromRules;
   const reading = cachedReading(tx.receiptMatch) ?? cachedReading(tx.receiptReading);
   const files = tx.receiptMatch?.driveFileIds?.length ?? 1;
-  return reading ? readingToSuggestion(reading, tx, files) : null;
+  const fromReceipt = reading ? readingToSuggestion(reading, tx, files) : null;
+  if (!fromRules) return fromReceipt;
+  if (!fromReceipt) return fromRules;
+  const conflict = suggestionConflict(fromRules, fromReceipt);
+  return conflict ? { ...fromRules, conflict, reading: fromReceipt.reading } : fromRules;
 }

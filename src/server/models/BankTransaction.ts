@@ -24,6 +24,8 @@ const receiptFileReadingSchema = new Schema(
     fileName: { type: String },
     status: { type: String, enum: ['ok', 'failed', 'noText'], required: true },
     reading: { type: readingSchema },
+    /** Drive web link of the file, so a matched set can be attached to the posting. */
+    link: { type: String },
     model: { type: String },
     readAt: { type: Date, required: true },
     error: { type: String },

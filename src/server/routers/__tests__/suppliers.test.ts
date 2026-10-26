@@ -100,7 +100,14 @@ describe('suppliers.overview', () => {
     const hits = Object.fromEntries(rows.map((r) => [r.id, r.openHits]));
     // purpose beats name, so the ABSCHLUSS row goes to Bank although Hoster's name pattern matches too
     expect(hits).toEqual({ [String(hoster._id)]: 1, [String(bank._id)]: 1, [String(idle._id)]: 0 });
-    expect(rows[0]).toMatchObject({ kreditorNumber: 70000, name: 'Hoster', namePatterns: ['Hoster'], defaultAccount: '6837', archived: false });
+    // the booking of the Hoster row taught its exact name to the rule that already matched
+    expect(rows[0]).toMatchObject({
+      kreditorNumber: 70000,
+      name: 'Hoster',
+      namePatterns: ['Hoster', 'Hoster GmbH'],
+      defaultAccount: '6837',
+      archived: false,
+    });
   });
 
   it('hides archived rules unless asked', async (ctx) => {

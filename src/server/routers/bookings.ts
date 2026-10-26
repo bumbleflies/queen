@@ -19,7 +19,7 @@ import { listReceiptFiles, type DriveFilesLike } from '../services/receiptsDrive
 import { driveForActor } from '../services/driveForUser';
 import { getReceiptsFolder } from '../services/appSettings';
 import { opencodeFromEnv } from '../services/OpencodeClient';
-import { readTxReceipts, receiptPromptAccounts, type ReadStatus, type ReceiptFileReading } from '../services/receiptReader';
+import { readTxReceipts, receiptPromptAccounts, receiptsPerRun, readOpenReceipts, type ReadStatus, type ReceiptFileReading } from '../services/receiptReader';
 import { FireflyClient } from '../services/FireflyClient';
 import { readFireflyEnv } from '../lib/fireflyEnv';
 
@@ -127,7 +127,6 @@ const bookFields = {
   split: z.array(splitPart).min(2).optional(),
   supplierId: z.string().optional(),
   text: z.string().max(200).optional(),
-  rememberRule: z.boolean().optional(),
   receipt: receiptInput.nullable().optional(),
   receiptMissingReason: z.string().max(200).nullable().optional(),
 };
@@ -253,6 +252,19 @@ export const bookingsRouter = router({
       return result(read.status, suggestForTx(tx, suppliers, history), read.match?.reading ?? null);
     }),
 
+  /**
+   * Reads the receipts of the year's open outgoing rows on demand (same queue
+   * as the nightly run: rule rows included). Returns how many rows were read.
+   */
+  readReceiptsNow: authedProcedure.input(yearInput).mutation(async ({ input, ctx }) => {
+    try {
+      const drive = await driveForActor(ctx.user.sub);
+      return await readOpenReceipts(new Date(), receiptsPerRun(), { years: [input.year], drive });
+    } catch {
+      return { read: 0, available: false };
+    }
+  }),
+
   booked: authedProcedure.input(yearInput).query(async ({ input }) => {
     const { txs, coverage } = await loadYear(input.year);
     const supplierIds = txs.flatMap((t) => (t.supplierId ? [t.supplierId] : []));
@@ -319,6 +331,10 @@ export const bookingsRouter = router({
       for (const bankTxId of input.bankTxIds) {
         const tx = await BankTransaction.findById(bankTxId);
         const s = tx ? suggestForTx(tx, suppliers, history) : null;
+        if (tx && s?.conflict) {
+          results.push({ bankTxId, ok: false, error: 'Regel und Beleg widersprechen sich — bitte einzeln prüfen' });
+          continue;
+        }
         if (!tx || !s || (!s.split && ((s.mode === 'normal' && !s.account) || s.vatRate === undefined))) {
           results.push({ bankTxId, ok: false, error: 'Kein Vorschlag — bitte einzeln buchen' });
           continue;

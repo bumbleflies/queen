@@ -23,6 +23,8 @@ export interface InboxRowLike {
     mode: BankBookingMode;
     split?: SplitPart[];
     reading?: { vendor: string; files?: number };
+    /** The receipt disagrees with the rule: both sides are shown, one is chosen. */
+    conflict?: { account?: string; vatRate?: number; mode: BankBookingMode; split?: SplitPart[] };
   } | null;
 }
 
@@ -58,14 +60,37 @@ export function BookingDialog({ year, tx, onDone }: { year: number; tx: InboxRow
   const [mode, setMode] = useState<BankBookingMode>(tx.suggestion?.mode ?? 'normal');
   const [supplierId, setSupplierId] = useState(tx.suggestion?.supplierId ?? '');
   const [text, setText] = useState('');
-  const [remember, setRemember] = useState(false);
   const [receiptId, setReceiptId] = useState('');
   const [missing, setMissing] = useState(false);
   const [missingReason, setMissingReason] = useState('');
 
+  const conflict = tx.suggestion?.conflict ?? null;
+  const [side, setSide] = useState<'rule' | 'receipt'>('rule');
   const suggestedSplit = tx.suggestion?.split && tx.suggestion.split.length >= 2 ? tx.suggestion.split : null;
+  const receiptSplit = conflict?.split && conflict.split.length >= 2 ? conflict.split : null;
+  const activeSplit = side === 'receipt' ? receiptSplit : suggestedSplit;
   const [useSplit, setUseSplit] = useState(true);
-  const split = suggestedSplit && useSplit ? suggestedSplit : null;
+  const split = activeSplit && useSplit ? activeSplit : null;
+
+  /** Take account, VAT rate, mode (and split) from the chosen side. */
+  function chooseSide(next: 'rule' | 'receipt') {
+    setSide(next);
+    const source = next === 'receipt' ? conflict : tx.suggestion;
+    if (!source) return;
+    if (source.split && source.split.length >= 2) {
+      setUseSplit(true);
+      return;
+    }
+    setAccount(source.account ?? '');
+    setVatRate(source.vatRate ?? 0.19);
+    setMode(source.mode);
+  }
+
+  function describe(source: { account?: string; vatRate?: number; mode: BankBookingMode; split?: SplitPart[] }): string {
+    if (source.split && source.split.length >= 2) return t('finance.outcome.split').replace('{n}', String(source.split.length));
+    if (source.mode === 'vatOnly') return t('finance.outcome.vatOnly');
+    return `${source.account ?? '—'} · ${Math.round((source.vatRate ?? 0) * 100)} %`;
+  }
 
   const preview = useMemo(() => {
     if (!split) return previewBankPosting({ direction: tx.direction, amountCents: tx.amountCents, account, vatRate, mode });
@@ -95,7 +120,6 @@ export function BookingDialog({ year, tx, onDone }: { year: number; tx: InboxRow
         ...(split ? { split } : {}),
         supplierId: supplierId || undefined,
         text: text || undefined,
-        rememberRule: remember,
         receipt: chosen ? { driveFileId: chosen.id, fileName: chosen.name, link: chosen.link } : undefined,
         receiptMissingReason: missing ? missingReason || null : undefined,
       });
@@ -137,7 +161,30 @@ export function BookingDialog({ year, tx, onDone }: { year: number; tx: InboxRow
         </div>
       </div>
       <div className="grid-form" style={{ padding: 16 }}>
-        {suggestedSplit ? (
+        {conflict ? (
+          <div style={{ gridColumn: '1 / -1' }}>
+            <p className="muted" style={{ margin: 0 }}>{t('bookings.dialog.conflict')}</p>
+            <div className="row" style={{ gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className={`btn sm ${side === 'rule' ? '' : 'ghost'}`}
+                aria-pressed={side === 'rule'}
+                onClick={() => chooseSide('rule')}
+              >
+                {t('bookings.dialog.sideRule')} · {tx.suggestion ? describe(tx.suggestion) : ''}
+              </button>
+              <button
+                type="button"
+                className={`btn sm ${side === 'receipt' ? '' : 'ghost'}`}
+                aria-pressed={side === 'receipt'}
+                onClick={() => chooseSide('receipt')}
+              >
+                {t('bookings.dialog.sideReceipt')} · {describe(conflict)}
+              </button>
+            </div>
+          </div>
+        ) : null}
+        {activeSplit ? (
           <div style={{ gridColumn: '1 / -1' }}>
             {tx.suggestion?.reading ? (
               <div className="lbl">
@@ -147,7 +194,7 @@ export function BookingDialog({ year, tx, onDone }: { year: number; tx: InboxRow
               </div>
             ) : null}
             <div className="num">
-              {suggestedSplit.map((p) => (
+              {activeSplit.map((p) => (
                 <div key={`${p.account}-${p.vatRate}-${p.grossCents}`}>
                   {p.account} · {Math.round(p.vatRate * 100)} %{p.mode === 'reverseCharge' ? ` · ${t('finance.outcome.reverseCharge')}` : ''} · {formatEUR(p.grossCents)}
                 </div>
@@ -237,10 +284,6 @@ export function BookingDialog({ year, tx, onDone }: { year: number; tx: InboxRow
             <input className="field" value={missingReason} onChange={(e) => setMissingReason(e.target.value)} />
           </label>
         ) : null}
-        <label className="lab" style={{ gridColumn: '1 / -1', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-          {t('bookings.dialog.remember')}
-        </label>
       </div>
       <datalist id="booking-accounts">
         {((accounts.data ?? []) as unknown as AccountRow[]).map((a) => (

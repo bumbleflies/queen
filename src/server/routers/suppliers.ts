@@ -54,7 +54,13 @@ export const suppliersRouter = router({
       }
       return all
         .filter((s) => input.includeArchived || !s.archived)
-        .map((s) => ({ id: String(s._id), ...toExport(s), openHits: hits.get(String(s._id)) ?? 0 }));
+        .map((s) => ({
+          id: String(s._id),
+          ...toExport(s),
+          origin: s.origin,
+          learnedAt: s.learnedAt ? s.learnedAt.toISOString() : null,
+          openHits: hits.get(String(s._id)) ?? 0,
+        }));
     }),
 
   /** All rules (incl. archived) in the import format. */

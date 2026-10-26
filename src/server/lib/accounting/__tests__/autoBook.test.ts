@@ -34,6 +34,10 @@ describe('isAutoBookable', () => {
     expect(isAutoBookable(iban, null)).toBe(false);
   });
 
+  it('is false for a row where the receipt contradicts the rule', () => {
+    expect(isAutoBookable({ ...iban, conflict: { account: '6640', vatRate: 0.07, mode: 'normal' } }, flagged)).toBe(false);
+  });
+
   it('is false without a suggestion', () => {
     expect(isAutoBookable(null, flagged)).toBe(false);
   });
