@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.25.0](https://github.com/bumbleflies/queen/compare/queen-v0.24.6...queen-v0.25.0) (2026-10-26)
+
+
+### Features
+
+* **auth:** sign-in links for people without a Google account ([#161](https://github.com/bumbleflies/queen/issues/161)) ([d7e5311](https://github.com/bumbleflies/queen/commit/d7e5311b5b41c4bb50ac711df773799f50ed97f2))
+
+
+### Bug Fixes
+
+* **deps:** update dependency googleapis to v188 ([#162](https://github.com/bumbleflies/queen/issues/162)) ([859a236](https://github.com/bumbleflies/queen/commit/859a236d293f460b4737f19c4a006a6a4ee8ccb2))
+
 ## [0.24.6](https://github.com/bumbleflies/queen/compare/queen-v0.24.5...queen-v0.24.6) (2026-10-26)
 
 
