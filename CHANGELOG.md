@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.26.1](https://github.com/bumbleflies/queen/compare/queen-v0.26.0...queen-v0.26.1) (2026-10-27)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @hookform/resolvers to v6.0.1 ([#172](https://github.com/bumbleflies/queen/issues/172)) ([e873f89](https://github.com/bumbleflies/queen/commit/e873f89144986d39126d76e1380865265036799d))
+* **deps:** update dependency oxlint to v1.90.0 ([#173](https://github.com/bumbleflies/queen/issues/173)) ([7b8a1d1](https://github.com/bumbleflies/queen/commit/7b8a1d1826b1b1097c361435cd6a2731d705a852))
+
 ## [0.26.0](https://github.com/bumbleflies/queen/compare/queen-v0.25.0...queen-v0.26.0) (2026-10-26)
 
 
