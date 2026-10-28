@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.26.4](https://github.com/bumbleflies/queen/compare/queen-v0.26.3...queen-v0.26.4) (2026-10-28)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @trpc/server to v11.22.1 ([#180](https://github.com/bumbleflies/queen/issues/180)) ([9b98bfc](https://github.com/bumbleflies/queen/commit/9b98bfc04827475c83e82ae2c09490b770515317))
+
 ## [0.26.3](https://github.com/bumbleflies/queen/compare/queen-v0.26.2...queen-v0.26.3) (2026-10-28)
 
 
