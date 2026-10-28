@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.26.3](https://github.com/bumbleflies/queen/compare/queen-v0.26.2...queen-v0.26.3) (2026-10-28)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @hookform/resolvers to v6.0.2 ([#178](https://github.com/bumbleflies/queen/issues/178)) ([e3808c3](https://github.com/bumbleflies/queen/commit/e3808c3725a03f9d52fd5f3f0a04d5fc252c54ad))
+
 ## [0.26.2](https://github.com/bumbleflies/queen/compare/queen-v0.26.1...queen-v0.26.2) (2026-10-27)
 
 
