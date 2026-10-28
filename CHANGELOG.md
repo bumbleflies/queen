@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.26.2](https://github.com/bumbleflies/queen/compare/queen-v0.26.1...queen-v0.26.2) (2026-10-27)
+
+
+### Bug Fixes
+
+* **deps:** update dependency react-router-dom to v7.18.5 ([#175](https://github.com/bumbleflies/queen/issues/175)) ([8420f12](https://github.com/bumbleflies/queen/commit/8420f1226be59613e43284a11052f3341287b97b))
+
 ## [0.26.1](https://github.com/bumbleflies/queen/compare/queen-v0.26.0...queen-v0.26.1) (2026-10-27)
 
 
