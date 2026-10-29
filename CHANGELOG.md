@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.26.7](https://github.com/bumbleflies/queen/compare/queen-v0.26.6...queen-v0.26.7) (2026-10-29)
+
+
+### Bug Fixes
+
+* **deps:** update dependency express-rate-limit to v8.7.2 ([#188](https://github.com/bumbleflies/queen/issues/188)) ([054d2c2](https://github.com/bumbleflies/queen/commit/054d2c254accb1e7790446f1edac28fcfd9b1660))
+* **deps:** update dependency nodemailer to v10.3.1 ([#189](https://github.com/bumbleflies/queen/issues/189)) ([dbdb16e](https://github.com/bumbleflies/queen/commit/dbdb16e373c03d3e222f3b7b138d401a1f04c593))
+
 ## [0.26.6](https://github.com/bumbleflies/queen/compare/queen-v0.26.5...queen-v0.26.6) (2026-10-29)
 
 
