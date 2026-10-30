@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.26.8](https://github.com/bumbleflies/queen/compare/queen-v0.26.7...queen-v0.26.8) (2026-10-30)
+
+
+### Bug Fixes
+
+* keep the server bundle out of the client and stop the blank page ([#192](https://github.com/bumbleflies/queen/issues/192)) ([de7cc08](https://github.com/bumbleflies/queen/commit/de7cc089225d6567e85fb035e5406b961d8876d2))
+
 ## [0.26.7](https://github.com/bumbleflies/queen/compare/queen-v0.26.6...queen-v0.26.7) (2026-10-29)
 
 
