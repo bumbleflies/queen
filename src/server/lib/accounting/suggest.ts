@@ -1,3 +1,4 @@
+import { normalizeIban } from './normalize';
 import { REVERSE_CHARGE_RATE, type BankBookingMode, type SplitPart } from './postingRules';
 
 export interface SuggestTx {
@@ -48,10 +49,6 @@ export interface SuggestionConflict {
   vatRate?: number;
   mode: BankBookingMode;
   split?: SplitPart[];
-}
-
-export function normalizeIban(s: string): string {
-  return s.replace(/\s+/g, '').toUpperCase();
 }
 
 function norm(s: string | null | undefined): string {

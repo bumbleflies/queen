@@ -1,5 +1,4 @@
-import { normalizeIban } from './suggest';
-import { normalizeVendor } from './receiptReading';
+import { normalizeIban, normalizeVendor } from './normalize';
 
 export type RuleKey =
   | { kind: 'iban'; value: string }

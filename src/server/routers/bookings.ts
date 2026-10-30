@@ -10,7 +10,8 @@ import { BookingError, bookBankTransaction, findCoverage, unbookBankTransaction 
 import { BANK_VAT_RATES, PostingError } from '../lib/accounting/postingRules';
 import { LedgerError } from '../lib/accounting/ledger';
 import { loadHistory } from '../lib/accounting/history';
-import { cachedReading, suggestForTx, type ReceiptReading } from '../lib/accounting/receiptReading';
+import { cachedReading, type ReceiptReading } from '../lib/accounting/receiptReading';
+import { suggestForTx } from '../lib/accounting/txSuggestion';
 import type { Suggestion } from '../lib/accounting/suggest';
 import { loadYear, openTransactions } from '../lib/accounting/bankCoverage';
 import { AUTO_BOOK_USER } from '../lib/accounting/autoBook';

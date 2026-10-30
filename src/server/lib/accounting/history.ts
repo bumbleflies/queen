@@ -1,7 +1,8 @@
 import { BankTransaction } from '../../models/BankTransaction';
 import { JournalEntry } from '../../models/JournalEntry';
 import { BANK, bankPosting, type BankBookingMode, type PostingLine } from './postingRules';
-import { normalizeIban, suggest, type SuggestSupplier, type SuggestTx, type Suggestion } from './suggest';
+import { normalizeIban } from './normalize';
+import { suggest, type SuggestSupplier, type SuggestTx, type Suggestion } from './suggest';
 
 export interface HistoryEntry {
   account: string;
