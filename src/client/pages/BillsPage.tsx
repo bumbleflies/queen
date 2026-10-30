@@ -61,6 +61,10 @@ export function BillsPage() {
     try {
       const result = await intake.mutateAsync();
       await utils.bills.list.invalidate();
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
       toast.show(
         t('bills.fetched')
           .replace('{new}', String(result.created))

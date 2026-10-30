@@ -368,6 +368,10 @@ export async function reversePayment(
 }
 
 /** True only when this module is the process entrypoint, so tests can import safely. */
-export function isCliEntrypoint(argv1: string | undefined): boolean {
-  return typeof argv1 === 'string' && /cron[\\/]reconcile(\.js|\.ts)?$/.test(argv1);
+export function isCliEntrypoint(argv1: string | undefined, script = 'reconcile'): boolean {
+  if (typeof argv1 !== 'string') return false;
+  // The script name is a literal from the caller, but escape it anyway so a typo
+  // can never turn into a wildcard.
+  const name = script.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`cron[\\\\/]${name}(?:\\.js|\\.ts)?$`).test(argv1);
 }

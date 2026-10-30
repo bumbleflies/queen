@@ -23,7 +23,7 @@ async function main(): Promise<void> {
   }
 }
 
-if (isCliEntrypoint(process.argv[1])) {
+if (isCliEntrypoint(process.argv[1], 'billIntake')) {
   void main().catch((err: unknown) => {
     console.error(`Bill intake failed: ${err instanceof Error ? err.message : String(err)}`);
     process.exitCode = 1;

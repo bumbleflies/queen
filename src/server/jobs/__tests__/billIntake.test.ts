@@ -6,7 +6,7 @@ import { BankTransaction } from '../../models/BankTransaction';
 import { Supplier } from '../../models/Supplier';
 import { JournalEntry } from '../../models/JournalEntry';
 import { Counter } from '../../models/Counter';
-import { runBillIntake, billsMailbox, isMissingGmailScope, type BillIntakeDeps } from '../billIntake';
+import { runBillIntake, billsMailbox, describeIntakeError, isMissingGmailScope, type BillIntakeDeps } from '../billIntake';
 import type { GmailClientLike, GmailMessage } from '../../services/GmailService';
 
 beforeAll(async () => {
@@ -221,6 +221,24 @@ describe('runBillIntake', () => {
     const stub = driveStub();
     await runBillIntake(deps({ client, drive: stub.drive as BillIntakeDeps['drive'] }));
     expect(stub.created).toEqual([{ name: '2025', parent: 'root' }]);
+  });
+});
+
+describe('describeIntakeError', () => {
+  it('turns the disabled-API error into an actionable sentence', () => {
+    const message = 'Gmail API has not been used in project 391372270100 before or it is disabled.';
+    const text = describeIntakeError(new Error(message));
+    expect(text).toContain('Gmail-API');
+    expect(text).toContain('391372270100');
+    expect(text).toContain('nicht aktiviert');
+  });
+
+  it('tells an admin to sign in again when the scope is missing', () => {
+    expect(describeIntakeError(new Error('Request had insufficient authentication scopes.'))).toContain('neu mit Google anmelden');
+  });
+
+  it('passes anything else through unchanged', () => {
+    expect(describeIntakeError(new Error('Drive 403'))).toBe('Drive 403');
   });
 });
 

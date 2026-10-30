@@ -6,7 +6,7 @@ import { BankTransaction } from '../models/BankTransaction';
 import { yearRange } from '../lib/accounting/bankCoverage';
 import { bestTransactionForBill } from '../lib/bills/matchBill';
 import { billLikeOf, txLikeOf } from '../services/billMatch';
-import { isMissingGmailScope, resolveBillIntakeDeps, runBillIntake } from '../jobs/billIntake';
+import { describeIntakeError, resolveBillIntakeDeps, runBillIntake } from '../jobs/billIntake';
 
 const yearInput = z.object({ year: z.number().int().min(2000).max(2100) });
 
@@ -54,21 +54,18 @@ export const billsRouter = router({
 
   /**
    * Read the mailbox now (admin). Same job as the nightly run, capped so the
-   * click returns quickly. A missing Gmail scope is a precondition, not a
-   * generic failure: the admin has to sign in again to grant it.
+   * click returns quickly.
+   *
+   * Expected failures are returned, not thrown: Traefik in front of this app
+   * replaces any 5xx body with its HTML error page, so a thrown BAD_GATEWAY
+   * reaches the browser as `Unexpected token '<'` with no usable reason.
    */
   intakeNow: adminProcedure.mutation(async () => {
     try {
       const deps = await resolveBillIntakeDeps();
-      return await runBillIntake({ ...deps, maxMessages: INTAKE_NOW_MAX_MESSAGES });
+      return { ok: true as const, ...(await runBillIntake({ ...deps, maxMessages: INTAKE_NOW_MAX_MESSAGES })) };
     } catch (err) {
-      if (isMissingGmailScope(err)) {
-        throw new TRPCError({
-          code: 'PRECONDITION_FAILED',
-          message: 'Gmail-Zugriff fehlt — bitte einmal neu mit Google anmelden, damit der Zugriff auf das bills@-Postfach erteilt wird.',
-        });
-      }
-      throw new TRPCError({ code: 'BAD_GATEWAY', message: (err as Error).message });
+      return { ok: false as const, error: describeIntakeError(err) };
     }
   }),
 
