@@ -3,6 +3,7 @@ import { connectMongo } from './db/mongo';
 import { setDbStatus } from './health';
 import { createApp } from './app';
 import { initFileInvoiceQueue } from './jobs/queue';
+import { initEmailIntakeQueue } from './jobs/emailIntake';
 import { seedAccounts } from './lib/accounting/seedAccounts';
 
 const app = createApp();
@@ -19,6 +20,8 @@ connectMongo()
     if (process.env.REDIS_URL || process.env.VALKEY_URL) {
       initFileInvoiceQueue();
       console.log('File-invoice queue started');
+      initEmailIntakeQueue();
+      console.log('Email-intake queue started');
     }
   })
   .catch(err => console.error('MongoDB connection failed:', err));
