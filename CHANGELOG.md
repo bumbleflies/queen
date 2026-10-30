@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.0](https://github.com/bumbleflies/queen/compare/queen-v0.27.1...queen-v0.28.0) (2026-10-30)
+
+
+### Features
+
+* bills email intake (Gmail → receipts folder + Bill) ([#199](https://github.com/bumbleflies/queen/issues/199)) ([6fd1598](https://github.com/bumbleflies/queen/commit/6fd1598ad915619c5532fa7154ddec39ec4963bd))
+
 ## [0.27.1](https://github.com/bumbleflies/queen/compare/queen-v0.27.0...queen-v0.27.1) (2026-10-30)
 
 
