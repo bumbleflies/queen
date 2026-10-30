@@ -3,6 +3,7 @@ import { TRPCError } from '@trpc/server';
 import type { HydratedDocument } from 'mongoose';
 import { router, authedProcedure } from '../trpcInit';
 import { BankTransaction, type BankTransactionDoc } from '../models/BankTransaction';
+import { Bill } from '../models/Bill';
 import { JournalEntry } from '../models/JournalEntry';
 import { Invoice } from '../models/Invoice';
 import { Supplier } from '../models/Supplier';
@@ -15,6 +16,8 @@ import { suggestForTx } from '../lib/accounting/txSuggestion';
 import type { Suggestion } from '../lib/accounting/suggest';
 import { loadYear, openTransactions } from '../lib/accounting/bankCoverage';
 import { AUTO_BOOK_USER } from '../lib/accounting/autoBook';
+import { bestBillForTransaction } from '../lib/bills/matchBill';
+import { billHintOf, billLikeOf, txLikeOf, type BillHint, type TxSource } from '../services/billMatch';
 import { rankReceipts, receiptCandidates, strongReceipt, type ReceiptFile } from '../lib/accounting/receipts';
 import { listReceiptFiles, type DriveFilesLike } from '../services/receiptsDrive';
 import { driveForActor } from '../services/driveForUser';
@@ -39,6 +42,17 @@ function toTrpc(err: unknown): never {
     throw new TRPCError({ code: 'BAD_REQUEST', message: err.message });
   }
   throw err;
+}
+
+/**
+ * Lookup "which bill from the mail does this payment settle?". Bills of the
+ * previous year count too: a December bill is often paid in January. A hint
+ * only — booking still goes through rules/receipts, never through this.
+ */
+async function billHintLookup(year: number): Promise<(tx: Omit<TxSource, '_id'>) => BillHint | null> {
+  const docs = await Bill.find({ ignored: false, receivedAt: { $gte: new Date(year - 1, 0, 1) } }).lean();
+  const candidates = docs.map((bill) => ({ ...billLikeOf(bill), hint: billHintOf(bill) }));
+  return (tx) => bestBillForTransaction(candidates, txLikeOf(tx))?.hint ?? null;
 }
 
 function row(tx: HydratedDocument<BankTransactionDoc>) {
@@ -144,6 +158,7 @@ export const bookingsRouter = router({
     );
     const supplierIds = txs.flatMap((t) => (t.supplierId ? [t.supplierId] : []));
     const names = new Map((await Supplier.find({ _id: { $in: supplierIds } }).lean() as unknown as { _id: unknown; name: string }[]).map((s) => [String(s._id), s.name]));
+    const billHint = await billHintLookup(input.year);
 
     return txs
       .map((t) => {
@@ -168,16 +183,17 @@ export const bookingsRouter = router({
             supplierName: t.supplierId ? (names.get(String(t.supplierId)) ?? null) : null,
           };
         }
-        return { ...row(t), state: 'open' as const, suggestion: suggestForTx(t, suppliers, history), receiptReading: readingState(t) };
+        return { ...row(t), state: 'open' as const, suggestion: suggestForTx(t, suppliers, history), receiptReading: readingState(t), bill: billHint(t) };
       })
       .reverse();
   }),
 
   inbox: authedProcedure.input(yearInput).query(async ({ input }) => {
     const [{ txs, coverage }, suppliers, history] = await Promise.all([loadYear(input.year), Supplier.find({ archived: false }), loadHistory()]);
+    const billHint = await billHintLookup(input.year);
     return txs
       .filter((t) => !t.matchedInvoiceId && !coverage.has(t.fireflyJournalId))
-      .map((t) => ({ ...row(t), suggestion: suggestForTx(t, suppliers, history), receiptReading: readingState(t) }));
+      .map((t) => ({ ...row(t), suggestion: suggestForTx(t, suppliers, history), receiptReading: readingState(t), bill: billHint(t) }));
   }),
 
   /** Clear receipt match per open row (inbox hint). Drive trouble → `available: false`, never an error. */

@@ -17,6 +17,7 @@ import { InvoiceDetailPage } from './pages/InvoiceDetailPage';
 import { ClientsPage } from './pages/ClientsPage';
 import { ClientDetailPage } from './pages/ClientDetailPage';
 import { FinancePage } from './pages/FinancePage';
+import { BillsPage } from './pages/BillsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import './index.css';
@@ -53,6 +54,7 @@ function App() {
                 <Route path="/clients" element={<ClientsPage />} />
                 <Route path="/clients/:id" element={<ClientDetailPage />} />
                 <Route path="/finance" element={<FinancePage />} />
+                <Route path="/bills" element={<BillsPage />} />
                 <Route path="/bank" element={<Navigate to="/finance" replace />} />
                 <Route path="/bookings" element={<Navigate to="/finance" replace />} />
                 <Route path="/ledger" element={<Navigate to="/finance" replace />} />

@@ -67,3 +67,24 @@ export async function driveForCron(): Promise<DriveFilesLike | null> {
     return null;
   }
 }
+
+/**
+ * Google credentials for a job that has no logged-in user: the admin who last
+ * saved the Drive settings. Same person `driveForCron` acts as, so the bill
+ * intake files into the Drive the settings point at. Null when nobody saved
+ * them or the stored token cannot be refreshed.
+ *
+ * The token must carry the scopes the caller needs (Drive, and Gmail for
+ * `bills`); a token minted before `gmail.readonly` was added simply fails at
+ * the API with a scope error, which callers surface as "sign in again".
+ */
+export async function googleAccessForCron(): Promise<GoogleAccess | null> {
+  const doc = await Setting.findOne({ key: 'drive' });
+  const userId = doc?.updatedBy;
+  if (!userId) return null;
+  try {
+    return await getGoogleAccessTokenForUser(userId);
+  } catch {
+    return null;
+  }
+}
