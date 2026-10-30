@@ -31,11 +31,14 @@ function googleOAuthUnavailable(_req: Request, res: Response, next: NextFunction
 // Drive scopes — no Sheets scope (plan Task 2). `drive.file` covers uploads
 // queen creates; `drive.readonly` lets the folder picker and receipt listing
 // see folders/files the user can access (drive.file only sees queen's own files).
+// `gmail.readonly` lets the bill intake read the invoices that arrive at the
+// bills mailbox (the job acts as the admin who saved the Drive settings).
 export const GOOGLE_SCOPES = [
   'profile',
   'email',
   'https://www.googleapis.com/auth/drive.file',
   'https://www.googleapis.com/auth/drive.readonly',
+  'https://www.googleapis.com/auth/gmail.readonly',
 ];
 
 function googleCreds() {

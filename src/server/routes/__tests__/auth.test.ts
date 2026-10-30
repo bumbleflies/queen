@@ -10,5 +10,10 @@ describe('Google OAuth scopes', () => {
   it('does not request Sheets or full write access', () => {
     expect(GOOGLE_SCOPES.some((s) => s.includes('spreadsheets'))).toBe(false);
     expect(GOOGLE_SCOPES).not.toContain('https://www.googleapis.com/auth/drive');
+    expect(GOOGLE_SCOPES).not.toContain('https://www.googleapis.com/auth/gmail.modify');
+  });
+
+  it('asks for read-only Gmail, which the bill intake needs', () => {
+    expect(GOOGLE_SCOPES).toContain('https://www.googleapis.com/auth/gmail.readonly');
   });
 });

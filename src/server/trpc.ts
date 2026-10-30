@@ -9,6 +9,7 @@ import { accountsRouter } from './routers/accounts';
 import { ledgerRouter } from './routers/ledger';
 import { suppliersRouter } from './routers/suppliers';
 import { bookingsRouter } from './routers/bookings';
+import { billsRouter } from './routers/bills';
 import { receiptsRouter } from './routers/receipts';
 import { settingsRouter } from './routers/settings';
 import { usersRouter } from './routers/users';
@@ -31,6 +32,7 @@ export const appRouter = router({
   ledger: ledgerRouter,
   suppliers: suppliersRouter,
   bookings: bookingsRouter,
+  bills: billsRouter,
   receipts: receiptsRouter,
   settings: settingsRouter,
   users: usersRouter,

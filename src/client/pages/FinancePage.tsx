@@ -57,6 +57,15 @@ interface StreamRow {
     fileCount?: number;
   } | null;
   invoice?: { invoiceNumber: string; status: string } | null;
+  /** Bill that arrived by e-mail and fits this payment (hint only, never booked from here). */
+  bill?: {
+    id: string;
+    vendorName: string;
+    invoiceNumber: string;
+    grossCents: number | null;
+    driveLink: string;
+    fileName: string;
+  } | null;
   entry?: {
     entryId: string;
     entryNumber: string;
@@ -668,6 +677,19 @@ export function FinancePage() {
                               {r.counterpartyIban ? <span className="muted num" style={{ fontSize: 12, marginLeft: 8 }}>{r.counterpartyIban}</span> : null}
                             </div>
                             <div className="num" style={{ fontSize: 13 }} title={r.description}>{r.description.slice(0, 120)}</div>
+                            {r.bill ? (
+                              <div className="rc" style={{ fontSize: 12 }}>
+                                {t('finance.billHint')}:{' '}
+                                {r.bill.driveLink ? (
+                                  <a href={r.bill.driveLink} target="_blank" rel="noreferrer">
+                                    {r.bill.vendorName} {r.bill.invoiceNumber}
+                                  </a>
+                                ) : (
+                                  <span>{r.bill.vendorName} {r.bill.invoiceNumber}</span>
+                                )}
+                                {r.bill.grossCents != null ? <> · <span className="num">{formatEUR(r.bill.grossCents)}</span></> : null}
+                              </div>
+                            ) : null}
                             {outcome(r)}
                           </td>
                           <td data-l={t('bookings.col.amount')} className="num right" style={{ whiteSpace: 'nowrap' }}>{formatEUR(signed(r.amountCents, r.direction))}</td>
