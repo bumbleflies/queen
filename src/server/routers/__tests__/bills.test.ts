@@ -111,9 +111,11 @@ describe('bills mutations', () => {
     expect(await Bill.countDocuments()).toBe(1);
   });
 
-  it('intakeNow reports a missing setup instead of silently doing nothing', async (ctx) => {
+  it('intakeNow reports the reason instead of a 5xx (Traefik rewrites those bodies)', async (ctx) => {
     skipIfNoDb(ctx);
     // No Drive folder saved and no Google token in the test env.
-    await expect(adminCaller().bills.intakeNow()).rejects.toMatchObject({ code: 'BAD_GATEWAY' });
+    const result = await adminCaller().bills.intakeNow();
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain('Belege-Ordner');
   });
 });

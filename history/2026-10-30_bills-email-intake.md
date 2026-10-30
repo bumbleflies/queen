@@ -56,6 +56,25 @@ Mailbox: `QUEEN_BILLS_MAILBOX`, default `bills@bumbleflies.de`.
 - A PDF that cannot be filed is **not** recorded: the next run retries it.
   Diffs of failures are in the run log and in the `errors` array of the result.
 
+## Follow-up 0.28.1 (same day, from the first live click)
+
+Two bugs the first production click exposed:
+
+1. **The cron entrypoint never ran.** `isCliEntrypoint` was hard-coded to
+   `cron/reconcile`, so `node dist/src/server/cron/billIntake.js` printed nothing
+   and exited 0 — the feature was inert again, in the same way as the PR it
+   replaced. `isCliEntrypoint(argv1, script)` now takes the job name, and a test
+   pins that a job does not fire for another job's file.
+2. **A 5xx never reaches the browser as JSON.** Traefik replaces 5xx bodies with
+   its HTML error page, so the thrown `BAD_GATEWAY` surfaced as
+   `Unexpected token '<', "<!DOCTYPE "`. Expected failures are now returned
+   (`{ ok: false, error }`) with HTTP 200 and a sentence that says what to do;
+   that is also how the real cause became visible: the Gmail API was not enabled
+   in the Google Cloud project of the shared OAuth client.
+
+Verified: `node dist/src/server/cron/billIntake.js` now prints the configuration
+error and exits, and `bills.intakeNow` answers with the API-disabled hint.
+
 ## Tests
 
 - `lib/bills/__tests__/parseBill.test.ts` — German/English amounts, VAT only when

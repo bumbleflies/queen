@@ -208,3 +208,25 @@ export function isMissingGmailScope(err: unknown): boolean {
     text,
   );
 }
+
+/**
+ * A sentence an admin can act on. Every expected failure of the intake is
+ * reported and none of them is a 5xx: this deployment's Traefik replaces 5xx
+ * response bodies with its HTML error page, so a `BAD_GATEWAY` reached the
+ * browser as `Unexpected token '<'` instead of the reason (2026-10-30).
+ */
+export function describeIntakeError(err: unknown): string {
+  const text = message(err);
+  if (/has not been used in project|accessNotConfigured|SERVICE_DISABLED|is disabled/i.test(text)) {
+    const project = text.match(/project (\d{6,})/)?.[1];
+    return (
+      `Die Gmail-API ist im Google-Cloud-Projekt${project ? ` ${project}` : ''} nicht aktiviert. ` +
+      'In der Google Cloud Console unter „APIs & Dienste → Bibliothek“ die Gmail API aktivieren ' +
+      '(ein bis zwei Minuten warten) und dann erneut abrufen.'
+    );
+  }
+  if (isMissingGmailScope(err)) {
+    return 'Gmail-Zugriff fehlt — bitte einmal neu mit Google anmelden, damit der Zugriff auf das bills@-Postfach erteilt wird.';
+  }
+  return text;
+}

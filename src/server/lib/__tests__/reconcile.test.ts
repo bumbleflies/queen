@@ -196,4 +196,14 @@ describe('isCliEntrypoint', () => {
     expect(isCliEntrypoint('/app/node_modules/vitest/vitest.mjs')).toBe(false);
     expect(isCliEntrypoint(undefined)).toBe(false);
   });
+
+  it('knows the other cron jobs by name and keeps them apart', () => {
+    expect(isCliEntrypoint('/app/dist/src/server/cron/billIntake.js', 'billIntake')).toBe(true);
+    expect(isCliEntrypoint('/app/src/server/cron/billIntake.ts', 'billIntake')).toBe(true);
+    // A job must not fire for another job's file: that made the bill intake a
+    // silent no-op (`node dist/.../cron/billIntake.js` printed nothing, exit 0).
+    expect(isCliEntrypoint('/app/dist/src/server/cron/billIntake.js')).toBe(false);
+    expect(isCliEntrypoint('/app/dist/src/server/cron/reconcile.js', 'billIntake')).toBe(false);
+    expect(isCliEntrypoint('/app/dist/src/server/cron/billIntake.js', 'bill.*')).toBe(false);
+  });
 });
