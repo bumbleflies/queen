@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.27.0](https://github.com/bumbleflies/queen/compare/queen-v0.26.8...queen-v0.27.0) (2026-10-30)
+
+
+### Features
+
+* bills email intake (Gmail → PDF parsing → draft BankTransaction) ([#195](https://github.com/bumbleflies/queen/issues/195)) ([8a56d62](https://github.com/bumbleflies/queen/commit/8a56d626cb4f0248a292884d1e33b67b920fcbf0))
+
+
+### Bug Fixes
+
+* **deps:** update dependency googleapis to v189 ([#194](https://github.com/bumbleflies/queen/issues/194)) ([15fbed4](https://github.com/bumbleflies/queen/commit/15fbed4ef154cc919920b65df014a9b35087f305))
+* **deps:** update dependency node to v26 ([#177](https://github.com/bumbleflies/queen/issues/177)) ([7f7a060](https://github.com/bumbleflies/queen/commit/7f7a060cd909fc986f56ec01f361838b94b2e7bf))
+* **deps:** update dependency redis to v6.3.1 ([#191](https://github.com/bumbleflies/queen/issues/191)) ([832d1f7](https://github.com/bumbleflies/queen/commit/832d1f7bb89f4bd9a1bda96e84a6528483089a9d))
+* **deps:** update dependency unpdf to v2 ([#181](https://github.com/bumbleflies/queen/issues/181)) ([b0cc518](https://github.com/bumbleflies/queen/commit/b0cc518c358b3feb1941955c2a6ae757bed7ac63))
+
 ## [0.26.8](https://github.com/bumbleflies/queen/compare/queen-v0.26.7...queen-v0.26.8) (2026-10-30)
 
 
