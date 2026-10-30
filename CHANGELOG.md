@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.1](https://github.com/bumbleflies/queen/compare/queen-v0.28.0...queen-v0.28.1) (2026-10-30)
+
+
+### Bug Fixes
+
+* bill intake failures are visible and the cron entrypoint runs ([#201](https://github.com/bumbleflies/queen/issues/201)) ([bb27790](https://github.com/bumbleflies/queen/commit/bb27790ec92dc100e3475c92665712e6b0c711c1))
+
 ## [0.28.0](https://github.com/bumbleflies/queen/compare/queen-v0.27.1...queen-v0.28.0) (2026-10-30)
 
 
