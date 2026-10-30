@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { suggestionConflict, suggestForTx, type ReceiptReading } from '../receiptReading';
+import { suggestionConflict, type ReceiptReading } from '../receiptReading';
+import { suggestForTx } from '../txSuggestion';
 import type { Suggestion } from '../suggest';
 
 const rule = (over: Partial<Suggestion> = {}): Suggestion => ({

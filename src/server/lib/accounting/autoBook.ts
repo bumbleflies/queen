@@ -8,7 +8,7 @@ import { BookingError, bookBankTransaction } from './bankBooking';
 import { openTransactions } from './bankCoverage';
 import { LedgerError } from './ledger';
 import { loadHistory } from './history';
-import { suggestForTx } from './receiptReading';
+import { suggestForTx } from './txSuggestion';
 import { rankReceipts, strongReceipt, type ReceiptFile } from './receipts';
 import type { Suggestion } from './suggest';
 

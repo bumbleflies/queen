@@ -1,6 +1,6 @@
 import { BANK, BANK_VAT_RATES, REVERSE_CHARGE_RATE, type SplitPart } from './postingRules';
-import { suggestWithHistory, type BookingHistory } from './history';
-import type { SuggestSupplier, SuggestTx, Suggestion, SuggestionConflict } from './suggest';
+import { normalizeVendor } from './normalize';
+import type { SuggestTx, Suggestion, SuggestionConflict } from './suggest';
 
 export interface ReceiptLine {
   vatRate: number;
@@ -130,15 +130,6 @@ export function readingToSuggestion(
   };
   if (parts.length === 1) return { ...base, account: parts[0].account, vatRate: parts[0].vatRate };
   return { ...base, split: parts };
-}
-
-/** Vendors compared case- and punctuation-insensitively ("Augustiner-Keller GmbH" vs "Augustiner Keller"). */
-export function normalizeVendor(vendor: string | null | undefined): string {
-  return (vendor ?? '')
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N} ]+/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
 }
 
 /** One parsed reading together with the file it came from. */
@@ -277,20 +268,4 @@ export function suggestionConflict(booked: Suggestion, receipt: Suggestion): Sug
   if (!sameRate(booked.vatRate, receipt.vatRate)) return side;
   if (booked.mode !== 'vatOnly' && (booked.account ?? '') !== (receipt.account ?? '')) return side;
   return null;
-}
-
-/**
- * Suggestion order: rule → history → matched receipts (else a legacy single
- * reading). A receipt that contradicts the winning suggestion does not replace
- * it: it is attached as `conflict` so the row needs a decision.
- */
-export function suggestForTx(tx: ReadableTx, suppliers: SuggestSupplier[], history: BookingHistory): Suggestion | null {
-  const fromRules = suggestWithHistory(tx, suppliers, history);
-  const reading = cachedReading(tx.receiptMatch) ?? cachedReading(tx.receiptReading);
-  const files = tx.receiptMatch?.driveFileIds?.length ?? 1;
-  const fromReceipt = reading ? readingToSuggestion(reading, tx, files) : null;
-  if (!fromRules) return fromReceipt;
-  if (!fromReceipt) return fromRules;
-  const conflict = suggestionConflict(fromRules, fromReceipt);
-  return conflict ? { ...fromRules, conflict, reading: fromReceipt.reading } : fromRules;
 }

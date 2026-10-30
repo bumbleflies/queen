@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { suggest, normalizeIban, type SuggestSupplier } from '../suggest';
+import { suggest, type SuggestSupplier } from '../suggest';
+import { normalizeIban } from '../normalize';
 
 const base = { namePatterns: [], purposePatterns: [], ibans: [], archived: false };
 const suppliers: SuggestSupplier[] = [

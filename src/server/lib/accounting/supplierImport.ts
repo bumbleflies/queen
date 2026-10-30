@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { Supplier } from '../../models/Supplier';
 import { Account } from '../../models/Account';
 import { allocateSupplierNumber, raiseSupplierCounter } from '../numbering';
-import { normalizeIban } from './suggest';
+import { normalizeIban } from './normalize';
 import { BANK_VAT_RATES, REVERSE_CHARGE_RATE, type BankBookingMode } from './postingRules';
 
 export const REVERSE_CHARGE_RATE_MESSAGE = 'Bei §13b ist der USt-Satz immer 19 %';
