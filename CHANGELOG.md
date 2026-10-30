@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.1](https://github.com/bumbleflies/queen/compare/queen-v0.27.0...queen-v0.27.1) (2026-10-30)
+
+
+### Bug Fixes
+
+* revert bills email intake ([#195](https://github.com/bumbleflies/queen/issues/195)) ([#197](https://github.com/bumbleflies/queen/issues/197)) ([e6a597d](https://github.com/bumbleflies/queen/commit/e6a597ddfe015d613650623579ad9cddf42e8201))
+
 ## [0.27.0](https://github.com/bumbleflies/queen/compare/queen-v0.26.8...queen-v0.27.0) (2026-10-30)
 
 
