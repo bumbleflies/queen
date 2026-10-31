@@ -100,4 +100,55 @@ describe('parseBillText', () => {
   it('keeps the sender name when the PDF text has none', () => {
     expect(parseBillText('Summe brutto 10,00 EUR', { fromName: 'ACME Versand' }).vendorName).toBe('ACME Versand');
   });
+
+  it('parses a forwarded Bundesanzeiger invoice (letterhead, header number, value-before-label gross)', () => {
+    // Forwarded mail: the sender is the forwarder, not the vendor. The vendor
+    // is the letterhead, the invoice number lives in the `#####...~no~...~`
+    // header line, and the gross sits on the line before its label.
+    const text = `#####Rechnung~98848178~103855369~24.08.26
+Amsterdamer Str. 192
+50735 Köln
+Ust-Ident-Nr. DE 122 787 997
+Bundesanzeiger Verlag GmbH - Postfach 100534 - 50445 Köln
+Bankverbindung:
+Konto 399 509
+Postbank Köln, BLZ 370 100 50
+IBAN DE57 3701 0050 0000 3995 09
+BIC-CODE PBNKDEFFXXX
+bumbleflies UG (haftungsbeschränkt)
+Kundennummer
+103855369
+bei Zahlungen und Rückfragen bitte angeben
+98848178
+RechnungsdatumRechnungsnummer
+Rechnung
+Seite 1 von 2
+24.08.2026
+I
+Rechnungs-
+betrag €
+Preis
+€
+AnzahlBestellzeichen
+Offenlegung
+MwSt
+Schl.
+Auftrags-
+nummer
+MwSt-Schlüssel :
+49,15
+3 7,85
+41,30
+49,15Zahlbar ohne Abzüge innerhalb von 14 Tagen
+Brutto-Rechnungsbetrag
+Netto-Rechnungsbetrag
+%19,00`;
+
+    const bill = parseBillText(text, { fromName: 'Sebastian Keller' });
+    expect(bill.vendorName).toContain('Bundesanzeiger Verlag GmbH');
+    expect(bill.vendorName).not.toBe('Sebastian Keller');
+    expect(bill.invoiceNumber).toBe('98848178');
+    expect(bill.grossCents).toBe(4915);
+    expect(bill.iban).toBe('DE57370100500000399509');
+  });
 });
