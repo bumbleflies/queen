@@ -248,16 +248,21 @@ export async function rematchBills(opts: { year?: number } = {}): Promise<{ link
     if (link.amountMismatch !== null) {
       update.amountMismatch = link.amountMismatch;
     }
-    if (!tx.receipt?.driveFileId && bill.driveFileId) {
-      update.receipt = {
-        driveFileId: bill.driveFileId,
-        fileName: bill.fileName,
-        link: bill.driveLink,
-      };
-    }
 
     try {
       await Bill.findByIdAndUpdate(bill._id, update);
+      // Attach the bill's filed PDF as the receipt on the bank transaction so it
+      // shows in the finance inbox. MongoDB has no multi-document transactions
+      // without a replica set, so do the two writes sequentially: if the second
+      // fails, the bill link remains and the receipt can be re-attached on the
+      // next rematch run.
+      if (!tx.receipt?.driveFileId && bill.driveFileId) {
+        await BankTransaction.findByIdAndUpdate(link.txId, {
+          $set: {
+            receipt: { driveFileId: bill.driveFileId, fileName: bill.fileName, link: bill.driveLink },
+          },
+        });
+      }
       linked += 1;
     } catch (err) {
       errors.push(`${bill.fileName}: ${err instanceof Error ? err.message : String(err)}`);
