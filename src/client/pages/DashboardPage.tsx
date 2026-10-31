@@ -64,6 +64,7 @@ export function DashboardPage() {
   const reports = trpc.reports.openItems.useQuery();
   const reconcile = trpc.reconcile.status.useQuery();
   const openBank = trpc.bookings.stats.useQuery({ year: new Date().getFullYear() });
+  const bills = trpc.bills.list.useQuery({ year: new Date().getFullYear() });
   const [filter, setFilter] = useState<Filter>('all');
   const { lang, t } = useLanguage();
 
@@ -302,6 +303,13 @@ export function DashboardPage() {
             {overpaid.length > 0
               ? plural(overpaid.length, t('dash.overpayOne'), t('dash.overpayMany'))
               : t('dash.noOverpay')}
+          </div>
+        </Link>
+        <Link to="/bills" className="kpi">
+          <div className="kpi-label">{t('dash.billsIn')}</div>
+          <div className="kpi-value num">{ (bills.data ?? []).length }</div>
+          <div className="kpi-sub">
+            {(bills.data ?? []).filter((b) => !b.transaction).length} {t('dash.billsOpen')} · {(bills.data ?? []).filter((b) => !!b.transaction).length} {t('dash.billsPaid')}
           </div>
         </Link>
       </section>
