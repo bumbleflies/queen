@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.30.1](https://github.com/bumbleflies/queen/compare/queen-v0.30.0...queen-v0.30.1) (2026-10-31)
+
+
+### Bug Fixes
+
+* attach bill receipt to bank transaction on rematch ([#218](https://github.com/bumbleflies/queen/issues/218)) ([3227b9c](https://github.com/bumbleflies/queen/commit/3227b9cd2842fa6afe89365ba83b2771be4455bd))
+
 ## [0.30.0](https://github.com/bumbleflies/queen/compare/queen-v0.29.0...queen-v0.30.0) (2026-10-31)
 
 
