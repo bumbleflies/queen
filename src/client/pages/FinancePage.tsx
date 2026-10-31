@@ -196,6 +196,8 @@ export function FinancePage() {
     () => new Map(((accounts.data ?? []) as unknown as AccountRow[]).map((a) => [a.number, a.name])),
     [accounts.data],
   );
+  const bills = trpc.bills.list.useQuery({ year });
+
   const openItems = (openItemsQuery.data?.items ?? []) as unknown as OpenItem[];
   const rows = (stream.data ?? []) as unknown as StreamRow[];
   const matches = (receiptMatches.data?.matches ?? {}) as Record<string, ReceiptMatch>;
@@ -644,6 +646,10 @@ export function FinancePage() {
                     : t('finance.bulkNone')}
               </button>
             </div>
+            <section className="card" style={{ marginTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span><strong>{t('nav.bills')}</strong> — {(bills.data ?? []).length} Belege ({(bills.data ?? []).filter((b: { status: string }) => b.status === 'parsed').length} gelesen, {(bills.data ?? []).filter((b: { status: string }) => b.status === 'failed').length} nicht)</span>
+              <a href="/bills" className="btn ghost sm">{t('nav.bills')}</a>
+            </section>
             <section className="card flush">
               {inbox.length === 0 ? (
                 <p className="empty">

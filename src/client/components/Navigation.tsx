@@ -61,7 +61,6 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/invoices', labelKey: 'nav.invoices', shortKey: 'nav.invoices', icon: 'invoices' },
   { to: '/clients', labelKey: 'nav.clients', shortKey: 'nav.clients', icon: 'clients' },
   { to: '/finance', labelKey: 'nav.finance', shortKey: 'nav.financeShort', icon: 'bank', badge: 'finance' },
-  { to: '/bills', labelKey: 'nav.bills', shortKey: 'nav.bills', icon: 'bills' },
   { to: '/reports', labelKey: 'nav.reports', shortKey: 'nav.reports', icon: 'reports' },
 ];
 
