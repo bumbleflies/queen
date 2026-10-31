@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.30.2](https://github.com/bumbleflies/queen/compare/queen-v0.30.1...queen-v0.30.2) (2026-10-31)
+
+
+### Bug Fixes
+
+* gross parsing — exclude line items and 'zu zahlen' from GROSS_LABEL ([#220](https://github.com/bumbleflies/queen/issues/220)) ([6fe089f](https://github.com/bumbleflies/queen/commit/6fe089fe1d6163cac4c1132424329ee34ad2711b))
+
 ## [0.30.1](https://github.com/bumbleflies/queen/compare/queen-v0.30.0...queen-v0.30.1) (2026-10-31)
 
 
