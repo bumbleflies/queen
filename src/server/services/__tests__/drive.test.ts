@@ -53,4 +53,28 @@ describe('uploadInvoicePdf', () => {
     const q = (list.mock.calls[0][0] as any).q as string;
     expect(q).toContain("name = 'O\\'Brien 5.pdf'");
   });
+
+  it('hands googleapis a stream, not a Buffer (it pipes the media part)', async () => {
+    // googleapis-common does `part.body.pipe(pStream)` for media + requestBody,
+    // so a Buffer throws "part.body.pipe is not a function" before the request.
+    const { drive, create, update } = makeDrive();
+    await uploadInvoicePdf(
+      { auth, buffer: Buffer.from('%PDF-1.4 inhalt'), fileName: 'inv.pdf', folderId: 'folder-1' },
+      { drive },
+    );
+    const body = (create.mock.calls[0][0] as any).media.body;
+    expect(typeof body.pipe).toBe('function');
+
+    const chunks: Buffer[] = [];
+    for await (const chunk of body) chunks.push(Buffer.from(chunk));
+    expect(Buffer.concat(chunks).toString()).toBe('%PDF-1.4 inhalt');
+    expect(update).not.toHaveBeenCalled();
+
+    const { drive: drive2, update: update2 } = makeDrive('existing-id');
+    await uploadInvoicePdf(
+      { auth, buffer: Buffer.from('x'), fileName: 'inv.pdf', folderId: 'folder-1' },
+      { drive: drive2 },
+    );
+    expect(typeof (update2.mock.calls[0][0] as any).media.body.pipe).toBe('function');
+  });
 });

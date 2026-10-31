@@ -75,6 +75,22 @@ Two bugs the first production click exposed:
 Verified: `node dist/src/server/cron/billIntake.js` now prints the configuration
 error and exits, and `bills.intakeNow` answers with the API-disabled hint.
 
+## Follow-up 0.28.2 (2026-10-31, from the first real fetch)
+
+Enabling the Gmail API made the fetch reach Drive, and all uploads failed with
+`part.body.pipe is not a function` — a **pre-existing regression from the
+`googleapis` 189 bump** (#194, in 0.27.0), not something the intake introduced.
+
+`uploadInvoicePdf` passed the PDF as a `Buffer`. With `media` **and**
+`requestBody` googleapis-common builds a `multipart/related` body and calls
+`part.body.pipe(...)`, so a Buffer throws before any request is sent
+(reproduced locally without network). It never showed up because prod had
+issued no invoice since the bump — `uploadInvoicePdf` had never actually
+succeeded there (`invoices` with `driveMetadata.filedAt`: none), so
+"Ausstellen & ablegen" was broken as well. Fixed by streaming
+(`Readable.from([buffer])`) and typing the media body as `Readable`; a test pins
+the contract by piping the body back and comparing bytes.
+
 ## Tests
 
 - `lib/bills/__tests__/parseBill.test.ts` — German/English amounts, VAT only when
