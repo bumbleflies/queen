@@ -449,6 +449,38 @@ describe('bookings', () => {
     expect((await caller.bookings.receiptMatches({ year: 2026 })).readingAvailable).toBe(false);
   });
 
+  it('receiptMatches returns the attached receipt (e.g. from a bill) before any Drive guess', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    process.env.QUEEN_RECEIPTS_FOLDER_ID = 'root';
+    listReceiptFiles.mockResolvedValue([
+      { id: 'h10', name: 'Hoster_2026-10-16_100000123456.pdf', link: 'https://drive/h10' },
+      { id: 'bill1', name: '26-B001-98848178.PDF', link: 'https://drive/bill1' },
+    ]);
+    const BILL = { driveFileId: 'bill1', fileName: '26-B001-98848178.PDF', link: 'https://drive/bill1' };
+    // No name/date/amount in the file name: Drive ranking alone finds nothing.
+    const fromBill = await tx({ counterpartyName: 'Verlag GmbH', description: 'Rechnung', amountCents: 4915, receipt: BILL });
+    // A strong Drive match exists, but the attached receipt wins.
+    const attached = await tx({
+      counterpartyName: 'Hoster GmbH',
+      description: 'Invoice No. 100000123456',
+      date: new Date(2026, 9, 21),
+      amountCents: 1213,
+      receipt: { driveFileId: 'own', fileName: 'own.pdf', link: 'https://drive/own' },
+    });
+
+    const res = await caller.bookings.receiptMatches({ year: 2026 });
+    expect(res.matches[String(fromBill._id)]).toEqual({ id: 'bill1', name: '26-B001-98848178.PDF', link: 'https://drive/bill1' });
+    expect(res.matches[String(attached._id)]).toEqual({ id: 'own', name: 'own.pdf', link: 'https://drive/own' });
+
+    // Attached receipts need no Drive listing.
+    listReceiptFiles.mockRejectedValue(new Error('no token'));
+    const offline = await caller.bookings.receiptMatches({ year: 2026 });
+    expect(offline.available).toBe(false);
+    expect(offline.matches[String(fromBill._id)]).toEqual({ id: 'bill1', name: '26-B001-98848178.PDF', link: 'https://drive/bill1' });
+    delete process.env.QUEEN_RECEIPTS_FOLDER_ID;
+  });
+
   describe('receipt reading', () => {
     const RECEIPT = { driveFileId: 'r1', fileName: 'Cafe_2026-01-30.pdf', link: 'https://drive/r1' };
     const SPLIT_READING = {

@@ -549,6 +549,7 @@ export const en: Dict = {
   'finance.outcome.rule': 'Rule {name}',
   'finance.outcome.history': 'as on {date}',
   'finance.outcome.receipt': 'Receipt:',
+  'finance.outcome.receipt.fromBill': '(from the bill inbox)',
   'finance.outcome.noReceipt': 'no receipt found',
   'finance.outcome.vatOnly': 'VAT only',
   'finance.outcome.reverseCharge': '§13b',
