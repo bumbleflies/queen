@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.30.3](https://github.com/bumbleflies/queen/compare/queen-v0.30.2...queen-v0.30.3) (2026-10-31)
+
+
+### Bug Fixes
+
+* inbox shows the attached receipt (bill PDF) instead of "no receipt found" ([#222](https://github.com/bumbleflies/queen/issues/222)) ([9beba63](https://github.com/bumbleflies/queen/commit/9beba6332ae5ab1d8541532107a895becaf1d428))
+
 ## [0.30.2](https://github.com/bumbleflies/queen/compare/queen-v0.30.1...queen-v0.30.2) (2026-10-31)
 
 
