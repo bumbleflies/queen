@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.29.0](https://github.com/bumbleflies/queen/compare/queen-v0.28.4...queen-v0.29.0) (2026-10-31)
+
+
+### Features
+
+* bill intake visible on dashboard and in finance section ([#213](https://github.com/bumbleflies/queen/issues/213)) ([6be8920](https://github.com/bumbleflies/queen/commit/6be8920c55878928fbeefdbe645f005932ef9745))
+* link bills to bank transactions (auto when sure) ([#211](https://github.com/bumbleflies/queen/issues/211)) ([6c0568b](https://github.com/bumbleflies/queen/commit/6c0568ba837192c8f540ac05bf9186ce1f5ffae9))
+
+
+### Bug Fixes
+
+* parse bill PDFs — letterhead vendor, header invoice number, value-before-label gross ([#212](https://github.com/bumbleflies/queen/issues/212)) ([14227c0](https://github.com/bumbleflies/queen/commit/14227c0ca193d1cd53af1ad764542c63d00e48fc))
+
 ## [0.28.4](https://github.com/bumbleflies/queen/compare/queen-v0.28.3...queen-v0.28.4) (2026-10-31)
 
 
