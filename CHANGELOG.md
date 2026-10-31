@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.3](https://github.com/bumbleflies/queen/compare/queen-v0.28.2...queen-v0.28.3) (2026-10-31)
+
+
+### Bug Fixes
+
+* read bill PDFs (Buffer -&gt; Uint8Array) and never overwrite a filed receipt ([#205](https://github.com/bumbleflies/queen/issues/205)) ([8c52329](https://github.com/bumbleflies/queen/commit/8c523291d5c253b39b6c28163495543909325ddb))
+
 ## [0.28.2](https://github.com/bumbleflies/queen/compare/queen-v0.28.1...queen-v0.28.2) (2026-10-31)
 
 
