@@ -1,5 +1,6 @@
 import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
+import { Readable } from 'node:stream';
 
 export interface DriveFile {
   id?: string | null;
@@ -16,13 +17,14 @@ export interface DriveClientLike {
     }): Promise<{ data: { files?: DriveFile[] | null } }>;
     create(params: {
       requestBody: { name: string; parents?: string[] };
-      media: { mimeType: string; body: Buffer };
+      /** A stream: googleapis-common pipes it into a multipart/related body (see the note on `uploadInvoicePdf`). */
+      media: { mimeType: string; body: Readable };
       fields?: string;
     }): Promise<{ data: { id?: string | null; webViewLink?: string | null } }>;
     update(params: {
       fileId: string;
       requestBody: { name: string };
-      media: { mimeType: string; body: Buffer };
+      media: { mimeType: string; body: Readable };
       fields?: string;
     }): Promise<{ data: { id?: string | null; webViewLink?: string | null } }>;
   };
@@ -62,6 +64,12 @@ function escapeDriveQueryValue(value: string): string {
 /**
  * Upload an invoice PDF to a Drive folder. If a file with the same name already
  * exists in the folder, update/replace it instead of creating a duplicate.
+ *
+ * The body must be a stream, not a Buffer: with `media` + `requestBody`
+ * googleapis-common builds a multipart/related body and calls
+ * `part.body.pipe(...)`, so a Buffer fails with `part.body.pipe is not a
+ * function` before any request is made (googleapis 189 / googleapis-common 9,
+ * observed 2026-10-31 on the first real upload after the bump).
  */
 export async function uploadInvoicePdf(
   args: UploadInvoicePdfArgs,
@@ -78,7 +86,7 @@ export async function uploadInvoicePdf(
     spaces: 'drive',
   });
   const existingId = existing.data.files?.[0]?.id ?? undefined;
-  const media = { mimeType: 'application/pdf', body: args.buffer };
+  const media = { mimeType: 'application/pdf', body: Readable.from([args.buffer]) };
 
   const res = existingId
     ? await drive.files.update({
