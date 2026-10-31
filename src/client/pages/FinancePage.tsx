@@ -7,6 +7,7 @@ import { useLanguage } from '../i18n/LanguageContext';
 import { BookingDialog, type InboxRowLike } from '../components/BookingDialog';
 import { EntryForm } from '../components/EntryForm';
 import { BackfillSection } from '../components/BackfillSection';
+import { BillsSection } from '../components/BillsSection';
 import { AvailableCashCard } from '../components/AvailableCashCard';
 import { LedgerViews } from '../components/LedgerViews';
 import { RuleDialog, RulesSection, draftFromTransaction, type RuleDraft } from '../components/RulesSection';
@@ -14,10 +15,10 @@ import { FullSyncDialog, ReceiptPickDialog, StornoDialog, type StornoTarget } fr
 import { suggestionsFor, type OpenItem, type Suggestion } from '../lib/paymentSuggest';
 import type { BankBookingMode, SplitPart } from '../../server/lib/accounting/postingRules';
 
-type Tab = 'open' | 'done' | 'ignored' | 'rules' | 'journal';
+type Tab = 'open' | 'done' | 'ignored' | 'rules' | 'journal' | 'bills';
 type DirFilter = 'all' | 'in' | 'out';
 
-const TABS: Tab[] = ['open', 'done', 'ignored', 'rules', 'journal'];
+const TABS: Tab[] = ['open', 'done', 'ignored', 'rules', 'journal', 'bills'];
 
 interface StreamSuggestion {
   supplierId?: string;
@@ -511,6 +512,7 @@ export function FinancePage() {
     done: counts.done,
     ignored: counts.ignored,
     rules: (suppliers.data ?? []).length,
+    bills: (bills.data ?? []).filter((b) => !b.transaction).length,
   };
   const tabLabel: Record<Tab, string> = {
     open: t('finance.state.open'),
@@ -518,6 +520,7 @@ export function FinancePage() {
     ignored: t('finance.state.ignored'),
     rules: t('finance.rulesToggle'),
     journal: t('finance.journalToggle'),
+    bills: t('nav.bills'),
   };
 
   const dirSwitch = (
@@ -645,10 +648,6 @@ export function FinancePage() {
                     : t('finance.bulkNone')}
               </button>
             </div>
-            <section className="card" style={{ marginTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span><strong>{t('nav.bills')}</strong> — {(bills.data ?? []).length} Belege ({(bills.data ?? []).filter((b: { status: string }) => b.status === 'parsed').length} gelesen, {(bills.data ?? []).filter((b: { status: string }) => b.status === 'failed').length} nicht)</span>
-              <a href="/bills" className="btn ghost sm">{t('nav.bills')}</a>
-            </section>
             <section className="card flush">
               {inbox.length === 0 ? (
                 <p className="empty">
@@ -828,6 +827,8 @@ export function FinancePage() {
           <LedgerViews key={accountParam ?? 'none'} year={year} initialView={accountParam ? 'account' : 'journal'} initialAccount={accountParam ?? '1800'} />
         </div>
       ) : null}
+
+      {tab === 'bills' ? <BillsSection key={`bills-${year}`} year={year} /> : null}
 
       {active ? <BookingDialog year={year} tx={active} onDone={() => setActive(null)} /> : null}
       {ruleDraft ? <RuleDialog draft={ruleDraft} openRows={openRows} onDone={() => setRuleDraft(null)} /> : null}
