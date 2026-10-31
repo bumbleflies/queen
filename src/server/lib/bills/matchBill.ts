@@ -15,6 +15,7 @@ export interface BillLike {
 }
 
 export interface TxLike {
+  _id?: unknown;
   date: Date;
   amountCents: number;
   direction: 'in' | 'out' | string;
@@ -105,4 +106,57 @@ export function bestTransactionForBill<T extends TxLike>(bill: BillLike, txs: T[
     }
   }
   return tied ? null : best;
+}
+
+/** Result of linking a bill to the bank transaction that settled it. */
+export interface LinkResult {
+  txId: string;
+  matchMethod: 'amount' | 'iban+purpose';
+  /** Bill gross minus transaction amount when they differ (iban+purpose match only). */
+  amountMismatch: number | null;
+}
+
+/**
+ * Link a bill to its settling bank transaction, two grades:
+ *
+ * 1. `amount` — exact amount, unambiguous (today's rule).
+ * 2. `iban+purpose` — IBAN equal AND the bill's invoice number appears in the
+ *    transaction's Verwendungszweck, unambiguous. Amounts may differ (partial
+ *    payment, different line item); the difference is recorded as
+ *    `amountMismatch`.
+ *
+ * Ties within a grade produce no link. A manual link (from the UI) always wins
+ * over an automatic one and is never overwritten by a rematch.
+ */
+export function linkBillToTransaction(bill: BillLike, txs: TxLike[]): LinkResult | null {
+  // Grade 1: exact amount.
+  const amountMatch = bestTransactionForBill(bill, txs);
+  if (amountMatch && amountMatch._id) {
+    return { txId: String(amountMatch._id), matchMethod: 'amount', amountMismatch: null };
+  }
+
+  // Grade 2: IBAN equal + invoice number in purpose.
+  const iban = bill.iban.replace(/\s/g, '').toUpperCase();
+  const invoice = squash(bill.invoiceNumber);
+  if (!iban || invoice.length < 3) return null;
+
+  const start = bill.receivedAt.getTime() - EARLY_DAYS * DAY;
+  const end = (bill.dueDate ?? bill.receivedAt).getTime() + LATE_DAYS * DAY;
+  const candidates: TxLike[] = [];
+  for (const tx of txs) {
+    if (tx.direction !== 'out') continue;
+    if (!tx.counterpartyIban) continue;
+    if (tx.counterpartyIban.replace(/\s/g, '').toUpperCase() !== iban) continue;
+    if (tx.date.getTime() < start || tx.date.getTime() > end) continue;
+    if (!squash(tx.description ?? '').includes(invoice)) continue;
+    candidates.push(tx);
+  }
+  if (candidates.length !== 1) return null;
+
+  const tx = candidates[0];
+  return {
+    txId: String(tx._id),
+    matchMethod: 'iban+purpose',
+    amountMismatch: bill.grossCents ? bill.grossCents - tx.amountCents : null,
+  };
 }

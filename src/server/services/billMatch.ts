@@ -46,8 +46,9 @@ export function billLikeOf(bill: BillSource): BillLike {
   };
 }
 
-export function txLikeOf(tx: Omit<TxSource, '_id'>): TxLike {
+export function txLikeOf(tx: TxSource): TxLike {
   return {
+    _id: tx._id,
     date: tx.date,
     amountCents: tx.amountCents,
     direction: tx.direction,

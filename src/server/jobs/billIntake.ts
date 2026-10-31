@@ -1,8 +1,11 @@
 import { createHash } from 'crypto';
 import { google } from 'googleapis';
 import { Bill } from '../models/Bill';
+import { BankTransaction } from '../models/BankTransaction';
 import { parseBillText, type ParsedBill } from '../lib/bills/parseBill';
 import { billFileName } from '../lib/bills/billFileName';
+import { linkBillToTransaction } from '../lib/bills/matchBill';
+import { billLikeOf, txLikeOf } from '../services/billMatch';
 import {
   createGmailClient,
   displayNameFromHeader,
@@ -194,6 +197,74 @@ export async function runBillIntake(deps: BillIntakeDeps): Promise<BillIntakeRes
   }
 
   return result;
+}
+
+/**
+ * Re-link every bill without a stored link (or with a manual link, which is
+ * kept) to its settling bank transaction. Two grades: exact amount, or IBAN +
+ * invoice number in purpose. When a link is found and the transaction has no
+ * receipt yet, the bill's filed PDF is attached as the receipt.
+ */
+export async function rematchBills(opts: { year?: number } = {}): Promise<{ linked: number; skipped: number; errors: string[] }> {
+  const now = new Date();
+  const start = opts.year ? new Date(opts.year, 0, 1) : new Date(now.getFullYear() - 1, 0, 1);
+  const end = opts.year ? new Date(opts.year + 1, 0, 1) : new Date(now.getFullYear() + 1, 0, 1);
+
+  const [bills, txs] = await Promise.all([
+    Bill.find({
+      receivedAt: { $gte: start, $lt: end },
+      $or: [{ transactionId: { $exists: false } }, { matchMethod: 'manual' }],
+    }).sort({ receivedAt: -1 }).lean(),
+    BankTransaction.find({ direction: 'out', date: { $gte: start, $lt: end } }).sort({ date: 1 }).lean(),
+  ]);
+  const txLikes = txs.map((t) => ({ id: String(t._id), ...txLikeOf(t) }));
+  const txById = new Map(txs.map((t) => [String(t._id), t]));
+
+  let linked = 0;
+  let skipped = 0;
+  const errors: string[] = [];
+
+  for (const bill of bills) {
+    if (bill.matchMethod === 'manual') {
+      skipped += 1;
+      continue;
+    }
+    const link = linkBillToTransaction(billLikeOf(bill), txLikes);
+    if (!link) {
+      skipped += 1;
+      continue;
+    }
+    const tx = txById.get(link.txId);
+    if (!tx) {
+      skipped += 1;
+      continue;
+    }
+
+    const update: Record<string, unknown> = {
+      transactionId: link.txId,
+      matchMethod: link.matchMethod,
+      matchedAt: new Date(),
+    };
+    if (link.amountMismatch !== null) {
+      update.amountMismatch = link.amountMismatch;
+    }
+    if (!tx.receipt?.driveFileId && bill.driveFileId) {
+      update.receipt = {
+        driveFileId: bill.driveFileId,
+        fileName: bill.fileName,
+        link: bill.driveLink,
+      };
+    }
+
+    try {
+      await Bill.findByIdAndUpdate(bill._id, update);
+      linked += 1;
+    } catch (err) {
+      errors.push(`${bill.fileName}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  return { linked, skipped, errors };
 }
 
 /**

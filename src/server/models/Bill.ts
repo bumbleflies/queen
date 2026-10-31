@@ -46,6 +46,13 @@ const billSchema = new Schema(
     /** Hidden from the list; bills are never deleted (audit trail). */
     ignored: { type: Boolean, required: true, default: false },
     createdBy: { type: String, required: true },
+    /** The bank transaction that settled this bill (link only, never booked from here). */
+    transactionId: { type: Schema.Types.ObjectId, ref: 'BankTransaction' },
+    /** How the link was established: exact amount, IBAN+purpose, or manual. */
+    matchMethod: { type: String, enum: ['amount', 'iban+purpose', 'manual'] },
+    matchedAt: { type: Date },
+    /** Bill gross vs transaction amount when they differ (iban+purpose match only). */
+    amountMismatch: { type: Number },
   },
   { timestamps: true },
 );
@@ -53,6 +60,7 @@ const billSchema = new Schema(
 billSchema.index({ messageId: 1, attachmentId: 1 }, { unique: true });
 billSchema.index({ sha256: 1 });
 billSchema.index({ receivedAt: -1 });
+billSchema.index({ transactionId: 1 });
 
 export type BillDoc = InferSchemaType<typeof billSchema> & { _id: mongoose.Types.ObjectId };
 

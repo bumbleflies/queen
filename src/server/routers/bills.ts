@@ -4,9 +4,7 @@ import { router, authedProcedure, adminProcedure } from '../trpcInit';
 import { Bill } from '../models/Bill';
 import { BankTransaction } from '../models/BankTransaction';
 import { yearRange } from '../lib/accounting/bankCoverage';
-import { bestTransactionForBill } from '../lib/bills/matchBill';
-import { billLikeOf, txLikeOf } from '../services/billMatch';
-import { describeIntakeError, resolveBillIntakeDeps, runBillIntake } from '../jobs/billIntake';
+import { describeIntakeError, resolveBillIntakeDeps, rematchBills, runBillIntake } from '../jobs/billIntake';
 
 const yearInput = z.object({ year: z.number().int().min(2000).max(2100) });
 
@@ -16,17 +14,17 @@ const INTAKE_NOW_MAX_MESSAGES = 10;
 export const billsRouter = router({
   /**
    * Bills received by e-mail in a year, each with the payment it belongs to.
-   * The match is a suggestion from amount + IBAN + invoice number in the
-   * Verwendungszweck — it never books anything.
+   * The link is stored on the Bill document (set by intake + rematch) — it
+   * never books anything.
    */
   list: authedProcedure.input(yearInput).query(async ({ input }) => {
     const [bills, txs] = await Promise.all([
       Bill.find({ receivedAt: yearRange(input.year) }).sort({ receivedAt: -1 }).lean(),
       BankTransaction.find({ direction: 'out', date: yearRange(input.year) }).sort({ date: 1 }).lean(),
     ]);
-    const txLikes = txs.map((t) => ({ id: String(t._id), ...txLikeOf(t) }));
+    const txById = new Map(txs.map((t) => [String(t._id), t]));
     return bills.map((bill) => {
-      const paid = bestTransactionForBill(billLikeOf(bill), txLikes);
+      const tx = bill.transactionId ? txById.get(String(bill.transactionId)) : undefined;
       return {
         id: String(bill._id),
         receivedAt: bill.receivedAt,
@@ -39,17 +37,29 @@ export const billsRouter = router({
         ignored: !!bill.ignored,
         error: bill.error ?? null,
         parse: bill.parse ?? null,
-        transaction: paid
+        matchMethod: bill.matchMethod ?? null,
+        amountMismatch: bill.amountMismatch ?? null,
+        transaction: tx
           ? {
-              id: paid.id,
-              date: paid.date,
-              amountCents: paid.amountCents,
-              counterpartyName: paid.counterpartyName ?? null,
-              description: paid.description ?? '',
+              id: String(tx._id),
+              date: tx.date,
+              amountCents: tx.amountCents,
+              counterpartyName: tx.counterpartyName ?? null,
+              description: tx.description ?? '',
             }
           : null,
       };
     });
+  }),
+
+  /**
+   * Re-link every bill in the year to its settling bank transaction.
+   * Two grades: exact amount, or IBAN + invoice number in purpose. Manual
+   * links are never overwritten. When a link is found and the transaction has
+   * no receipt yet, the bill's filed PDF is attached as the receipt.
+   */
+  rematch: adminProcedure.input(yearInput).mutation(async ({ input }) => {
+    return rematchBills({ year: input.year });
   }),
 
   /**

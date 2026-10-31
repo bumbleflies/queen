@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { Bill } from '../../models/Bill';
 import { BankTransaction } from '../../models/BankTransaction';
 import { appRouter } from '../../trpc';
+import { rematchBills } from '../../jobs/billIntake';
 import { adminCaller, initLedgerModels, resetLedgerDb, skipIfNoDb } from './helpers/ledgerFixtures';
 
 function userCaller() {
@@ -71,16 +72,34 @@ describe('bills.list', () => {
     skipIfNoDb(ctx);
     await Bill.create(BILL);
     const tx = await bankTx();
+    await rematchBills({ year: 2026 });
     const rows = await adminCaller().bills.list({ year: 2026 });
     expect(rows).toHaveLength(1);
     expect(rows[0].transaction?.id).toBe(String(tx._id));
+    expect(rows[0].transaction?.amountCents).toBe(11900);
+    expect(rows[0].matchMethod).toBe('amount');
     expect(rows[0].parse?.grossCents).toBe(11900);
+  });
+
+  it('pairs a bill by IBAN + purpose when amounts differ', async (ctx) => {
+    skipIfNoDb(ctx);
+    // Grade 2: IBAN equal + invoice number in purpose links even when amounts
+    // differ (partial payment). amountMismatch records the difference.
+    await Bill.create({ ...BILL, parse: { ...BILL.parse, invoiceNumber: '98848178', grossCents: 4915 } });
+    const tx = await bankTx({ amountCents: 4000, description: 'Kundennr. 103855369 Belegnr. 98848178', counterpartyIban: 'DE44500921000000059512' });
+    await rematchBills({ year: 2026 });
+    const rows = await adminCaller().bills.list({ year: 2026 });
+    expect(rows[0].transaction?.id).toBe(String(tx._id));
+    expect(rows[0].matchMethod).toBe('iban+purpose');
+    expect(rows[0].amountMismatch).toBe(4915 - 4000);
+    expect(rows[0].transaction?.amountCents).toBe(4000);
   });
 
   it('leaves a bill without a fitting payment unmatched', async (ctx) => {
     skipIfNoDb(ctx);
     await Bill.create(BILL);
     await bankTx({ amountCents: 500 });
+    await rematchBills({ year: 2026 });
     const rows = await adminCaller().bills.list({ year: 2026 });
     expect(rows[0].transaction).toBeNull();
   });
