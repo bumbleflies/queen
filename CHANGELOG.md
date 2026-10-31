@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.2](https://github.com/bumbleflies/queen/compare/queen-v0.28.1...queen-v0.28.2) (2026-10-31)
+
+
+### Bug Fixes
+
+* stream the PDF body to Drive (uploads were broken since googleapis 189) ([#203](https://github.com/bumbleflies/queen/issues/203)) ([953b0a7](https://github.com/bumbleflies/queen/commit/953b0a78d083d053cf28443b07d5dcddc584f936))
+
 ## [0.28.1](https://github.com/bumbleflies/queen/compare/queen-v0.28.0...queen-v0.28.1) (2026-10-30)
 
 
