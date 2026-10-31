@@ -46,6 +46,7 @@ export interface BillIntakeResult {
   skipped: number;
   /** Created bills whose PDF had no readable text layer (a scan). */
   noText: number;
+  /** Bills that could not be filed or read; a `failed` bill is retried next run. */
   failed: number;
   errors: string[];
 }
@@ -105,18 +106,21 @@ export async function runBillIntake(deps: BillIntakeDeps): Promise<BillIntakeRes
 
     for (const attachment of attachments) {
       result.attachments += 1;
-      if (await Bill.exists({ messageId: id, attachmentId: attachment.attachmentId })) {
+      const existing = await Bill.findOne({ messageId: id, attachmentId: attachment.attachmentId });
+      // A `failed` bill is retried: its parse never finished, so what it holds is
+      // not an answer. (An extraction bug once made every bill look like a scan.)
+      if (existing && existing.status !== 'failed') {
         result.skipped += 1;
         continue;
       }
       const sha256 = createHash('sha256').update(attachment.buffer).digest('hex');
-      if (await Bill.exists({ sha256 })) {
+      if (await Bill.exists({ sha256, status: { $ne: 'failed' } })) {
         result.skipped += 1;
         continue;
       }
 
       let parsed: ParsedBill | null = null;
-      let status: 'parsed' | 'noText' = 'noText';
+      let status: 'parsed' | 'noText' | 'failed' = 'noText';
       let textError = '';
       try {
         const text = await extractText(attachment.buffer);
@@ -125,7 +129,10 @@ export async function runBillIntake(deps: BillIntakeDeps): Promise<BillIntakeRes
           status = 'parsed';
         }
       } catch (err) {
+        // The reader threw, so we do not know whether there is a text layer:
+        // `failed` (retried next run), not `noText` (final).
         textError = message(err);
+        status = 'failed';
       }
 
       let filed;
@@ -141,26 +148,40 @@ export async function runBillIntake(deps: BillIntakeDeps): Promise<BillIntakeRes
         continue;
       }
 
+      const doc = {
+        messageId: id,
+        attachmentId: attachment.attachmentId,
+        sha256,
+        mailbox: deps.mailbox,
+        from,
+        subject,
+        receivedAt,
+        fileName: attachment.fileName,
+        driveFileId: filed.fileId,
+        driveLink: filed.link,
+        status,
+        ...(parsed ? { parse: parsed } : {}),
+        ...(textError ? { error: textError } : {}),
+        ignored: false,
+        createdBy: 'bill-intake',
+      };
+
       try {
-        await Bill.create({
-          messageId: id,
-          attachmentId: attachment.attachmentId,
-          sha256,
-          mailbox: deps.mailbox,
-          from,
-          subject,
-          receivedAt,
-          fileName: attachment.fileName,
-          driveFileId: filed.fileId,
-          driveLink: filed.link,
-          status,
-          ...(parsed ? { parse: parsed } : {}),
-          ...(textError ? { error: textError } : {}),
-          ignored: false,
-          createdBy: 'bill-intake',
-        });
+        if (existing) {
+          // Retry of a `failed` bill: update in place (a bill is never deleted).
+          await Bill.updateOne(
+            { _id: existing._id },
+            textError ? { $set: doc } : { $set: doc, $unset: { error: 1 } },
+          );
+        } else {
+          await Bill.create(doc);
+        }
         result.created += 1;
         if (status === 'noText') result.noText += 1;
+        if (status === 'failed') {
+          result.failed += 1;
+          result.errors.push(`${attachment.fileName}: ${textError}`);
+        }
       } catch (err) {
         if (isDuplicateKey(err)) {
           result.skipped += 1;
@@ -195,7 +216,10 @@ export async function resolveBillIntakeDeps(): Promise<BillIntakeDeps> {
   return {
     gmail: createGmailClient(access.refreshToken, access.accessToken),
     drive,
-    upload: (file) => uploadInvoicePdf({ auth, ...file }, { drive }),
+    upload: (file) =>
+      // `skip`: a vendor PDF already in the year folder is the same document.
+      // The app's `drive.file` scope could not overwrite it anyway.
+      uploadInvoicePdf({ auth, ifExists: 'skip', ...file }, { drive }),
     receiptsFolderId: folder.id,
     mailbox: billsMailbox(),
   };

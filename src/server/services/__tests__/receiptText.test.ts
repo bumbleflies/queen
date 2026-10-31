@@ -31,6 +31,14 @@ describe('receiptText', () => {
     expect(await extractPdfText(png)).toBe('');
   });
 
+  it('accepts a Node Buffer, which pdf.js otherwise refuses by name', async () => {
+    // Gmail hands the intake a Buffer; pdf.js threw "Please provide binary data
+    // as `Uint8Array`, rather than `Buffer`" and every bill became a scan.
+    const bytes = await pdf((doc) => doc.text('Hetzner — Summe 119,00 EUR'));
+    expect(bytes).toBeInstanceOf(Buffer);
+    expect(await extractPdfText(bytes)).toContain('Summe 119,00 EUR');
+  });
+
   it('gives empty text for a PDF without a text layer', async () => {
     const bytes = await pdf((doc) => doc.rect(50, 50, 200, 100).fill('#000'));
     expect((await extractPdfText(new Uint8Array(bytes))).trim()).toBe('');

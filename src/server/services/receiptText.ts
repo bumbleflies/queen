@@ -17,8 +17,16 @@ function isPdf(bytes: Uint8Array): boolean {
 
 /** The PDF's text layer, pages joined; '' for scans without one and for anything that is not a PDF (photos). */
 export async function extractPdfText(bytes: Uint8Array): Promise<string> {
-  if (!isPdf(bytes)) return '';
-  const { text } = await extractText(bytes, { mergePages: true });
+  // pdf.js (via unpdf) refuses a Node Buffer *by name*: "Please provide binary
+  // data as `Uint8Array`, rather than `Buffer`". Callers hand over whatever the
+  // transport produced (a Gmail attachment is a Buffer), so normalise to a
+  // plain view of exactly those bytes. This made every e-mailed bill look like
+  // a scan until 2026-10-31.
+  const data = ArrayBuffer.isView(bytes)
+    ? new Uint8Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength))
+    : new Uint8Array(bytes);
+  if (!isPdf(data)) return '';
+  const { text } = await extractText(data, { mergePages: true });
   return text;
 }
 

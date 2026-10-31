@@ -5,6 +5,7 @@ import { Readable } from 'node:stream';
 export interface DriveFile {
   id?: string | null;
   name?: string | null;
+  webViewLink?: string | null;
 }
 
 /** Minimal subset of the Drive v3 client used here (injectable for tests). */
@@ -35,6 +36,19 @@ export interface UploadInvoicePdfArgs {
   buffer: Buffer;
   fileName: string;
   folderId: string;
+  /**
+   * What to do when a file of that name is already in the folder.
+   *
+   * - `replace` (default, used for the invoices we generate): upload over it.
+   * - `skip` (received bills): return the existing file untouched.
+   *
+   * `skip` exists because the app's OAuth scope is `drive.file`, which can only
+   * write files the app itself created. A vendor PDF that a person filed by
+   * hand cannot be overwritten (`The user has not granted the app … write
+   * access to the file`, observed 2026-10-31) — and must not be: it is the
+   * original document, already in the right place.
+   */
+  ifExists?: 'replace' | 'skip';
 }
 
 export interface UploadInvoicePdfResult {
@@ -62,8 +76,8 @@ function escapeDriveQueryValue(value: string): string {
 }
 
 /**
- * Upload an invoice PDF to a Drive folder. If a file with the same name already
- * exists in the folder, update/replace it instead of creating a duplicate.
+ * Upload a PDF to a Drive folder, replacing a file of the same name unless
+ * `ifExists: 'skip'` is set (see `UploadInvoicePdfArgs`).
  *
  * The body must be a stream, not a Buffer: with `media` + `requestBody`
  * googleapis-common builds a multipart/related body and calls
@@ -82,19 +96,20 @@ export async function uploadInvoicePdf(
     q: `'${escapeDriveQueryValue(args.folderId)}' in parents and name = '${escapeDriveQueryValue(
       args.fileName,
     )}' and trashed = false`,
-    fields: 'files(id, name)',
+    fields: 'files(id, name, webViewLink)',
     spaces: 'drive',
   });
-  const existingId = existing.data.files?.[0]?.id ?? undefined;
+  const existingFile = existing.data.files?.[0];
+  const existingId = existingFile?.id ?? undefined;
+
+  if (existingId && args.ifExists === 'skip') {
+    return { fileId: existingId, link: existingFile?.webViewLink ?? '' };
+  }
+
   const media = { mimeType: 'application/pdf', body: Readable.from([args.buffer]) };
 
   const res = existingId
-    ? await drive.files.update({
-        fileId: existingId,
-        requestBody: { name: args.fileName },
-        media,
-        fields: 'id, webViewLink',
-      })
+    ? await updateOrExplain(drive, existingId, args.fileName, media)
     : await drive.files.create({
         requestBody: { name: args.fileName, parents: [args.folderId] },
         media,
@@ -104,4 +119,36 @@ export async function uploadInvoicePdf(
   const fileId = res.data.id ?? existingId;
   if (!fileId) throw new Error('Drive did not return a file id');
   return { fileId, link: res.data.webViewLink ?? '' };
+}
+
+/**
+ * A file of that name exists but the app may not replace it. With the
+ * `drive.file` scope that is not a Drive problem to retry — a person has to
+ * rename or remove the foreign file, so say that instead of surfacing Google's
+ * bare message.
+ */
+async function updateOrExplain(
+  drive: DriveClientLike,
+  fileId: string,
+  fileName: string,
+  media: { mimeType: string; body: Readable },
+): Promise<{ data: { id?: string | null; webViewLink?: string | null } }> {
+  try {
+    return await drive.files.update({
+      fileId,
+      requestBody: { name: fileName },
+      media,
+      fields: 'id, webViewLink',
+    });
+  } catch (err) {
+    const text = err instanceof Error ? err.message : String(err);
+    if (/has not granted the app .* write access/i.test(text)) {
+      throw new Error(
+        `Die Datei „${fileName}“ liegt bereits im Zielordner, wurde aber nicht von der App angelegt ` +
+          `und darf deshalb nicht überschrieben werden (Drive-Berechtigung „drive.file“). ` +
+          `Bitte die vorhandene Datei umbenennen oder löschen und erneut ablegen.`,
+      );
+    }
+    throw err;
+  }
 }

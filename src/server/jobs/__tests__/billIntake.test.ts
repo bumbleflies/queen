@@ -201,6 +201,32 @@ describe('runBillIntake', () => {
     expect(await Bill.countDocuments()).toBe(0);
   });
 
+  it('files a bill whose text could not be read as failed, and repairs it next run', async (ctx) => {
+    if (mongoose.connection.readyState !== 1) ctx.skip();
+    // pdf.js refused a Buffer ("Please provide binary data as `Uint8Array`"), so
+    // every bill looked like a scan and stayed `noText` forever.
+    const { client } = gmailWith([{ id: 'm1', fileName: 'rechnung.pdf', bytes: Buffer.from('%PDF-1.4 x') }]);
+    const broken = await runBillIntake(
+      deps({ client, extractText: async () => { throw new Error('Please provide binary data as `Uint8Array`'); } }),
+    );
+
+    expect(broken).toMatchObject({ created: 1, noText: 0, failed: 1 });
+    const failed = await Bill.findOne({ messageId: 'm1' });
+    expect(failed?.status).toBe('failed');
+    expect(failed?.error).toContain('Uint8Array');
+    // The PDF is filed anyway: it is a valid receipt, only reading it failed.
+    expect(failed?.driveFileId).toBe('file-1');
+
+    // A `failed` bill is not an answer: the next run reads it again.
+    const repaired = await runBillIntake(deps({ client }));
+    expect(repaired).toMatchObject({ created: 1, skipped: 0, failed: 0 });
+    const bill = await Bill.findOne({ messageId: 'm1' });
+    expect(bill?.status).toBe('parsed');
+    expect(bill?.parse).toMatchObject({ invoiceNumber: 'R-1000' });
+    expect(bill?.error).toBeUndefined();
+    expect(await Bill.countDocuments()).toBe(1);
+  });
+
   it('reads inline attachment bodies too', async (ctx) => {
     if (mongoose.connection.readyState !== 1) ctx.skip();
     const { client, fetched } = gmailWith(
