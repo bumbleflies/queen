@@ -44,6 +44,43 @@ describe('uploadInvoicePdf', () => {
     expect(res).toEqual({ fileId: 'existing-id', link: 'https://drive/upd' });
   });
 
+  it('leaves an existing file alone when ifExists is skip (a received bill)', async () => {
+    // The app's scope is `drive.file`: a vendor PDF someone filed by hand
+    // cannot be overwritten, and must not be. Observed on the first real fetch
+    // (2026-10-31): "The user has not granted the app … write access to the file".
+    const { drive, create, update } = makeDrive('existing-id');
+    const res = await uploadInvoicePdf(
+      {
+        auth,
+        buffer: Buffer.from('pdf'),
+        fileName: '26-B001-103855369-98848178.PDF',
+        folderId: 'folder-1',
+        ifExists: 'skip',
+      },
+      { drive },
+    );
+
+    expect(update).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+    expect(res.fileId).toBe('existing-id');
+  });
+
+  it('says what to do when it may not overwrite a file it did not create', async () => {
+    const { drive, update } = makeDrive('foreign-id');
+    update.mockRejectedValueOnce(
+      new Error(
+        'The user has not granted the app 391372270100 write access to the file foreign-id.',
+      ),
+    );
+
+    await expect(
+      uploadInvoicePdf(
+        { auth, buffer: Buffer.from('pdf'), fileName: 'Rechnung 1.pdf', folderId: 'folder-1' },
+        { drive },
+      ),
+    ).rejects.toThrow(/nicht von der App angelegt[\s\S]*umbenennen oder löschen/);
+  });
+
   it('escapes single quotes in the Drive search query', async () => {
     const { drive, list } = makeDrive();
     await uploadInvoicePdf(

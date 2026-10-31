@@ -91,6 +91,46 @@ succeeded there (`invoices` with `driveMetadata.filedAt`: none), so
 (`Readable.from([buffer])`) and typing the media body as `Readable`; a test pins
 the contract by piping the body back and comparing bytes.
 
+## Follow-up 0.28.3 (2026-10-31, second real fetch)
+
+Uploads worked, one bill filed, one failed:
+
+```
+Bill intake: 26-B001-103855369-98848178.PDF: The user has not granted the app
+391372270100 write access to the file 1in5M3AZVMXdDu4dpGgrgENVNc-pETbHt.
+Bill intake done: messages=6 attachments=2 created=1 skipped=0 noText=1 failed=1
+```
+
+The app's OAuth scope is `drive.file`, which grants write access only to files
+**the app created**. That PDF was filed by hand in August (owner: a colleague,
+in `überwiesen/2026/`), so `uploadInvoicePdf`'s name collision → `files.update`
+was refused. The file was the same document, already in the right place.
+
+`uploadInvoicePdf` now takes `ifExists: 'replace' | 'skip'`: invoice filing keeps
+`replace` (the app created those PDFs), bill intake passes `skip` and returns the
+existing file — no write, no duplicate, and a vendor PDF is never overwritten.
+For the remaining `replace` case a foreign file now produces a sentence an admin
+can act on instead of Google's bare message.
+
+## Follow-up 0.28.4 (2026-10-31, first parsed bill)
+
+The intake filed its first bill and stored it as `noText` with
+
+```
+error: Please provide binary data as `Uint8Array`, rather than `Buffer`.
+```
+
+pdf.js (via `unpdf`) refuses a Node Buffer **by name**. Gmail attachments are
+Buffers, so `extractPdfText` threw on **every** e-mailed bill — the intake filed
+them all and parsed none, which would have made amount/vendor matching
+impossible. It now normalises the input to a plain `Uint8Array`, and a test pins
+it with a real Buffer from pdfkit.
+
+Related: a thrown extraction is now `failed`, not `noText`. `noText` is final (a
+scan), `failed` means "we do not know yet" and is retried on the next run
+(updated in place — a bill is still never deleted), so a fix like this one
+repairs the bills it broke instead of leaving them as scans forever.
+
 ## Tests
 
 - `lib/bills/__tests__/parseBill.test.ts` — German/English amounts, VAT only when
