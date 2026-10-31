@@ -15,6 +15,8 @@ export interface InboxRowLike {
   counterpartyName?: string | null;
   counterpartyIban?: string | null;
   description: string;
+  /** Receipt already attached to the row (by hand or from a linked bill). */
+  receipt?: { driveFileId?: string } | null;
   suggestion: {
     supplierId?: string;
     supplierName: string;
@@ -104,11 +106,13 @@ export function BookingDialog({ year, tx, onDone }: { year: number; tx: InboxRow
   const files = (receipts.data ?? []) as ReceiptFile[];
   const chosen = files.find((f) => f.id === receiptId);
 
-  // Preselect a clear match once the ranked list arrives.
+  // Preselect the attached receipt, else a clear match once the ranked list arrives.
   useEffect(() => {
-    const best = strongReceipt((receipts.data ?? []) as ReceiptFile[]);
+    const list = (receipts.data ?? []) as ReceiptFile[];
+    const attached = tx.receipt?.driveFileId;
+    const best = attached && list.some((f) => f.id === attached) ? { id: attached } : strongReceipt(list);
     if (best) setReceiptId((current) => current || best.id);
-  }, [receipts.data]);
+  }, [receipts.data, tx.receipt?.driveFileId]);
 
   async function submit() {
     try {

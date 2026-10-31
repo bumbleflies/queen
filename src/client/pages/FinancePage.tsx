@@ -44,7 +44,7 @@ interface StreamRow {
   counterpartyIban?: string | null;
   description: string;
   ignored: boolean;
-  receipt?: { fileName?: string; link?: string } | null;
+  receipt?: { driveFileId?: string; fileName?: string; link?: string } | null;
   receiptMissingReason?: string | null;
   matchedInvoiceId?: string;
   matchMethod?: string;
@@ -372,6 +372,7 @@ export function FinancePage() {
     const receiptLine = match ? (
       <span className="rc">
         {t('finance.outcome.receipt')} <a href={match.link} target="_blank" rel="noreferrer">{match.name}</a>
+        {r.bill && r.bill.fileName === match.name ? ` ${t('finance.outcome.receipt.fromBill')}` : ''}
       </span>
     ) : null;
     const s = r.suggestion;

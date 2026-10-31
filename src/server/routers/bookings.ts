@@ -213,7 +213,15 @@ export const bookingsRouter = router({
   /** Clear receipt match per open row (inbox hint). Drive trouble → `available: false`, never an error. */
   receiptMatches: authedProcedure.input(yearInput).query(async ({ input, ctx }) => {
     const readingAvailable = opencodeFromEnv() !== null;
-    const none = { available: false, readingAvailable, matches: {} as Record<string, ReceiptFile> };
+    const open = await openTransactions(input.year);
+    // A receipt already attached to the row (by hand, or the filed PDF of a
+    // linked bill) is the receipt — no Drive listing needed, no guess over it.
+    const matches: Record<string, ReceiptFile> = {};
+    for (const tx of open) {
+      const r = tx.receipt;
+      if (r?.driveFileId) matches[String(tx._id)] = { id: r.driveFileId, name: r.fileName ?? '', link: r.link ?? '' };
+    }
+    const none = { available: false, readingAvailable, matches };
     const folder = await getReceiptsFolder();
     if (!folder) return none;
     let files: ReceiptFile[];
@@ -224,9 +232,9 @@ export const bookingsRouter = router({
       if (err instanceof TRPCError && err.code === 'PRECONDITION_FAILED') throw err;
       return none;
     }
-    const [open, suppliers, history] = await Promise.all([openTransactions(input.year), Supplier.find({ archived: false }), loadHistory()]);
-    const matches: Record<string, ReceiptFile> = {};
+    const [suppliers, history] = await Promise.all([Supplier.find({ archived: false }), loadHistory()]);
     for (const tx of open) {
+      if (matches[String(tx._id)]) continue;
       const best = strongReceipt(rankReceipts(files, tx, suggestForTx(tx, suppliers, history)?.supplierName));
       if (best) matches[String(tx._id)] = { id: best.id, name: best.name, link: best.link };
     }

@@ -546,6 +546,7 @@ export const de = {
   'finance.outcome.rule': 'Regel {name}',
   'finance.outcome.history': 'wie am {date}',
   'finance.outcome.receipt': 'Beleg:',
+  'finance.outcome.receipt.fromBill': '(aus dem Rechnungseingang)',
   'finance.outcome.noReceipt': 'kein Beleg gefunden',
   'finance.outcome.vatOnly': 'nur USt',
   'finance.outcome.reverseCharge': '§13b',
