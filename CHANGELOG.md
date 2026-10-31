@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.28.4](https://github.com/bumbleflies/queen/compare/queen-v0.28.3...queen-v0.28.4) (2026-10-31)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @hookform/resolvers to v7 ([#208](https://github.com/bumbleflies/queen/issues/208)) ([f6964e3](https://github.com/bumbleflies/queen/commit/f6964e30bda6d09c374d70c7b7dac0978cc91577))
+* incoming payments only match invoices; outgoing rows get none ([#209](https://github.com/bumbleflies/queen/issues/209)) ([52dc368](https://github.com/bumbleflies/queen/commit/52dc368ca5c8d10f5c980bdc05cff966e00296d8))
+
 ## [0.28.3](https://github.com/bumbleflies/queen/compare/queen-v0.28.2...queen-v0.28.3) (2026-10-31)
 
 
