@@ -655,6 +655,8 @@ export const de = {
   'bills.ignored': 'ignoriert',
   'bills.ignore': 'Ignorieren',
   'bills.unignore': 'Einblenden',
+  'bills.reread': 'Erneut lesen',
+  'bills.rereadLabel': 'Nochmal einlesen',
   'bills.unpaid': 'offen',
   'bills.reverseCharge': 'Reverse Charge',
   'bills.hint': 'Die Zuordnung zur Zahlung ist ein Vorschlag aus Betrag, IBAN und Verwendungszweck. Gebucht wird ausschließlich im Bankabgleich.',

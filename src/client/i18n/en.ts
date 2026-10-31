@@ -658,6 +658,8 @@ export const en: Dict = {
   'bills.ignored': 'ignored',
   'bills.ignore': 'Ignore',
   'bills.unignore': 'Show',
+  'bills.reread': 'Re-read',
+  'bills.rereadLabel': 'Read again',
   'bills.unpaid': 'unpaid',
   'bills.reverseCharge': 'Reverse charge',
   'bills.hint': 'The payment pairing is a suggestion from amount, IBAN and payment reference. Booking happens only in the bank reconciliation.',

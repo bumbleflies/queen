@@ -2,8 +2,15 @@ import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router, authedProcedure, adminProcedure } from '../trpcInit';
 import { Bill } from '../models/Bill';
+import { Bill } from '../models/Bill';
 import { BankTransaction } from '../models/BankTransaction';
 import { yearRange } from '../lib/accounting/bankCoverage';
+import { bestTransactionForBill } from '../lib/bills/matchBill';
+import { billLikeOf, txLikeOf } from '../services/billMatch';
+import { createGmailClient, displayNameFromHeader, fetchPdfAttachments } from '../services/GmailService';
+import { extractPdfText } from '../services/receiptText';
+import { parseBillText } from '../lib/bills/parseBill';
+import { googleAccessForCron } from '../services/driveForUser';
 import { describeIntakeError, resolveBillIntakeDeps, rematchBills, runBillIntake } from '../jobs/billIntake';
 
 const yearInput = z.object({ year: z.number().int().min(2000).max(2100) });
@@ -86,5 +93,64 @@ export const billsRouter = router({
       const updated = await Bill.findByIdAndUpdate(input.id, { ignored: input.ignored }, { returnDocument: 'after' });
       if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Beleg nicht gefunden' });
       return { id: String(updated._id), ignored: !!updated.ignored };
+    }),
+
+  /** Re-read a bill's PDF attachment from Gmail and re-parse it.
+   * Repairs bills whose first read failed or parsed wrong (for example the
+   * mail's sender instead of the letterhead as vendor). Never books anything;
+   * use bills.rematch afterwards to (re-)link to a bank transaction.
+   */
+  reread: adminProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      const bill = await Bill.findById(input.id);
+      if (!bill) throw new TRPCError({ code: 'NOT_FOUND', message: 'Beleg nicht gefunden' });
+
+      const access = await googleAccessForCron();
+      if (!access) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Kein Google-Zugang hinterlegt — bitte in den Einstellungen neu verbinden',
+        });
+      }
+
+      const gmail = createGmailClient(access.refreshToken, access.accessToken);
+      const msg = (await gmail.users.messages.get({ userId: 'me', id: bill.messageId, format: 'full' })).data;
+      const attachments = await fetchPdfAttachments(gmail, bill.messageId, msg.payload);
+      const attachment = attachments[0];
+      if (!attachment) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Kein PDF-Anhang mehr im Postfach' });
+      }
+
+      let text = '';
+      let parseError = '';
+      try {
+        text = await extractPdfText(attachment.buffer);
+      } catch (err) {
+        parseError = err instanceof Error ? err.message : String(err);
+      }
+
+      let parsed = null;
+      let status: 'parsed' | 'noText' | 'failed' = 'noText';
+      if (text.trim().length >= 20) {
+        parsed = parseBillText(text, { fromName: displayNameFromHeader(bill.from) });
+        status = 'parsed';
+      } else if (parseError) {
+        status = 'failed';
+      }
+
+      const set: Record<string, unknown> = { status };
+      const unset: Record<string, unknown> = {};
+      if (parsed) {
+        set.parse = parsed;
+        unset.error = 1;
+      } else {
+        set.error = parseError || 'Kein lesbarer Text im PDF';
+      }
+      const update: Record<string, unknown> = { $set: set };
+      if (Object.keys(unset).length > 0) update.$unset = unset;
+
+      await Bill.findByIdAndUpdate(bill._id, update);
+      return { id: String(bill._id), status, parsed: !!parsed, error: parseError ?? null };
     }),
 });
