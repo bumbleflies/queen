@@ -60,6 +60,7 @@ export function BillsSection({ year: yearProp, onFetchNow }: BillsSectionProps =
   const bills = trpc.bills.list.useQuery({ year });
   const intake = trpc.bills.intakeNow.useMutation();
   const setIgnored = trpc.bills.setIgnored.useMutation();
+  const reread = trpc.bills.reread.useMutation();
 
   const rows = (bills.data ?? []) as unknown as BillRow[];
   const years = [currentYear, currentYear - 1, currentYear - 2];
@@ -87,6 +88,15 @@ export function BillsSection({ year: yearProp, onFetchNow }: BillsSectionProps =
   async function toggleIgnored(row: BillRow) {
     try {
       await setIgnored.mutateAsync({ id: row.id, ignored: !row.ignored });
+      await utils.bills.list.invalidate();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
+  async function rereadNow(row: BillRow) {
+    try {
+      await reread.mutateAsync({ id: row.id });
       await utils.bills.list.invalidate();
     } catch (err) {
       toast.error((err as Error).message);
@@ -178,9 +188,22 @@ export function BillsSection({ year: yearProp, onFetchNow }: BillsSectionProps =
                     </td>
                     <td>
                       {isAdmin ? (
-                        <button type="button" className="btn ghost sm" onClick={() => toggleIgnored(row)} disabled={setIgnored.isPending}>
-                          {row.ignored ? t('bills.unignore') : t('bills.ignore')}
-                        </button>
+                        <>
+                          {row.status === 'failed' || row.error ? (
+                            <button
+                              type="button"
+                              className="btn ghost sm"
+                              onClick={() => rereadNow(row)}
+                              disabled={reread.isPending}
+                              title={t('bills.reread')}
+                            >
+                              {t('bills.rereadLabel')}
+                            </button>
+                          ) : null}
+                          <button type="button" className="btn ghost sm" onClick={() => toggleIgnored(row)} disabled={setIgnored.isPending}>
+                            {row.ignored ? t('bills.unignore') : t('bills.ignore')}
+                          </button>
+                        </>
                       ) : null}
                     </td>
                   </tr>
