@@ -30,6 +30,15 @@ const VAT_LABEL = /(?:\bust\.?|\bmwst\.?|umsatzsteuer|\bvat\b|\btax\b)/i;
 const REVERSE_CHARGE = /reverse[-\s]?charge|§\s*13\s*b|steuerschuldnerschaft\s*des\s*leistungsempf/i;
 const ANY_LABEL = new RegExp(`${GROSS_LABEL.source}|${NET_LABEL.source}|${VAT_LABEL.source}`, 'i');
 
+// Company legal forms: a line carrying one of these is the letterhead vendor,
+// not an address or a line item. Preferred over the mail's From header for
+// forwarded mails, where the sender is the forwarder, not the vendor.
+const COMPANY_SUFFIX = /\b(GmbH|AG|UG|e\.?G|e\.?K|SE|Ltd|Limited|LLC|Inc|Corp|Corporation|OHG|KG|mbH|GmbH\s*&\s*Co\.?|e\.?V\.?|Foundation)\b/i;
+
+// A line that is itself a line item (quantity × unit price) must never be
+// read as the gross total.
+const LINE_ITEM = /(?:stck|stück|anzahl|menge|qty|quantity)\b|^\s*\d+\s+zu\s+\d[\d.,]*\s*€?/i;
+
 const MONTHS: Record<string, number> = {
   jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
   jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
@@ -100,6 +109,27 @@ function amountOnLine(line: string): number | null {
   return null;
 }
 
+/** First bare amount that carries decimals (real money), else the first bare amount.
+ * Used for value-before-label gross so a bare day/year on the same line isn't
+ * mistaken for the total. */
+function moneyAmountOnLine(line: string): number | null {
+  const withCurrency = line.match(/(-?\d[\d.,]*)\s*(?:EUR|€)/i);
+  if (withCurrency) return parseAmountToken(withCurrency[1]);
+  const bare = line.match(/-?\d[\d.,]*/g);
+  if (!bare) return null;
+  for (const token of bare) {
+    if (/[.,]/.test(token)) {
+      const cents = parseAmountToken(token);
+      if (cents !== null) return cents;
+    }
+  }
+  for (const token of bare) {
+    const cents = parseAmountToken(token);
+    if (cents !== null) return cents;
+  }
+  return null;
+}
+
 function parseGermanDate(token: string): Date | null {
   const german = token.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/);
   if (german) {
@@ -143,12 +173,22 @@ function cleanVendorName(value: string): string {
 }
 
 function vendorFromText(lines: string[]): string {
+  // First pass: prefer a line that carries a company legal form (the letterhead).
+  for (const raw of lines.slice(0, 40)) {
+    const line = raw.trim();
+    if (line.length < 3) continue;
+    if (ANY_LABEL.test(line)) continue;
+    if (/^(?:rechnung|invoice|beleg|seite|page|datum|date)\b/i.test(line)) continue;
+    if (/^[\d.,\s/~#-]+$/.test(line)) continue;
+    if (COMPANY_SUFFIX.test(line)) return cleanVendorName(line).slice(0, 120);
+  }
+  // Fallback: first plausible vendor line without a company suffix.
   for (const raw of lines.slice(0, 12)) {
     const line = raw.trim();
     if (line.length < 3) continue;
     if (ANY_LABEL.test(line)) continue;
     if (/^(?:rechnung|invoice|beleg|seite|page|datum|date)\b/i.test(line)) continue;
-    if (/^[\d.,\s/-]+$/.test(line)) continue;
+    if (/^[\d.,\s/~#-]+$/.test(line)) continue;
     return cleanVendorName(line).slice(0, 120);
   }
   return '';
@@ -169,7 +209,26 @@ export function parseBillText(text: string, hints: BillHints = {}): ParsedBill {
     const line = lines[i];
     if (!line) continue;
     const next = lines[i + 1] ?? '';
-    if (GROSS_LABEL.test(line)) {
+    const isLineItem = LINE_ITEM.test(line);
+
+    // Value before label: "49,15\nBrutto-Rechnungsbetrag" — the amount sits on
+    // the line right before the gross label. Only when this line isn't itself a
+    // line item or another amount label (net/VAT), and carries a real money
+    // amount (decimals or currency) — never a bare date or year.
+    if (
+      !isLineItem &&
+      grossCents === null &&
+      !GROSS_LABEL.test(line) &&
+      !NET_LABEL.test(line) &&
+      !VAT_LABEL.test(line) &&
+      /\d[.,]\d{1,2}/.test(line) &&
+      GROSS_LABEL.test(next)
+    ) {
+      const cents = moneyAmountOnLine(line);
+      if (cents !== null) grossCents ??= cents;
+    }
+
+    if (GROSS_LABEL.test(line) && !isLineItem) {
       const cents = amountOnLine(line) ?? (next ? amountOnLine(next) : null);
       if (cents !== null) grossCents ??= cents;
       continue;
@@ -197,10 +256,27 @@ export function parseBillText(text: string, hints: BillHints = {}): ParsedBill {
   }
   if (grossCents === null && netCents !== null && vatCents !== null) grossCents = netCents + vatCents;
 
-  const invoiceMatch = text.match(
+  // Header lines like "#####Rechnung~98848178~103855369~24.08.26": the middle
+  // run of 6+ digits between tildes is the invoice number.
+  const INVOICE_HEADER = /~\s*(\d{6,})\s*~/;
+  // "Belegnr. 98848178" — German for invoice number.
+  const BELEG_NR = /belegnr\.?\s*:?\s*(\d{5,})/i;
+
+  let invoiceNumber = '';
+  const labeled = text.match(
     /(?:rechnungsnummer|rechnungs-?nr\.?|invoice\s*(?:no\.?|number|#)|belegnummer|bill\s*(?:no\.?|number))[\s:#]*([A-Za-z0-9][A-Za-z0-9._/-]{1,39})/i,
   );
-  const invoiceNumber = invoiceMatch && !/^\d{2}[./-]\d{2}[./-]\d{2,4}$/.test(invoiceMatch[1]) ? invoiceMatch[1] : '';
+  if (labeled && !/^(?:rechnung|invoice|beleg|schein|quittung|rechnungsdatum|datum)$/i.test(labeled[1])) {
+    invoiceNumber = labeled[1];
+  }
+  if (!invoiceNumber) {
+    const m = text.match(INVOICE_HEADER);
+    if (m) invoiceNumber = m[1];
+  }
+  if (!invoiceNumber) {
+    const m = text.match(BELEG_NR);
+    if (m) invoiceNumber = m[1];
+  }
 
   const dueMatch = text.match(
     /(?:fällig(?:keitsdatum|keit|am)?|zahlbar\s*bis|payment\s*due|due\s*date)[\s:]*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{4}-\d{2}-\d{2}|[A-Za-z]{3,9}\.?\s+\d{1,2},?\s+\d{4})/i,
@@ -209,7 +285,10 @@ export function parseBillText(text: string, hints: BillHints = {}): ParsedBill {
   const fromName = hints.fromName ? cleanVendorName(hints.fromName) : '';
 
   return {
-    vendorName: fromName || vendorFromText(lines),
+    // Letterhead first: the mail's From header is the forwarder on forwarded
+    // mails (Fwd:/WG:/AW:), not the vendor. Fall back to the sender only when
+    // the PDF text has no vendor line at all.
+    vendorName: vendorFromText(lines) || fromName,
     invoiceNumber,
     grossCents,
     netCents,
