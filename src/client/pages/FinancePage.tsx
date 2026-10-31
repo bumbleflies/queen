@@ -196,6 +196,8 @@ export function FinancePage() {
     () => new Map(((accounts.data ?? []) as unknown as AccountRow[]).map((a) => [a.number, a.name])),
     [accounts.data],
   );
+  const bills = trpc.bills.list.useQuery({ year });
+
   const openItems = (openItemsQuery.data?.items ?? []) as unknown as OpenItem[];
   const rows = (stream.data ?? []) as unknown as StreamRow[];
   const matches = (receiptMatches.data?.matches ?? {}) as Record<string, ReceiptMatch>;
@@ -363,24 +365,8 @@ export function FinancePage() {
   const bal = balance.data;
 
   function outcome(r: StreamRow) {
-    const { reason, suggestions } = suggestionsFor(r, openItems, lang);
-    if (suggestions.length > 0) {
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
-          {suggestions.map((s: Suggestion) => (
-            <div className="sug outcome inv" key={s.id} style={{ marginTop: 0 }}>
-              <div style={{ minWidth: 0 }}>
-                <span className="what num">{s.invoiceNumber}</span> · {s.clientName} · <span className="num">{formatEUR(s.openCents)}</span>
-                <div className="rc">{s.why}</div>
-              </div>
-              <button type="button" className="btn sm" onClick={() => bankAction(() => assign.mutateAsync({ bankTxId: r.id, invoiceId: s.id }), t('bank.assigned'))}>
-                {t('bank.assign')}
-              </button>
-            </div>
-          ))}
-        </div>
-      );
-    }
+    const invoiceResult = r.direction === 'in' ? suggestionsFor(r, openItems, lang) : { reason: '', suggestions: [] as Suggestion[] };
+    const invoiceSuggestions = invoiceResult.suggestions;
     const match = matches[r.id];
     const receiptLine = match ? (
       <span className="rc">
@@ -396,7 +382,7 @@ export function FinancePage() {
           : `${x.account ?? '—'} · ${Math.round((x.vatRate ?? 0) * 100)} %`;
     return (
       <>
-        {r.direction === 'in' ? <div className="lbl" style={{ marginTop: 6 }}>{reason}</div> : null}
+        {r.direction === 'in' ? <div className="lbl" style={{ marginTop: 6 }}>{invoiceResult.reason}</div> : null}
         {s?.conflict ? (
           <div className="outcome warn">
             <span className="what">
@@ -436,6 +422,21 @@ export function FinancePage() {
             {readHintText(r)}
           </div>
         )}
+        {invoiceSuggestions.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
+            {invoiceSuggestions.map((s: Suggestion) => (
+              <div className="sug outcome inv" key={s.id} style={{ marginTop: 0 }}>
+                <div style={{ minWidth: 0 }}>
+                  <span className="what num">{s.invoiceNumber}</span> · {s.clientName} · <span className="num">{formatEUR(s.openCents)}</span>
+                  <div className="rc">{s.why}</div>
+                </div>
+                <button type="button" className="btn sm" onClick={() => bankAction(() => assign.mutateAsync({ bankTxId: r.id, invoiceId: s.id }), t('bank.assigned'))}>
+                  {t('bank.assign')}
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </>
     );
   }
@@ -644,6 +645,10 @@ export function FinancePage() {
                     : t('finance.bulkNone')}
               </button>
             </div>
+            <section className="card" style={{ marginTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span><strong>{t('nav.bills')}</strong> — {(bills.data ?? []).length} Belege ({(bills.data ?? []).filter((b: { status: string }) => b.status === 'parsed').length} gelesen, {(bills.data ?? []).filter((b: { status: string }) => b.status === 'failed').length} nicht)</span>
+              <a href="/bills" className="btn ghost sm">{t('nav.bills')}</a>
+            </section>
             <section className="card flush">
               {inbox.length === 0 ? (
                 <p className="empty">

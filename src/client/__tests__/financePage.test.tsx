@@ -135,6 +135,9 @@ vi.mock('../lib/trpc', () => ({
       unignore: mut('unignore', async () => ({})),
       syncNow: mut('syncNow', async () => ({ ok: true, fetched: 0 })),
     },
+    bills: {
+      list: { useQuery: () => ({ data: [], isError: false }) },
+    },
     bookings: {
       stream: { useQuery: () => ({ data: state.rows ?? streamRows, isError: false }) },
       receiptMatches: { useQuery: () => ({ data: { available: true, matches: state.matches, readingAvailable: state.readingAvailable } }) },

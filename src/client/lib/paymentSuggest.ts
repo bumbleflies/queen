@@ -4,6 +4,7 @@ import type { Lang } from '../i18n/LanguageContext';
 export interface BankTxLite {
   _id?: unknown;
   amountCents: number;
+  direction: 'in' | 'out';
   description: string;
   counterpartyName?: string | null;
 }
@@ -86,6 +87,10 @@ export function suggestionsFor(tx: BankTxLite, openItems: OpenItem[], lang: Lang
     }
   }
 
+  // Only incoming payments match against open invoices (customer paid us).
+  // Outgoing rows are expenses — they never get invoice pills.
+  if (tx.direction !== 'in') return { reason: txt.noRef, suggestions: [] };
+
   for (const item of openItems) {
     const whys: string[] = [];
     let exact = false;
@@ -101,7 +106,10 @@ export function suggestionsFor(tx: BankTxLite, openItems: OpenItem[], lang: Lang
     ) {
       whys.push(txt.whyPayer);
     }
-    if (item.paymentMissing) whys.push(txt.whyMissing);
+    // `paymentMissing` only annotates an invoice that already matched via
+    // amount / reference / payer — it never creates a suggestion on its own,
+    // otherwise "Zahlung nicht zugeordnet" invoices spill onto every row.
+    if (item.paymentMissing && whys.length > 0) whys.push(txt.whyMissing);
     if (whys.length > 0) {
       out.push({
         id: item.id,
