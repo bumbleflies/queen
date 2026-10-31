@@ -23,7 +23,7 @@ export interface BillHints {
 }
 
 const GROSS_LABEL =
-  /(?:summe\s*brutto|bruttobetrag|gesamtbetrag|rechnungsbetrag|endbetrag|zahlbetrag|zu\s*zahlen(?:der\s*beitrag|der\s*betrag)?|\btotal\b(?:\s*(?:amount|due|in\s*eur|eur))?|amount\s*due|balance\s*due|grand\s*total)/i;
+  /(?:summe\s*brutto|bruttobetrag|gesamtbetrag|rechnungsbetrag|endbetrag|zahlbetrag|\btotal\b(?:\s*(?:amount|due|in\s*eur|eur))?|amount\s*due|balance\s*due|grand\s*total)/i;
 const NET_LABEL = /(?:summe\s*netto|nettobetrag|netto(?:summe|betrag)?)/i;
 // Word boundaries matter: "Industriestr." and "Musterfirma" both contain "ust".
 const VAT_LABEL = /(?:\bust\.?|\bmwst\.?|umsatzsteuer|\bvat\b|\btax\b)/i;
@@ -229,7 +229,7 @@ export function parseBillText(text: string, hints: BillHints = {}): ParsedBill {
     }
 
     if (GROSS_LABEL.test(line) && !isLineItem) {
-      const cents = amountOnLine(line) ?? (next ? amountOnLine(next) : null);
+      const cents = amountOnLine(line) ?? (next && !LINE_ITEM.test(next) ? amountOnLine(next) : null);
       if (cents !== null) grossCents ??= cents;
       continue;
     }
