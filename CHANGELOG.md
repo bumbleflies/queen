@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.30.0](https://github.com/bumbleflies/queen/compare/queen-v0.29.0...queen-v0.30.0) (2026-10-31)
+
+
+### Features
+
+* re-read and re-parse a bill attachment (repair wrong reads) ([#216](https://github.com/bumbleflies/queen/issues/216)) ([e3ce3cf](https://github.com/bumbleflies/queen/commit/e3ce3cfd0e707cd09e8b848607579bb965175b40))
+
 ## [0.29.0](https://github.com/bumbleflies/queen/compare/queen-v0.28.4...queen-v0.29.0) (2026-10-31)
 
 
