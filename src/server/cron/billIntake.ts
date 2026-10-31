@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { connectMongo, disconnectMongo } from '../db/mongo';
 import { isCliEntrypoint } from '../lib/reconcile';
-import { resolveBillIntakeDeps, runBillIntake } from '../jobs/billIntake';
+import { resolveBillIntakeDeps, rematchBills, runBillIntake } from '../jobs/billIntake';
 
 /**
  * Bill-intake entrypoint for the scheduler (Ofelia job-exec, after the GLS
@@ -18,6 +18,12 @@ async function main(): Promise<void> {
     );
     for (const error of result.errors) console.warn(`Bill intake: ${error}`);
     if (result.failed > 0) process.exitCode = 1;
+
+    const rematch = await rematchBills();
+    console.log(
+      `Bill rematch done: linked=${rematch.linked} skipped=${rematch.skipped}`,
+    );
+    for (const error of rematch.errors) console.warn(`Bill rematch: ${error}`);
   } finally {
     await disconnectMongo();
   }
