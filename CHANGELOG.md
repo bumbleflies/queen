@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.30.7](https://github.com/bumbleflies/queen/compare/queen-v0.30.6...queen-v0.30.7) (2026-11-02)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @tanstack/react-query to v5.105.3 ([#230](https://github.com/bumbleflies/queen/issues/230)) ([5779d03](https://github.com/bumbleflies/queen/commit/5779d03b2e733b664ac6884d2ed6951252a0bf58))
+* **deps:** update dependency express-rate-limit to v8.7.3 ([#231](https://github.com/bumbleflies/queen/issues/231)) ([39af7e9](https://github.com/bumbleflies/queen/commit/39af7e9dfff68e61e42267a92c886a499c10a383))
+
 ## [0.30.6](https://github.com/bumbleflies/queen/compare/queen-v0.30.5...queen-v0.30.6) (2026-11-02)
 
 
