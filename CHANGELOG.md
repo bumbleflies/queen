@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.30.6](https://github.com/bumbleflies/queen/compare/queen-v0.30.5...queen-v0.30.6) (2026-11-02)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @vitejs/plugin-react to v6.2.1 ([#228](https://github.com/bumbleflies/queen/issues/228)) ([b2d3df6](https://github.com/bumbleflies/queen/commit/b2d3df611d307901324ac094e2e0587335f7b967))
+
 ## [0.30.5](https://github.com/bumbleflies/queen/compare/queen-v0.30.4...queen-v0.30.5) (2026-11-01)
 
 
