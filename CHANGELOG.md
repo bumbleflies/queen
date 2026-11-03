@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.30.8](https://github.com/bumbleflies/queen/compare/queen-v0.30.7...queen-v0.30.8) (2026-11-03)
+
+
+### Bug Fixes
+
+* **deps:** update dependency vitest to v5.1.0 ([#233](https://github.com/bumbleflies/queen/issues/233)) ([e70bb9e](https://github.com/bumbleflies/queen/commit/e70bb9e4283c8eaa3bc9dfef5e3f495016e4342f))
+* **deps:** update trpc monorepo to v11.23.0 ([#234](https://github.com/bumbleflies/queen/issues/234)) ([59f2a63](https://github.com/bumbleflies/queen/commit/59f2a6375e075e759491fcb1171714be80c5ea2c))
+
 ## [0.30.7](https://github.com/bumbleflies/queen/compare/queen-v0.30.6...queen-v0.30.7) (2026-11-02)
 
 
