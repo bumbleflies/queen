@@ -201,7 +201,9 @@ export async function runBillIntake(deps: BillIntakeDeps): Promise<BillIntakeRes
         }
         result.created += 1;
         result.createdBills.push({
-          fileName,
+          // The name as it arrived: the summary is read in the mailbox, where
+          // the attachment is what the reader recognises.
+          fileName: attachment.fileName,
           vendorName: parsed?.vendorName ?? displayNameFromHeader(from),
           grossCents: parsed?.grossCents ?? null,
           receivedAt,
