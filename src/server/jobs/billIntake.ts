@@ -334,7 +334,7 @@ export async function resolveBillIntakeDeps(): Promise<BillIntakeDeps> {
   }
   const access = await googleAccessForCron();
   if (!access) {
-    throw new Error('Kein Google-Zugang hinterlegt — bitte in den Einstellungen neu verbinden');
+    throw new Error('Kein Google-Zugang hinterlegt — bitte in den Einstellungen unter „Google-Zugang“ erneuern');
   }
   const auth = createOAuth2Client(access.refreshToken);
   auth.setCredentials({ refresh_token: access.refreshToken, access_token: access.accessToken });
@@ -376,7 +376,7 @@ export function describeIntakeError(err: unknown): string {
     );
   }
   if (isMissingGmailScope(err)) {
-    return 'Gmail-Zugriff fehlt — bitte einmal neu mit Google anmelden, damit der Zugriff auf das bills@-Postfach erteilt wird.';
+    return 'Gmail-Zugriff fehlt — in den Einstellungen „Google-Zugang erneuern“ wählen (mit dem Konto, das die Beleg-Ordner gespeichert hat), damit das bills@-Postfach gelesen und bestätigt werden darf.';
   }
   return text;
 }

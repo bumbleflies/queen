@@ -5,6 +5,7 @@ import { useToast } from '../components/Toast';
 import { LanguageToggle } from '../components/LanguageToggle';
 import { FolderPicker, type PickerFolder, type PickerScope } from '../components/FolderPicker';
 import { UsersSection } from '../components/UsersSection';
+import { GoogleAccessSection } from '../components/GoogleAccessSection';
 import { useLanguage } from '../i18n/LanguageContext';
 import type { DictKey } from '../i18n/de';
 import { useTheme } from '../theme/ThemeContext';
@@ -109,6 +110,8 @@ export function SettingsPage() {
           </div>
         </section>
       ) : null}
+
+      {user?.role === 'admin' ? <GoogleAccessSection /> : null}
 
       {user?.role === 'admin' ? <TaxRateSection /> : null}
 
