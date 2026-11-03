@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.31.0](https://github.com/bumbleflies/queen/compare/queen-v0.30.10...queen-v0.31.0) (2026-11-03)
+
+
+### Features
+
+* mail a bill-intake summary back to the bills mailbox ([#242](https://github.com/bumbleflies/queen/issues/242)) ([18062cd](https://github.com/bumbleflies/queen/commit/18062cd162c51c7d97b2bb7bcf0d9ae5888f52fa))
+
 ## [0.30.10](https://github.com/bumbleflies/queen/compare/queen-v0.30.9...queen-v0.30.10) (2026-11-03)
 
 
