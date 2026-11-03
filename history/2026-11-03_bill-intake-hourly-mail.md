@@ -24,7 +24,24 @@ An attempt to solve both (PR #239, "hourly email intake via Bull queue + reply t
 
 ## Deployment results
 
-- To be filled in after the servyy-container schedule change and the deploy.
+Deployed to production (`servy.lehel.xyz`, `https://queen.bumbleflies.de`) on
+2026-11-03, release `queen-v0.31.0`:
+
+- The image already carried the change (watchtower pulled `0.31.0`;
+  `dist/src/server/lib/bills/intakeMail.js` present in the container).
+- `finance/docker-compose.yml` synced to `52d5d66`, and `docker compose -p
+  finance up -d queen` recreated only the queen container — the diff against
+  the checkout was exactly this label change.
+- Verified: container `healthy`, `/health` 200 through Traefik, label now
+  `ofelia.job-exec.bill-intake.schedule=0 * * * *`, and a manual run of the
+  cron command inside the container completed (`messages=11 attachments=3
+  created=0 skipped=3 failed=0`, then `Bill rematch done: linked=0 skipped=2`).
+  It sent no mail because nothing new arrived — the idle-run path.
+- The cron credential does **not** carry `gmail.send` yet (checked against
+  `oauth2.googleapis.com/tokeninfo`): `gmail.send: false`, while
+  `gmail.readonly`, `drive.file` and `drive.readonly` are present. The admin
+  whose credential the cron borrows has to sign in with Google once; until
+  then the bills keep arriving and only the summary mail is skipped.
 
 ## Verification commands
 
