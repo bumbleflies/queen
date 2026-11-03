@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.32.0](https://github.com/bumbleflies/queen/compare/queen-v0.31.0...queen-v0.32.0) (2026-11-03)
+
+
+### Features
+
+* a real "renew Google access" control in Settings ([#245](https://github.com/bumbleflies/queen/issues/245)) ([8403e5a](https://github.com/bumbleflies/queen/commit/8403e5a5393bc11e143170ef85b5f00892f7ce5f))
+
 ## [0.31.0](https://github.com/bumbleflies/queen/compare/queen-v0.30.10...queen-v0.31.0) (2026-11-03)
 
 
