@@ -6,7 +6,13 @@ import { BankTransaction } from '../../models/BankTransaction';
 import { Supplier } from '../../models/Supplier';
 import { JournalEntry } from '../../models/JournalEntry';
 import { Counter } from '../../models/Counter';
-import { runBillIntake, billsMailbox, describeIntakeError, isMissingGmailScope, type BillIntakeDeps } from '../billIntake';
+import {
+  runBillIntake,
+  billsMailbox,
+  describeIntakeError,
+  isMissingGmailScope,
+  type BillIntakeDeps,
+} from '../billIntake';
 import type { GmailClientLike, GmailMessage } from '../../services/GmailService';
 
 beforeAll(async () => {
@@ -132,6 +138,15 @@ describe('runBillIntake', () => {
     expect(result).toMatchObject({ messages: 1, attachments: 1, created: 1, skipped: 0, failed: 0 });
     expect(fetched).toEqual(['att-m1']);
 
+    // The run reports what it filed, so the cron can mail a summary.
+    expect(result.createdBills).toHaveLength(1);
+    expect(result.createdBills[0]).toMatchObject({
+      fileName: 'rechnung.pdf',
+      vendorName: 'Hetzner Online GmbH',
+      grossCents: 11900,
+    });
+    expect(result.createdBills[0].receivedAt.toISOString()).toBe(new Date(Date.UTC(2026, 9, 1, 8)).toISOString());
+
     const bill = await Bill.findOne({ messageId: 'm1' });
     expect(bill?.status).toBe('parsed');
     expect(bill?.parse).toMatchObject({
@@ -220,6 +235,7 @@ describe('runBillIntake', () => {
     // A `failed` bill is not an answer: the next run reads it again.
     const repaired = await runBillIntake(deps({ client }));
     expect(repaired).toMatchObject({ created: 1, skipped: 0, failed: 0 });
+
     const bill = await Bill.findOne({ messageId: 'm1' });
     expect(bill?.status).toBe('parsed');
     expect(bill?.parse).toMatchObject({ invoiceNumber: 'R-1000' });

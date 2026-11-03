@@ -32,13 +32,15 @@ function googleOAuthUnavailable(_req: Request, res: Response, next: NextFunction
 // queen creates; `drive.readonly` lets the folder picker and receipt listing
 // see folders/files the user can access (drive.file only sees queen's own files).
 // `gmail.readonly` lets the bill intake read the invoices that arrive at the
-// bills mailbox (the job acts as the admin who saved the Drive settings).
+// bills mailbox (the job acts as the admin who saved the Drive settings);
+// `gmail.send` lets that same job mail the arrival summary back to the mailbox.
 export const GOOGLE_SCOPES = [
   'profile',
   'email',
   'https://www.googleapis.com/auth/drive.file',
   'https://www.googleapis.com/auth/drive.readonly',
   'https://www.googleapis.com/auth/gmail.readonly',
+  'https://www.googleapis.com/auth/gmail.send',
 ];
 
 function googleCreds() {

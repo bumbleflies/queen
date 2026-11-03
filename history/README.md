@@ -30,3 +30,4 @@ The plans in `docs/plans/` say what was intended. These logs say what actually s
 | 2026-10-22 | [Receipt-first booking and learned rules](2026-10-22_receipt-first-booking.md) | pending |
 | 2026-10-22 | [Invoices imported as paid without a bank payment](2026-10-22_unassigned-payments.md) | pending |
 | 2026-10-22 | [Sign-in links for people without a Google account](2026-10-22_accountant-invite-login.md) | pending |
+| 2026-11-03 | [Hourly bill intake and its confirmation mail](2026-11-03_bill-intake-hourly-mail.md) | pending |
