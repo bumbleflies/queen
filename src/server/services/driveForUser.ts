@@ -42,7 +42,7 @@ export async function driveAccessForActor(userId: string): Promise<GoogleAccess>
   } catch {
     throw new TRPCError({
       code: 'PRECONDITION_FAILED',
-      message: 'Der hinterlegte Google-Laufwerk-Zugang ist abgelaufen — bitte in den Einstellungen neu verbinden.',
+      message: 'Der hinterlegte Google-Laufwerk-Zugang ist abgelaufen — bitte in den Einstellungen unter „Google-Zugang“ erneuern.',
     });
   }
 }

@@ -58,7 +58,7 @@ npm run lint && npm run typecheck && npm run typecheck:server && npm test
 
 ## Known issues
 
-- The confirmation mail needs a one-time admin re-login to grant `gmail.send`; until then the intake works and only the mail is skipped.
+- The confirmation mail needs a one-time admin re-consent to grant `gmail.send`; until then the intake works and only the mail is skipped. The app had no control for that — its error texts said "reconnect in the settings" while the only path was the Google sign-in link on `/login`. Settings → **Google-Zugang** (`components/GoogleAccessSection.tsx`) now links `/auth/google`, which re-runs the consent flow (`prompt: 'consent'`, `access_type: 'offline'`) and overwrites the stored refresh token.
 - One mail per run: after a long downtime the first run reports every bill it catches up on in one message.
 
 ## Future enhancements

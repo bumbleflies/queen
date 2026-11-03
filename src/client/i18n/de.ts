@@ -350,6 +350,12 @@ export const de = {
   'settings.enName': 'Englisch',
   'settings.switchTo': 'Wechseln zu {lang}',
   'settings.toggleTheme': 'Design umschalten',
+  'settings.googleTitle': 'Google-Zugang',
+  'settings.googleHint':
+    'Erneuert die Verbindung dieses Kontos: Laufwerk-Zugriff, Gmail lesen und E-Mails senden. Nach dem Klick zeigt Google die Zustimmungsseite — bitte alle Punkte bestätigen.',
+  'settings.googleReconnect': 'Google-Zugang erneuern',
+  'settings.googleCronHint':
+    'Der stündliche Beleg-Abruf und der Bankabgleich nutzen den Zugang des Admins, der die Laufwerk-Ordner zuletzt gespeichert hat.',
   'settings.drive': 'Google Drive',
   'settings.driveTitle': 'Google Drive-Ordner',
   'settings.driveInvoices': 'Rechnungs-Ordner',

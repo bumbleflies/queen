@@ -276,7 +276,7 @@ describe('describeIntakeError', () => {
   });
 
   it('tells an admin to sign in again when the scope is missing', () => {
-    expect(describeIntakeError(new Error('Request had insufficient authentication scopes.'))).toContain('neu mit Google anmelden');
+    expect(describeIntakeError(new Error('Request had insufficient authentication scopes.'))).toContain('Google-Zugang erneuern');
   });
 
   it('passes anything else through unchanged', () => {

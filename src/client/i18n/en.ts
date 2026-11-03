@@ -353,6 +353,12 @@ export const en: Dict = {
   'settings.enName': 'English',
   'settings.switchTo': 'Switch to {lang}',
   'settings.toggleTheme': 'Toggle theme',
+  'settings.googleTitle': 'Google access',
+  'settings.googleHint':
+    'Renews this account\'s connection: Drive access, reading Gmail and sending mail. Google shows its consent screen after the click — approve every item.',
+  'settings.googleReconnect': 'Renew Google access',
+  'settings.googleCronHint':
+    'The hourly bill intake and the bank reconcile use the credential of the admin who last saved the Drive folders.',
   'settings.drive': 'Google Drive',
   'settings.driveTitle': 'Google Drive folders',
   'settings.driveInvoices': 'Invoices folder',
