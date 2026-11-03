@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.30.9](https://github.com/bumbleflies/queen/compare/queen-v0.30.8...queen-v0.30.9) (2026-11-03)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @hookform/resolvers to v7.0.2 ([#236](https://github.com/bumbleflies/queen/issues/236)) ([b1f87e5](https://github.com/bumbleflies/queen/commit/b1f87e51a5ae3d51b811b1c3084799374ebb2222))
+* **deps:** update dependency google-auth-library to v11.3.3 ([#237](https://github.com/bumbleflies/queen/issues/237)) ([21280bb](https://github.com/bumbleflies/queen/commit/21280bb3800bff9231b0a9ef1c4e3099c5a5f5a3))
+
 ## [0.30.8](https://github.com/bumbleflies/queen/compare/queen-v0.30.7...queen-v0.30.8) (2026-11-03)
 
 
