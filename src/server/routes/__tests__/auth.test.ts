@@ -16,4 +16,11 @@ describe('Google OAuth scopes', () => {
   it('asks for read-only Gmail, which the bill intake needs', () => {
     expect(GOOGLE_SCOPES).toContain('https://www.googleapis.com/auth/gmail.readonly');
   });
+
+  it('asks for Gmail send, so the intake can mail its arrival summary', () => {
+    expect(GOOGLE_SCOPES).toContain('https://www.googleapis.com/auth/gmail.send');
+    // Still no full mailbox control: send + read only.
+    expect(GOOGLE_SCOPES).not.toContain('https://www.googleapis.com/auth/gmail.modify');
+    expect(GOOGLE_SCOPES).not.toContain('https://mail.google.com/');
+  });
 });

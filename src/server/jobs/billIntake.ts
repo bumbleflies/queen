@@ -12,8 +12,10 @@ import {
   fetchPdfAttachments,
   headerValue,
   listBillMessages,
+  sendMail,
   type GmailClientLike,
 } from '../services/GmailService';
+import { intakeMail, type IntakeMailBill } from '../lib/bills/intakeMail';
 import { ensureYearFolder, type FolderDriveLike } from '../services/receiptsFolder';
 import { createOAuth2Client, uploadInvoicePdf, type DriveClientLike } from '../services/DriveService';
 import { extractPdfText } from '../services/receiptText';
@@ -27,6 +29,13 @@ export const BILL_QUERY_DAYS = 14;
 
 export function billsMailbox(env: NodeJS.ProcessEnv = process.env): string {
   return env.QUEEN_BILLS_MAILBOX?.trim() || DEFAULT_BILLS_MAILBOX;
+}
+
+/** Origin used for links in mails the intake writes back to us. */
+export const DEFAULT_APP_URL = 'https://queen.bumbleflies.de';
+
+export function intakeAppUrl(env: NodeJS.ProcessEnv = process.env): string {
+  return (env.QUEEN_APP_URL?.trim() || DEFAULT_APP_URL).replace(/\/+$/, '');
 }
 
 export interface BillIntakeDeps {
@@ -52,6 +61,8 @@ export interface BillIntakeResult {
   /** Bills that could not be filed or read; a `failed` bill is retried next run. */
   failed: number;
   errors: string[];
+  /** The bills this run filed, for the confirmation mail; empty when nothing arrived. */
+  createdBills: IntakeMailBill[];
 }
 
 function message(err: unknown): string {
@@ -76,7 +87,16 @@ export async function runBillIntake(deps: BillIntakeDeps): Promise<BillIntakeRes
   const now = deps.now ?? new Date();
   const parse = deps.parse ?? parseBillText;
   const extractText = deps.extractText ?? extractPdfText;
-  const result: BillIntakeResult = { messages: 0, attachments: 0, created: 0, skipped: 0, noText: 0, failed: 0, errors: [] };
+  const result: BillIntakeResult = {
+    messages: 0,
+    attachments: 0,
+    created: 0,
+    skipped: 0,
+    noText: 0,
+    failed: 0,
+    errors: [],
+    createdBills: [],
+  };
 
   const messages = await listBillMessages(deps.gmail, {
     query: `has:attachment newer_than:${BILL_QUERY_DAYS}d`,
@@ -138,9 +158,9 @@ export async function runBillIntake(deps: BillIntakeDeps): Promise<BillIntakeRes
         status = 'failed';
       }
 
+      const fileName = billFileName(parsed, receivedAt, attachment.fileName);
       let filed;
       try {
-        const fileName = billFileName(parsed, receivedAt, attachment.fileName);
         const folderId = await ensureYearFolder(deps.drive, deps.receiptsFolderId, receivedAt.getFullYear());
         filed = await deps.upload({ buffer: attachment.buffer, fileName, folderId });
       } catch (err) {
@@ -180,6 +200,14 @@ export async function runBillIntake(deps: BillIntakeDeps): Promise<BillIntakeRes
           await Bill.create(doc);
         }
         result.created += 1;
+        result.createdBills.push({
+          // The name as it arrived: the summary is read in the mailbox, where
+          // the attachment is what the reader recognises.
+          fileName: attachment.fileName,
+          vendorName: parsed?.vendorName ?? displayNameFromHeader(from),
+          grossCents: parsed?.grossCents ?? null,
+          receivedAt,
+        });
         if (status === 'noText') result.noText += 1;
         if (status === 'failed') {
           result.failed += 1;
@@ -270,6 +298,28 @@ export async function rematchBills(opts: { year?: number } = {}): Promise<{ link
   }
 
   return { linked, skipped, errors };
+}
+
+/**
+ * Tell the mailbox what just arrived. One mail per run that filed something,
+ * so an hourly schedule stays quiet when there is no new bill.
+ *
+ * Returns the Gmail message id, or `null` when there was nothing to report.
+ * Callers must treat a throw as informational: the bills are already filed,
+ * and a token minted before `gmail.send` was added simply cannot send.
+ */
+export async function sendIntakeConfirmation(
+  result: BillIntakeResult,
+  deps: { gmail: GmailClientLike; to: string; appUrl: string },
+): Promise<string | null> {
+  const mail = intakeMail({
+    created: result.createdBills,
+    noText: result.noText,
+    failed: result.failed,
+    appUrl: deps.appUrl,
+  });
+  if (!mail) return null;
+  return sendMail(deps.gmail, { ...mail, to: deps.to });
 }
 
 /**

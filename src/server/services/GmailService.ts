@@ -21,6 +21,11 @@ export interface GmailClientLike {
           id: string;
         }): Promise<{ data: { data?: string | null; size?: number | null } }>;
       };
+      /**
+       * Sending needs the `gmail.send` scope, which a token minted for reading
+       * does not carry — so it stays optional and `sendMail` says what to do.
+       */
+      send?(params: { userId: string; requestBody: { raw: string } }): Promise<{ data: { id?: string | null } }>;
     };
   };
 }
@@ -146,3 +151,69 @@ export async function listBillMessages(
     .filter((m): m is { id: string } => typeof m.id === 'string' && m.id.length > 0)
     .map((m) => ({ id: m.id }));
 }
+
+/** A plain-text mail the intake can send to itself. */
+export interface OutgoingMail {
+  to: string;
+  subject: string;
+  text: string;
+  /**
+   * Left unset on purpose by default: Gmail only accepts a `From` that is the
+   * authenticated account or one of its aliases and rejects the message
+   * otherwise. Without it Gmail fills in the account the token belongs to.
+   */
+  from?: string;
+  replyTo?: string;
+  date?: Date;
+  messageId?: string;
+}
+
+/** RFC 2047 encoded-word for anything that is not plain printable ASCII. */
+function encodeHeader(value: string): string {
+  // eslint-disable-next-line no-control-regex
+  return /^[\x20-\x7e]*$/.test(value) ? value : `=?UTF-8?B?${Buffer.from(value, 'utf8').toString('base64')}?=`;
+}
+
+/** Base64 must be wrapped: a single 10 kB line is not a valid body. */
+function wrapBase64(encoded: string): string {
+  return encoded.replace(/.{1,76}/g, (chunk) => `${chunk}\r\n`).trimEnd();
+}
+
+/**
+ * Build the RFC 5322 message for `users.messages.send`. Plain text only, body
+ * base64 encoded (so umlauts and long lines are safe) and CRLF line endings
+ * (RFC 5322 requires them; a bare `\n` gets rejected).
+ */
+export function buildRawMail(mail: OutgoingMail): string {
+  const date = mail.date ?? new Date();
+  const domain = mail.to.split('@')[1]?.trim() || 'localhost';
+  const messageId = mail.messageId ?? `<queen-${date.getTime()}-${Math.random().toString(36).slice(2, 10)}@${domain}>`;
+  const headers = [
+    `To: ${mail.to}`,
+    ...(mail.from ? [`From: ${mail.from}`] : []),
+    ...(mail.replyTo ? [`Reply-To: ${mail.replyTo}`] : []),
+    `Subject: ${encodeHeader(mail.subject)}`,
+    `Date: ${date.toUTCString()}`,
+    `Message-ID: ${messageId}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+  ];
+  return `${headers.join('\r\n')}\r\n\r\n${wrapBase64(Buffer.from(mail.text, 'utf8').toString('base64'))}`;
+}
+
+/**
+ * Send one mail as the authenticated account. Returns the Gmail message id.
+ * Throws a sentence naming the missing scope when the token cannot send.
+ */
+export async function sendMail(client: GmailClientLike, mail: OutgoingMail): Promise<string> {
+  if (!client.users.messages.send) {
+    throw new Error('Gmail-Versand steht nicht zur Verfügung — es fehlt der Zugriff `gmail.send` (bitte in den Einstellungen neu verbinden)');
+  }
+  const res = await client.users.messages.send({
+    userId: 'me',
+    requestBody: { raw: Buffer.from(buildRawMail(mail), 'utf8').toString('base64url') },
+  });
+  return res.data.id ?? '';
+}
+
