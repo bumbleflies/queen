@@ -3,7 +3,7 @@ import { connectMongo, disconnectMongo } from '../db/mongo';
 import { BankTransaction } from '../models/BankTransaction';
 import { Supplier } from '../models/Supplier';
 import EmailBillModel from '../models/EmailBill';
-import { fetchBillEmails, type GmailMessage } from '../services/GmailService';
+import { fetchBillEmails, createGmailClient, type GmailMessage } from '../services/GmailService';
 import { uploadInvoicePdf, createOAuth2Client } from '../services/DriveService';
 import { receiptText } from '../services/receiptText';
 import { loadHistory } from '../lib/accounting/history';
@@ -33,7 +33,7 @@ export function initEmailIntakeQueue(): Queue {
     await runEmailIntake();
   });
   setEnqueueEmailIntake(async () => {
-    await queue.add({});
+    await queue.add({}, { repeat: { cron: '0 * * * *' } });
   });
   return queue;
 }
@@ -66,74 +66,86 @@ async function runEmailIntake(): Promise<void> {
       return;
     }
 
-    const drive = await driveForCron();
-    if (!drive) throw new Error('Drive not available for cron');
-
-    const folderRef = await getReceiptsFolder();
-    if (!folderRef) throw new Error('Receipts folder not configured');
-
-    const gmailClient = require('googleapis').google.gmail({
-      version: 'v1',
-      auth: createOAuth2Client(gmailRefreshToken),
-    });
-
-    const suppliers = await Supplier.find({ archived: false }).lean() as any[];
-    void loadHistory();
-
-    for (const msg of messages) {
-      const fullMsg = await gmailClient.users.messages.get({ userId: 'me', id: msg.id, format: 'full' });
-      const pdfFiles = extractPdfAttachments(fullMsg.data);
-
-      for (const { buffer, fileName } of pdfFiles) {
-        try {
-          const bill = await extractBillFromPdf(buffer, fileName);
-          if (!bill) {
-            console.log(`Could not parse PDF: ${fileName}`);
-            continue;
-          }
-
-          const existing = await EmailBillModel.findOne({ messageId: msg.id, fileName });
-          if (existing) {
-            console.log(`Bill already processed: ${fileName}`);
-            continue;
-          }
-
-          const uploadResult = await uploadInvoicePdf({
-            auth: createOAuth2Client(gmailRefreshToken),
-            buffer,
-            fileName,
-            folderId: folderRef.id,
-          });
-
-          const supplier = await findOrCreateSupplier(bill, suppliers);
-          createDraftBankTransaction(bill, supplier, uploadResult.fileId, uploadResult.link, 'bills@bumbleflies.de', msg.id, fullMsg.data);
-          await EmailBillModel.create({
-            emailSource: 'bills@bumbleflies.de',
-            messageId: msg.id,
-            subject: getHeader(fullMsg.data, 'Subject') ?? '',
-            date: new Date(fullMsg.data.internalDate ? Date.parse(fullMsg.data.internalDate) : Date.now()),
-            vendor: bill.vendor,
-            vendorName: bill.vendorName,
-            invoiceNumber: bill.invoiceNumber,
-            amountCents: bill.amountCents,
-            vatCents: bill.vatCents,
-            iban: bill.iban,
-            dueDate: bill.dueDate,
-            description: bill.description,
-            fileId: uploadResult.fileId,
-            status: 'draft',
-            createdBy: 'email-intake-job',
-          });
-
-          console.log(`Created draft bill: ${bill.vendorName} - ${bill.invoiceNumber} (${bill.amountCents / 100} EUR)`);
-        } catch (err) {
-          console.error(`Failed to process attachment ${fileName}:`, (err as Error).message);
-        }
-      }
+    const processedCount = await processBillMessages(messages, gmailRefreshToken);
+    if (processedCount > 0) {
+      await sendIntakeReply(processedCount);
     }
   } finally {
     await disconnectMongo();
   }
+}
+
+async function processBillMessages(messages: any[], gmailRefreshToken: string): Promise<number> {
+  const drive = await driveForCron();
+  if (!drive) throw new Error('Drive not available for cron');
+
+  const folderRef = await getReceiptsFolder();
+  if (!folderRef) throw new Error('Receipts folder not configured');
+
+  const gmailClient = require('googleapis').google.gmail({
+    version: 'v1',
+    auth: createOAuth2Client(gmailRefreshToken),
+  });
+
+  const suppliers = await Supplier.find({ archived: false }).lean() as any[];
+  void loadHistory();
+
+  let processedCount = 0;
+
+  for (const msg of messages) {
+    const fullMsg = await gmailClient.users.messages.get({ userId: 'me', id: msg.id, format: 'full' });
+    const pdfFiles = extractPdfAttachments(fullMsg.data);
+
+    for (const { buffer, fileName } of pdfFiles) {
+      try {
+        const bill = await extractBillFromPdf(buffer, fileName);
+        if (!bill) {
+          console.log(`Could not parse PDF: ${fileName}`);
+          continue;
+        }
+
+        const existing = await EmailBillModel.findOne({ messageId: msg.id, fileName });
+        if (existing) {
+          console.log(`Bill already processed: ${fileName}`);
+          continue;
+        }
+
+        const uploadResult = await uploadInvoicePdf({
+          auth: createOAuth2Client(gmailRefreshToken),
+          buffer,
+          fileName,
+          folderId: folderRef.id,
+        });
+
+        const supplier = await findOrCreateSupplier(bill, suppliers);
+        createDraftBankTransaction(bill, supplier, uploadResult.fileId, uploadResult.link, 'bills@bumbleflies.de', msg.id, fullMsg.data);
+        await EmailBillModel.create({
+          emailSource: 'bills@bumbleflies.de',
+          messageId: msg.id,
+          subject: getHeader(fullMsg.data, 'Subject') ?? '',
+          date: new Date(fullMsg.data.internalDate ? Date.parse(fullMsg.data.internalDate) : Date.now()),
+          vendor: bill.vendor,
+          vendorName: bill.vendorName,
+          invoiceNumber: bill.invoiceNumber,
+          amountCents: bill.amountCents,
+          vatCents: bill.vatCents,
+          iban: bill.iban,
+          dueDate: bill.dueDate,
+          description: bill.description,
+          fileId: uploadResult.fileId,
+          status: 'draft',
+          createdBy: 'email-intake-job',
+        });
+
+        processedCount++;
+        console.log(`Created draft bill: ${bill.vendorName} - ${bill.invoiceNumber} (${bill.amountCents / 100} EUR)`);
+      } catch (err) {
+        console.error(`Failed to process attachment ${fileName}:`, (err as Error).message);
+      }
+    }
+  }
+
+  return processedCount;
 }
 
 function getHeader(msg: GmailMessage, name: string): string | null {
@@ -271,4 +283,29 @@ async function createDraftBankTransaction(
     ignored: false,
     importedAt: new Date(),
   });
+}
+
+async function sendIntakeReply(count: number): Promise<void> {
+  const gmailClient = createGmailClient(process.env.GMAIL_REFRESH_TOKEN);
+  const subject = '✅ Queen email-intake completed';
+  const body = `
+Hi,
+
+The hourly email-intake job has processed <strong>${count}</strong> bill(s) and created the corresponding draft bank transactions.
+
+You can view the latest data in Queen: https://queen.bumbleflies.de/finance
+
+Best regards,
+Bumbleflies automation
+`;
+
+  const raw = await gmailClient.users.messages.create({
+    userId: 'me',
+    requestBody: {
+      raw: Buffer.from(`From: ${process.env.GMAIL_REFRESH_TOKEN ? 'service-account' : 'your-gmail-address'}\nTo: bills@bumbleflies.de\nSubject: ${subject}\n\n${body}`).toString('base64'),
+      threadId: 'bills@bumbleflies.de',
+    },
+  });
+
+  console.log('✅ Reply sent:', raw.data.id);
 }
