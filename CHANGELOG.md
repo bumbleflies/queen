@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.32.3](https://github.com/bumbleflies/queen/compare/queen-v0.32.2...queen-v0.32.3) (2026-11-05)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @hookform/resolvers to v7.0.3 ([#252](https://github.com/bumbleflies/queen/issues/252)) ([b91e428](https://github.com/bumbleflies/queen/commit/b91e428b3e55dc38587b39ed7f25891984448211))
+* **deps:** update dependency @tanstack/react-query to v5.106.1 ([#253](https://github.com/bumbleflies/queen/issues/253)) ([8ffb102](https://github.com/bumbleflies/queen/commit/8ffb102d187a16c5b471249dc7a1a00355b0a55e))
+
 ## [0.32.2](https://github.com/bumbleflies/queen/compare/queen-v0.32.1...queen-v0.32.2) (2026-11-04)
 
 
