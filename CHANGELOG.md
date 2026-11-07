@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.32.10](https://github.com/bumbleflies/queen/compare/queen-v0.32.9...queen-v0.32.10) (2026-11-07)
+
+
+### Bug Fixes
+
+* **deps:** update dependency concurrently to v10.0.7 ([#267](https://github.com/bumbleflies/queen/issues/267)) ([736c054](https://github.com/bumbleflies/queen/commit/736c054f36a6ceeb3283ee4b6695c2aab471dcc5))
+* **deps:** update dependency supertest to v7.3.2 ([#268](https://github.com/bumbleflies/queen/issues/268)) ([0f90814](https://github.com/bumbleflies/queen/commit/0f90814191fa969e144096ad5bdbd3e411e46d8e))
+
 ## [0.32.9](https://github.com/bumbleflies/queen/compare/queen-v0.32.8...queen-v0.32.9) (2026-11-06)
 
 
