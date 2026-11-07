@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.32.11](https://github.com/bumbleflies/queen/compare/queen-v0.32.10...queen-v0.32.11) (2026-11-07)
+
+
+### Bug Fixes
+
+* **deps:** update dependency nodemailer to v10.4.0 ([#270](https://github.com/bumbleflies/queen/issues/270)) ([909ce89](https://github.com/bumbleflies/queen/commit/909ce8982b1e3b0f4fd50be31843807b43430f8b))
+
 ## [0.32.10](https://github.com/bumbleflies/queen/compare/queen-v0.32.9...queen-v0.32.10) (2026-11-07)
 
 
