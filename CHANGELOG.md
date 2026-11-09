@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.32.15](https://github.com/bumbleflies/queen/compare/queen-v0.32.14...queen-v0.32.15) (2026-11-09)
+
+
+### Bug Fixes
+
+* **deps:** update dependency google-auth-library to v11.3.4 ([#279](https://github.com/bumbleflies/queen/issues/279)) ([6469ae6](https://github.com/bumbleflies/queen/commit/6469ae63ca5aa6966b8c433c24cf84b8f53173f8))
+* **deps:** update dependency vite to v8.3.7 ([#280](https://github.com/bumbleflies/queen/issues/280)) ([cbaedef](https://github.com/bumbleflies/queen/commit/cbaedefd54ebaa28e2b6cd823ffdfa1b14fd66e2))
+
 ## [0.32.14](https://github.com/bumbleflies/queen/compare/queen-v0.32.13...queen-v0.32.14) (2026-11-09)
 
 
