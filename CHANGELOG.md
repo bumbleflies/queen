@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.32.14](https://github.com/bumbleflies/queen/compare/queen-v0.32.13...queen-v0.32.14) (2026-11-09)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @hookform/resolvers to v7.0.5 ([#276](https://github.com/bumbleflies/queen/issues/276)) ([490f3d9](https://github.com/bumbleflies/queen/commit/490f3d96b0281d9d214ae3314f7bf5d376e637a6))
+* **deps:** update dependency dotenv to v18.0.10 ([#277](https://github.com/bumbleflies/queen/issues/277)) ([7d4223f](https://github.com/bumbleflies/queen/commit/7d4223fe2b5c1b261612a296379ab5e3c8cf84a1))
+
 ## [0.32.13](https://github.com/bumbleflies/queen/compare/queen-v0.32.12...queen-v0.32.13) (2026-11-08)
 
 
