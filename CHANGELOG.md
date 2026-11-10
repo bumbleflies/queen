@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.32.16](https://github.com/bumbleflies/queen/compare/queen-v0.32.15...queen-v0.32.16) (2026-11-10)
+
+
+### Bug Fixes
+
+* **deps:** update dependency express-rate-limit to v8.7.4 ([#282](https://github.com/bumbleflies/queen/issues/282)) ([6e47f17](https://github.com/bumbleflies/queen/commit/6e47f17fccc697dd7d61e830728854b07a2bc783))
+* **deps:** update dependency mongoose to v9.12.1 ([#283](https://github.com/bumbleflies/queen/issues/283)) ([c5c09ed](https://github.com/bumbleflies/queen/commit/c5c09ed5f1ffa5a434e6a6eb17e74e540da09ada))
+
 ## [0.32.15](https://github.com/bumbleflies/queen/compare/queen-v0.32.14...queen-v0.32.15) (2026-11-09)
 
 
