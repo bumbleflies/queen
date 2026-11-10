@@ -5,8 +5,10 @@
 
 ### Bug Fixes
 
+* **deps:** update dependency @vitejs/plugin-react to v6.3.0 ([#285](https://github.com/bumbleflies/queen/issues/285)) ([4c4a6b1](https://github.com/bumbleflies/queen/commit/4c4a6b1ed75e287fb3b22f87ced04033226e7370))
 * **deps:** update dependency express-rate-limit to v8.7.4 ([#282](https://github.com/bumbleflies/queen/issues/282)) ([6e47f17](https://github.com/bumbleflies/queen/commit/6e47f17fccc697dd7d61e830728854b07a2bc783))
 * **deps:** update dependency mongoose to v9.12.1 ([#283](https://github.com/bumbleflies/queen/issues/283)) ([c5c09ed](https://github.com/bumbleflies/queen/commit/c5c09ed5f1ffa5a434e6a6eb17e74e540da09ada))
+* **deps:** update dependency oxlint to v1.93.0 ([#286](https://github.com/bumbleflies/queen/issues/286)) ([7912aab](https://github.com/bumbleflies/queen/commit/7912aab3978035b9df7b80534af2a322f7b844d3))
 
 ## [0.32.15](https://github.com/bumbleflies/queen/compare/queen-v0.32.14...queen-v0.32.15) (2026-11-09)
 
