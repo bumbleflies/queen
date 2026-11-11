@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.32.20](https://github.com/bumbleflies/queen/compare/queen-v0.32.19...queen-v0.32.20) (2026-11-11)
+
+
+### Bug Fixes
+
+* **deps:** update trpc monorepo to v11.28.0 ([#295](https://github.com/bumbleflies/queen/issues/295)) ([5922880](https://github.com/bumbleflies/queen/commit/5922880750aa0e8376746be861289f651cb1dfd2))
+
 ## [0.32.19](https://github.com/bumbleflies/queen/compare/queen-v0.32.18...queen-v0.32.19) (2026-11-10)
 
 
