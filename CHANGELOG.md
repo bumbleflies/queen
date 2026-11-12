@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.32.22](https://github.com/bumbleflies/queen/compare/queen-v0.32.21...queen-v0.32.22) (2026-11-12)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @hookform/resolvers to v7.0.6 ([#300](https://github.com/bumbleflies/queen/issues/300)) ([3e21051](https://github.com/bumbleflies/queen/commit/3e2105109427da8baaad079765686bac71eebc1b))
+* **deps:** update dependency react-hook-form to v7.92.0 ([#299](https://github.com/bumbleflies/queen/issues/299)) ([6325d46](https://github.com/bumbleflies/queen/commit/6325d4679c9bbe0c712d33819624925034c3f106))
+
 ## [0.32.21](https://github.com/bumbleflies/queen/compare/queen-v0.32.20...queen-v0.32.21) (2026-11-11)
 
 
