@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.32.24](https://github.com/bumbleflies/queen/compare/queen-v0.32.23...queen-v0.32.24) (2026-11-13)
+
+
+### Bug Fixes
+
+* **deps:** update dependency jsdom to v31.0.1 ([#305](https://github.com/bumbleflies/queen/issues/305)) ([0f68e14](https://github.com/bumbleflies/queen/commit/0f68e1449b1da27b76b1c7c13070bf15bf0ebd5e))
+
 ## [0.32.23](https://github.com/bumbleflies/queen/compare/queen-v0.32.22...queen-v0.32.23) (2026-11-12)
 
 
