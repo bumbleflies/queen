@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.32.26](https://github.com/bumbleflies/queen/compare/queen-v0.32.25...queen-v0.32.26) (2026-11-14)
+
+
+### Bug Fixes
+
+* **deps:** update dependency unpdf to v2.2.0 ([#309](https://github.com/bumbleflies/queen/issues/309)) ([81eca7b](https://github.com/bumbleflies/queen/commit/81eca7b0e3e21a6f96b98db5a473e2aeff6639f2))
+
 ## [0.32.25](https://github.com/bumbleflies/queen/compare/queen-v0.32.24...queen-v0.32.25) (2026-11-14)
 
 
