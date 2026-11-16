@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.32.31](https://github.com/bumbleflies/queen/compare/queen-v0.32.30...queen-v0.32.31) (2026-11-16)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @testing-library/user-event to v14.6.12 ([#318](https://github.com/bumbleflies/queen/issues/318)) ([321f54f](https://github.com/bumbleflies/queen/commit/321f54f023408f9e3bd5e748a191e07cabdbf678))
+
 ## [0.32.30](https://github.com/bumbleflies/queen/compare/queen-v0.32.29...queen-v0.32.30) (2026-11-16)
 
 
