@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.32.29](https://github.com/bumbleflies/queen/compare/queen-v0.32.28...queen-v0.32.29) (2026-11-16)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @testing-library/user-event to v14.6.11 ([#315](https://github.com/bumbleflies/queen/issues/315)) ([efe80ba](https://github.com/bumbleflies/queen/commit/efe80ba55421b1b72f07ea655ffdc16083b063cf))
+* **deps:** update trpc monorepo to v11.28.3 ([#316](https://github.com/bumbleflies/queen/issues/316)) ([24d60ad](https://github.com/bumbleflies/queen/commit/24d60ad6da8259ffc8e95051fe3b6275ecbb39a6))
+
 ## [0.32.28](https://github.com/bumbleflies/queen/compare/queen-v0.32.27...queen-v0.32.28) (2026-11-15)
 
 
