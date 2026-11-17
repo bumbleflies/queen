@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.33.1](https://github.com/bumbleflies/queen/compare/queen-v0.33.0...queen-v0.33.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @vitejs/plugin-react to v6.3.0 ([#289](https://github.com/bumbleflies/queen/issues/289)) ([8a5e77d](https://github.com/bumbleflies/queen/commit/8a5e77d0814fb70542850f2d274086b916ca4714))
+* **deps:** update dependency googleapis to v190 ([#304](https://github.com/bumbleflies/queen/issues/304)) ([2656b5e](https://github.com/bumbleflies/queen/commit/2656b5e9d957c7237f603eb4877b4f68b057df78))
+* **deps:** update trpc monorepo to v11.28.6 ([#333](https://github.com/bumbleflies/queen/issues/333)) ([093cab7](https://github.com/bumbleflies/queen/commit/093cab792eb8da2a38c0e52516990b30cdb7a5b6))
+
 ## [0.33.0](https://github.com/bumbleflies/queen/compare/queen-v0.32.35...queen-v0.33.0) (2026-11-17)
 
 
