@@ -266,7 +266,8 @@ describe('runBillIntake confirmation replies', () => {
         client,
         sendReply,
         upload: async (file) => {
-          if (file.fileName === 'kaputt.pdf') throw new Error('Drive 403');
+          // The upload gets the filed name, so key the failure on the bytes.
+          if (file.buffer.toString('utf8').includes('broken')) throw new Error('Drive 403');
           return { fileId: 'file-1', link: 'https://drive.example/1' };
         },
       }),
