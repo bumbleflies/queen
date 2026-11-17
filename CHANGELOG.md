@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.33.0](https://github.com/bumbleflies/queen/compare/queen-v0.32.35...queen-v0.33.0) (2026-11-17)
+
+
+### Features
+
+* **bills:** reply to each bill mail in its own thread ([#331](https://github.com/bumbleflies/queen/issues/331)) ([da36c7b](https://github.com/bumbleflies/queen/commit/da36c7b1c2f59c3ea6c4c7cbee5d4df8d079091d))
+
 ## [0.32.35](https://github.com/bumbleflies/queen/compare/queen-v0.32.34...queen-v0.32.35) (2026-11-17)
 
 
