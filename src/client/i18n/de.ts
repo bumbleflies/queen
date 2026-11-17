@@ -557,6 +557,7 @@ export const de = {
   'finance.outcome.vatOnly': 'nur USt',
   'finance.outcome.reverseCharge': '§13b',
   'finance.outcome.split': 'Aufteilung auf {n} Konten',
+  'finance.outcome.rateOpen': 'USt-Satz offen',
   'finance.outcome.receipt.read': 'aus Beleg gelesen: {vendor}',
   'finance.outcome.receipt.readMany': 'aus {n} Belegen gelesen: {vendor}',
   'finance.readReceipt': 'Beleg auslesen',

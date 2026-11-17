@@ -560,6 +560,7 @@ export const en: Dict = {
   'finance.outcome.vatOnly': 'VAT only',
   'finance.outcome.reverseCharge': '§13b',
   'finance.outcome.split': 'Split across {n} accounts',
+  'finance.outcome.rateOpen': 'VAT rate open',
   'finance.outcome.receipt.read': 'read from receipt: {vendor}',
   'finance.outcome.receipt.readMany': 'read from {n} receipts: {vendor}',
   'finance.readReceipt': 'Read receipt',

@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { LanguageProvider } from '../i18n/LanguageContext';
+import { formatEUR } from '../lib/format';
 
 import { MemoryRouter } from 'react-router-dom';
 
@@ -357,7 +358,7 @@ describe('FinancePage — inbox', () => {
     }];
     renderPage();
     const row = screen.getByRole('row', { name: /Miete März/ });
-    expect(within(row).getByText(/✓ 6837 Lizenzen · §13b/)).toBeInTheDocument();
+    expect(within(row).getByText(/✓ 6837 Lizenzen · 19 % · §13b/)).toBeInTheDocument();
     fireEvent.click(within(row).getByRole('button', { name: 'Buchen' }));
     await waitFor(() => expect(calls.book).toEqual([{
       bankTxId: 'tx1',
@@ -767,6 +768,63 @@ describe('FinancePage — receipt reading', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Jetzt buchen' }));
     await waitFor(() => expect(calls.book).toHaveLength(1));
     expect(calls.book[0]).toEqual(expect.objectContaining({ bankTxId: 'tx1', split }));
+  });
+
+  it('a §13b receipt behind the same account and rate as a normal rule gets its own label', () => {
+    // Production report: rule 6837 / 19 % normal, receipt 6837 / 19 % §13b — the
+    // postings differ (1406 Vorsteuer vs 1407/3837), so both sides must be readable.
+    state.rows = [{
+      ...(streamRows[0] as Record<string, unknown>),
+      suggestion: {
+        supplierId: 's1',
+        supplierName: 'Acme GmbH',
+        account: '6837',
+        vatRate: 0.19,
+        mode: 'normal',
+        conflict: { account: '6837', vatRate: 0.19, mode: 'reverseCharge' },
+        reading: { vendor: 'Software EMEA Ltd', totalCents: 11900, lines: [{ vatRate: 0, grossCents: 11900, account: '6837' }] },
+      },
+    }];
+    renderPage();
+    const row = screen.getByRole('row', { name: /Miete März/ });
+    expect(within(row).getByText('Regel ≠ Beleg — Regel: 6837 · 19 % · Beleg: 6837 · 19 % · §13b')).toBeInTheDocument();
+    fireEvent.click(within(row).getByRole('button', { name: 'Prüfen' }));
+    const ruleSide = screen.getByRole('button', { name: /Regel übernehmen/ });
+    const receiptSide = screen.getByRole('button', { name: /Beleg übernehmen/ });
+    expect(ruleSide.textContent).toBe('Regel übernehmen · 6837 · 19 %');
+    expect(receiptSide.textContent).toBe('Beleg übernehmen · 6837 · 19 % · §13b');
+  });
+
+  it('two different splits get side labels that name their parts', () => {
+    const ruleSplit = [
+      { account: '6837', vatRate: 0.19, grossCents: 8330, mode: 'normal' as const },
+      { account: '6830', vatRate: 0.07, grossCents: 3570, mode: 'normal' as const },
+    ];
+    const receiptSplit = [
+      { account: '6837', vatRate: 0.19, grossCents: 3570, mode: 'normal' as const },
+      { account: '6830', vatRate: 0.07, grossCents: 8330, mode: 'normal' as const },
+    ];
+    state.rows = [{
+      ...(streamRows[0] as Record<string, unknown>),
+      suggestion: {
+        supplierId: 's1',
+        supplierName: 'Acme GmbH',
+        mode: 'normal',
+        split: ruleSplit,
+        conflict: { mode: 'normal', split: receiptSplit },
+        reading: { vendor: 'Muster Handel', totalCents: 11900, lines: [] },
+      },
+    }];
+    renderPage();
+    fireEvent.click(within(screen.getByRole('row', { name: /Miete März/ })).getByRole('button', { name: 'Prüfen' }));
+    const ruleSide = screen.getByRole('button', { name: /Regel übernehmen/ });
+    const receiptSide = screen.getByRole('button', { name: /Beleg übernehmen/ });
+    expect(ruleSide.textContent).toBe(
+      `Regel übernehmen · Aufteilung auf 2 Konten · 6837 19 % · ${formatEUR(8330)} + 6830 7 % · ${formatEUR(3570)}`,
+    );
+    expect(receiptSide.textContent).toBe(
+      `Beleg übernehmen · Aufteilung auf 2 Konten · 6837 19 % · ${formatEUR(3570)} + 6830 7 % · ${formatEUR(8330)}`,
+    );
   });
 
   it('the dialog keeps the rule side when the receipt is not chosen', async () => {
