@@ -50,25 +50,52 @@ describe('buildRawMail', () => {
     expect(headers).toContain('From: billing@hetzner.com');
     expect(headers).toContain('Reply-To: bills@bumbleflies.de');
   });
+
+  it('threads a reply with In-Reply-To and References, and leaves both out otherwise', () => {
+    const reply = buildRawMail({
+      to: 'bills@bumbleflies.de',
+      subject: 'Re: Ihre Rechnung',
+      text: 'Danke',
+      inReplyTo: '<CAF-123@mail.gmail.com>',
+      references: '<CAF-123@mail.gmail.com>',
+    });
+    const headers = headersOf(reply);
+    expect(headers).toContain('In-Reply-To: <CAF-123@mail.gmail.com>');
+    expect(headers).toContain('References: <CAF-123@mail.gmail.com>');
+    // Still no From: Gmail fills in the credential's own account.
+    expect(headers.some((h) => h.startsWith('From: '))).toBe(false);
+
+    const plain = headersOf(buildRawMail({ to: 'bills@bumbleflies.de', subject: 'x', text: 'y' }));
+    expect(plain.some((h) => h.startsWith('In-Reply-To: '))).toBe(false);
+    expect(plain.some((h) => h.startsWith('References: '))).toBe(false);
+  });
 });
 
 describe('sendMail', () => {
-  it('hands the encoded message to Gmail and reports the id', async () => {
-    const sent: { userId?: string; raw?: string }[] = [];
+  function capturing() {
+    const sent: { userId?: string; raw: string; threadId?: string }[] = [];
     const client = {
       users: {
         messages: {
           list: async () => ({ data: {} }),
           get: async () => ({ data: {} }),
           attachments: { get: async () => ({ data: {} }) },
-          send: async (params: { userId: string; requestBody: { raw: string } }) => {
-            const raw = Buffer.from(params.requestBody.raw, 'base64url').toString('utf8');
-            sent.push({ userId: params.userId, raw });
+          send: async (params: { userId: string; requestBody: { raw: string; threadId?: string } }) => {
+            sent.push({
+              userId: params.userId,
+              raw: Buffer.from(params.requestBody.raw, 'base64url').toString('utf8'),
+              threadId: params.requestBody.threadId,
+            });
             return { data: { id: 'msg-1' } };
           },
         },
       },
     };
+    return { client, sent };
+  }
+
+  it('hands the encoded message to Gmail and reports the id', async () => {
+    const { client, sent } = capturing();
 
     const id = await sendMail(client, { to: 'bills@bumbleflies.de', subject: 'Test', text: 'Hallo' });
 
@@ -76,6 +103,48 @@ describe('sendMail', () => {
     expect(sent).toHaveLength(1);
     expect(sent[0].userId).toBe('me');
     expect(sent[0].raw).toContain('To: bills@bumbleflies.de');
+    // No thread for a new mail.
+    expect(sent[0].threadId).toBeUndefined();
+  });
+
+  it('posts into the given thread and keeps the raw message base64url', async () => {
+    const { client, sent } = capturing();
+
+    await sendMail(client, {
+      to: 'bills@bumbleflies.de',
+      subject: 'Re: Ihre Rechnung',
+      text: 'Abgelegt.',
+      threadId: 'thread-1',
+      inReplyTo: '<m1@mail.gmail.com>',
+      references: '<m1@mail.gmail.com>',
+    });
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0].threadId).toBe('thread-1');
+    expect(sent[0].raw).toContain('In-Reply-To: <m1@mail.gmail.com>');
+    expect(sent[0].raw).toContain('References: <m1@mail.gmail.com>');
+  });
+
+  it('base64url-encodes the raw message so the JSON body stays plain ASCII', async () => {
+    const bodies: string[] = [];
+    const client = {
+      users: {
+        messages: {
+          list: async () => ({ data: {} }),
+          get: async () => ({ data: {} }),
+          attachments: { get: async () => ({ data: {} }) },
+          send: async (params: { userId: string; requestBody: { raw: string } }) => {
+            bodies.push(params.requestBody.raw);
+            return { data: { id: 'msg-1' } };
+          },
+        },
+      },
+    };
+
+    await sendMail(client, { to: 'bills@bumbleflies.de', subject: 'Rechnung für März', text: 'Grüße' });
+
+    expect(bodies[0]).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(Buffer.from(bodies[0], 'base64url').toString('utf8')).toContain('Subject: =?UTF-8?B?');
   });
 
   it('fails loudly when the client cannot send (no `gmail.send` scope)', async () => {

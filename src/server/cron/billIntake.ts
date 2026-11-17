@@ -1,20 +1,14 @@
 import 'dotenv/config';
 import { connectMongo, disconnectMongo } from '../db/mongo';
 import { isCliEntrypoint } from '../lib/reconcile';
-import {
-  intakeAppUrl,
-  rematchBills,
-  resolveBillIntakeDeps,
-  runBillIntake,
-  sendIntakeConfirmation,
-} from '../jobs/billIntake';
+import { rematchBills, resolveBillIntakeDeps, runBillIntake } from '../jobs/billIntake';
 
 /**
  * Bill-intake entrypoint for the scheduler (Ofelia job-exec, hourly). Reads the
  * `bills` mailbox, files each PDF as a receipt and stores what it said; never
- * books and never creates rules. After a run that filed something it mails a
- * short summary back to the same mailbox — that mail is a notification, so a
- * failure to send it never fails the intake.
+ * books and never creates rules. `runBillIntake` also answers every mail that
+ * produced a bill, in that mail's own thread — the same job the "Jetzt abrufen"
+ * button runs. A reply is a notification, so failing to send one only warns.
  */
 async function main(): Promise<void> {
   await connectMongo();
@@ -23,20 +17,17 @@ async function main(): Promise<void> {
     const result = await runBillIntake(deps);
     console.log(
       `Bill intake done: messages=${result.messages} attachments=${result.attachments} ` +
-        `created=${result.created} skipped=${result.skipped} noText=${result.noText} failed=${result.failed}`,
+        `created=${result.created} skipped=${result.skipped} noText=${result.noText} failed=${result.failed} ` +
+        `notified=${result.notified}`,
     );
     for (const error of result.errors) console.warn(`Bill intake: ${error}`);
     if (result.failed > 0) process.exitCode = 1;
 
-    try {
-      const mailId = await sendIntakeConfirmation(result, {
-        gmail: deps.gmail,
-        to: deps.mailbox,
-        appUrl: intakeAppUrl(),
-      });
-      if (mailId) console.log(`Bill intake confirmation sent: ${mailId}`);
-    } catch (err) {
-      console.warn(`Bill intake confirmation not sent: ${err instanceof Error ? err.message : String(err)}`);
+    if (result.notified > 0) {
+      console.log(`Bill intake confirmation sent: ${result.notified}`);
+    }
+    for (const error of result.notifyErrors) {
+      console.warn(`Bill intake confirmation not sent: ${error}`);
     }
 
     const rematch = await rematchBills();

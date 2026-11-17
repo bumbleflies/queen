@@ -67,8 +67,9 @@ export const billsRouter = router({
   }),
 
   /**
-   * Read the mailbox now (admin). Same job as the nightly run, capped so the
-   * click returns quickly.
+   * Read the mailbox now (admin). The same job as the hourly run — including
+   * one confirmation reply per mail that produced a bill, in that mail's thread
+   * — capped so the click returns quickly.
    *
    * Expected failures are returned, not thrown: Traefik in front of this app
    * replaces any 5xx body with its HTML error page, so a thrown BAD_GATEWAY

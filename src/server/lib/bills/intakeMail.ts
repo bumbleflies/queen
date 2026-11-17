@@ -1,93 +1,112 @@
 import { formatGermanEUR } from '../money';
 
-/** One bill that the intake filed in this run. */
-export interface IntakeMailBill {
+/** One bill the intake filed from the mail being answered. */
+export interface IntakeReplyBill {
+  /** The attachment name as it arrived: that is what the reader recognises in the mailbox. */
   fileName: string;
   vendorName: string;
+  invoiceNumber: string;
   /** `null` when the PDF had no readable total — never rendered as 0,00 €. */
   grossCents: number | null;
+  /** Filed, but without a text layer (a scan) — worth a look by hand. */
+  scan: boolean;
+  /** Needed for the year folder the PDF was filed into. */
   receivedAt: Date;
 }
 
-export interface IntakeMailInput {
-  created: IntakeMailBill[];
-  /** Bills filed but without a text layer (a scan) — worth a look by hand. */
-  noText: number;
-  /** Bills that could not be read at all; the next run retries them. */
-  failed: number;
+export interface IntakeReplyInput {
+  /** Subject of the mail being answered; a reply prefix is added, not doubled. */
+  subject: string;
+  /** Bills this run recorded from that mail (parsed or scanned) — never empty. */
+  bills: IntakeReplyBill[];
+  /** Attachments of that same mail whose filing or reading failed in this run. */
+  failed: string[];
   /** Origin of the deployment, e.g. `https://queen.bumbleflies.de`. */
   appUrl: string;
+  /** When this run processed the mail. */
+  processedAt: Date;
 }
 
-export interface IntakeMail {
+export interface IntakeReply {
   subject: string;
   text: string;
 }
 
-/** dd.mm.yyyy without depending on the runtime's locale data (same reason as `formatGermanEUR`). */
-function germanDate(date: Date): string {
+/**
+ * The German wall clock of a date. The container runs with TZ=Europe/Berlin,
+ * but the time zone is passed explicitly so a test or a developer machine
+ * produces the same text.
+ */
+const BERLIN_CLOCK = new Intl.DateTimeFormat('de-DE', {
+  timeZone: 'Europe/Berlin',
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
+/** `dd.mm.yyyy hh:mm`, built from parts so no locale separator sneaks in. */
+function germanDateTime(date: Date): string {
   if (Number.isNaN(date.getTime())) return '';
-  const pad = (n: number): string => String(n).padStart(2, '0');
-  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()}`;
+  const parts = BERLIN_CLOCK.formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes): string =>
+    parts.find((p) => p.type === type)?.value ?? '';
+  return `${part('day')}.${part('month')}.${part('year')} ${part('hour')}:${part('minute')}`;
 }
 
-function euro(cents: number | null): string {
-  return cents === null ? 'Betrag unbekannt' : formatGermanEUR(cents);
+/** `Re:`, `AW:` and `Antw:` are the same answer prefix in the two languages we get mail in. */
+const REPLY_PREFIX = /^\s*(?:re|aw|antw)\s*:\s*/i;
+
+function replySubject(subject: string): string {
+  let base = subject.trim();
+  while (REPLY_PREFIX.test(base)) base = base.replace(REPLY_PREFIX, '');
+  // An untitled mail still gets an answer a reader can place.
+  return `Re: ${base || 'Beleg eingegangen'}`;
 }
 
-function count(n: number, one: string, many: string): string {
-  return `${n} ${n === 1 ? one : many}`;
+function billLines(bill: IntakeReplyBill): string[] {
+  const vendor = bill.vendorName.trim() || 'Unbekannter Absender';
+  const number = bill.invoiceNumber.trim() ? `Rechnung ${bill.invoiceNumber.trim()}` : 'ohne Rechnungsnummer';
+  // A scan has no read total, and an unreadable one is omitted — never a guessed 0,00 €.
+  const amount = bill.scan || bill.grossCents === null ? '' : ` · ${formatGermanEUR(bill.grossCents)}`;
+  return [
+    `  • ${vendor} · ${number}${amount}`,
+    bill.scan
+      ? '    Scan ohne lesbaren Text — bitte bei Bedarf manuell ansehen'
+      : `    abgelegt als ${bill.fileName}`,
+  ];
 }
 
 /**
- * The confirmation mail sent to the bills mailbox after a run that actually
- * filed something. Deliberately plain text: it is a notification to ourselves,
- * not a customer-facing document.
+ * The answer to one incoming bill mail, posted into that mail's own Gmail
+ * thread. Deliberately plain text and in German: it is a notification to
+ * ourselves, not a customer-facing document.
  *
- * Returns `null` when nothing new arrived, so an hourly schedule stays quiet.
+ * Returns `null` when this mail produced no bill, so a mail whose attachments
+ * all failed (or a re-run over known bills) stays silent.
  */
-export function intakeMail(input: IntakeMailInput): IntakeMail | null {
-  if (input.created.length === 0) return null;
+export function intakeReply(input: IntakeReplyInput): IntakeReply | null {
+  if (input.bills.length === 0) return null;
 
-  const n = input.created.length;
-  const subject =
-    n === 1
-      ? 'Neuer Beleg im Postfach: 1 Beleg abgelegt'
-      : `Neue Belege im Postfach: ${n} Belege abgelegt`;
+  const years = [...new Set(input.bills.map((bill) => bill.receivedAt.getFullYear()))].join(', ');
 
   const lines = [
-    'Hallo,',
+    'Diese Rechnung ist bei queen eingegangen und abgelegt — die Mail kann ignoriert werden.',
     '',
-    `die Beleg-Erkennung hat ${n === 1 ? 'einen neuen Beleg' : `${n} neue Belege`} aus dem Postfach geholt, ` +
-      'im Belege-Ordner abgelegt und ausgelesen:',
-    '',
+    'Belege:',
   ];
+  for (const bill of input.bills) lines.push(...billLines(bill));
 
-  for (const bill of input.created) {
-    const vendor = bill.vendorName.trim() || 'Absender unbekannt';
-    lines.push(`  ${germanDate(bill.receivedAt)}  ${vendor}  ${bill.fileName}  ${euro(bill.grossCents)}`);
+  lines.push('', `Ordner: ${years} · Verarbeitet: ${germanDateTime(input.processedAt)}`);
+
+  if (input.failed.length > 0) {
+    lines.push('', 'Nicht verarbeitet (wird beim nächsten Lauf erneut versucht):');
+    for (const fileName of input.failed) lines.push(`  • ${fileName}`);
   }
 
-  if (input.noText > 0) {
-    lines.push(
-      '',
-      `${count(input.noText, 'Beleg', 'Belege')} ohne lesbaren Text (Scan) — bitte einmal von Hand ansehen.`,
-    );
-  }
-  if (input.failed > 0) {
-    lines.push(
-      '',
-      `${count(input.failed, 'Beleg konnte', 'Belege konnten')} nicht gelesen werden; der nächste Lauf versucht es erneut.`,
-    );
-  }
+  lines.push('', 'In Queen ansehen:', `${input.appUrl.replace(/\/+$/, '')}/finance?tab=bills`);
 
-  lines.push(
-    '',
-    'In Queen ansehen:',
-    `${input.appUrl.replace(/\/+$/, '')}/finance?tab=bills`,
-    '',
-    'Diese Mail schreibt Queen automatisch, sobald neue Belege eingegangen sind.',
-  );
-
-  return { subject, text: lines.join('\n') };
+  return { subject: replySubject(input.subject), text: lines.join('\n') };
 }

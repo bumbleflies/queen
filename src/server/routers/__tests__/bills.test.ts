@@ -1,10 +1,23 @@
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import mongoose from 'mongoose';
 import { Bill } from '../../models/Bill';
 import { BankTransaction } from '../../models/BankTransaction';
 import { appRouter } from '../../trpc';
-import { rematchBills } from '../../jobs/billIntake';
+import { rematchBills, type BillIntakeDeps } from '../../jobs/billIntake';
+import type { OutgoingMail } from '../../services/GmailService';
+import { gmailWith, intakeDeps } from '../../jobs/__tests__/helpers/intakeFixtures';
 import { adminCaller, initLedgerModels, resetLedgerDb, skipIfNoDb } from './helpers/ledgerFixtures';
+
+// "Jetzt abrufen" resolves the same production deps the cron does. Only the
+// resolution is swapped; the job itself is the real one.
+const intake = vi.hoisted(() => ({ deps: null as BillIntakeDeps | null }));
+vi.mock('../../jobs/billIntake', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../jobs/billIntake')>();
+  return {
+    ...actual,
+    resolveBillIntakeDeps: async () => intake.deps ?? actual.resolveBillIntakeDeps(),
+  };
+});
 
 function userCaller() {
   return appRouter.createCaller({
@@ -20,6 +33,7 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   if (mongoose.connection.readyState !== 1) return;
+  intake.deps = null;
   await resetLedgerDb();
   await Bill.deleteMany({});
 });
@@ -136,5 +150,60 @@ describe('bills mutations', () => {
     const result = await adminCaller().bills.intakeNow();
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toContain('Belege-Ordner');
+  });
+
+  it('intakeNow answers the mail in its thread, exactly like the hourly cron', async (ctx) => {
+    skipIfNoDb(ctx);
+    const { client } = gmailWith([
+      { id: 'm1', fileName: 'rechnung.pdf', bytes: Buffer.from('%PDF-1.4 router') },
+    ]);
+    const replies: OutgoingMail[] = [];
+    intake.deps = intakeDeps({
+      client,
+      sendReply: async (mail) => {
+        replies.push(mail);
+        return 'sent-1';
+      },
+    });
+
+    const result = await adminCaller().bills.intakeNow();
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.created).toBe(1);
+    expect(result.notified).toBe(1);
+    expect(result.notifyErrors).toEqual([]);
+    expect(replies).toHaveLength(1);
+    expect(replies[0]).toMatchObject({
+      to: 'bills@bumbleflies.de',
+      subject: 'Re: Ihre Rechnung',
+      threadId: 'thread-m1',
+      inReplyTo: '<m1@mail.example>',
+    });
+    expect(replies[0].text).toContain('abgelegt als rechnung.pdf');
+    expect(replies[0].text).toContain('https://queen.example/finance?tab=bills');
+  });
+
+  it('intakeNow reports a reply it could not send without failing the run', async (ctx) => {
+    skipIfNoDb(ctx);
+    const { client } = gmailWith([
+      { id: 'm1', fileName: 'rechnung.pdf', bytes: Buffer.from('%PDF-1.4 router') },
+    ]);
+    intake.deps = intakeDeps({
+      client,
+      sendReply: async () => {
+        throw new Error('es fehlt der Zugriff `gmail.send`');
+      },
+    });
+
+    const result = await adminCaller().bills.intakeNow();
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.created).toBe(1);
+    expect(result.notified).toBe(0);
+    expect(result.notifyErrors).toHaveLength(1);
+    expect(result.notifyErrors[0]).toContain('gmail.send');
+    expect(await Bill.countDocuments()).toBe(1);
   });
 });
