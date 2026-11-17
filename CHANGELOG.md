@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.33.2](https://github.com/bumbleflies/queen/compare/queen-v0.33.1...queen-v0.33.2) (2026-11-17)
+
+
+### Bug Fixes
+
+* **finance:** make the two sides of a rule/receipt conflict distinguishable ([#335](https://github.com/bumbleflies/queen/issues/335)) ([9f3fdd1](https://github.com/bumbleflies/queen/commit/9f3fdd197109ab668a03568a5583774fc44063ff))
+
 ## [0.33.1](https://github.com/bumbleflies/queen/compare/queen-v0.33.0...queen-v0.33.1) (2026-11-17)
 
 
