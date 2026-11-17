@@ -32,3 +32,4 @@ The plans in `docs/plans/` say what was intended. These logs say what actually s
 | 2026-10-22 | [Sign-in links for people without a Google account](2026-10-22_accountant-invite-login.md) | pending |
 | 2026-11-03 | [Hourly bill intake and its confirmation mail](2026-11-03_bill-intake-hourly-mail.md) | pending |
 | 2026-11-17 | [Bill intake replies in each mail's own thread](2026-11-17_intake-threaded-reply.md) | pending |
+| 2026-11-17 | [Distinguishable rule/receipt conflict labels](2026-11-17_rule-receipt-conflict-label.md) | pending |

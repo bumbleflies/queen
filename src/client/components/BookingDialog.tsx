@@ -3,6 +3,7 @@ import { trpc } from '../lib/trpc';
 import { formatDate, formatEUR } from '../lib/format';
 import { useToast } from '../components/Toast';
 import { previewBankPosting } from '../lib/bookingPreview';
+import { formatBooking } from '../lib/bookingLabel';
 import { useLanguage } from '../i18n/LanguageContext';
 import { REVERSE_CHARGE_RATE, bankPostingSplit, type BankBookingMode, type SplitPart } from '../../server/lib/accounting/postingRules';
 import { strongReceipt } from '../../server/lib/accounting/receipts';
@@ -88,12 +89,6 @@ export function BookingDialog({ year, tx, onDone }: { year: number; tx: InboxRow
     setMode(source.mode);
   }
 
-  function describe(source: { account?: string; vatRate?: number; mode: BankBookingMode; split?: SplitPart[] }): string {
-    if (source.split && source.split.length >= 2) return t('finance.outcome.split').replace('{n}', String(source.split.length));
-    if (source.mode === 'vatOnly') return t('finance.outcome.vatOnly');
-    return `${source.account ?? '—'} · ${Math.round((source.vatRate ?? 0) * 100)} %`;
-  }
-
   const preview = useMemo(() => {
     if (!split) return previewBankPosting({ direction: tx.direction, amountCents: tx.amountCents, account, vatRate, mode });
     try {
@@ -175,7 +170,7 @@ export function BookingDialog({ year, tx, onDone }: { year: number; tx: InboxRow
                 aria-pressed={side === 'rule'}
                 onClick={() => chooseSide('rule')}
               >
-                {t('bookings.dialog.sideRule')} · {tx.suggestion ? describe(tx.suggestion) : ''}
+                {t('bookings.dialog.sideRule')} · {tx.suggestion ? formatBooking(tx.suggestion, t) : ''}
               </button>
               <button
                 type="button"
@@ -183,7 +178,7 @@ export function BookingDialog({ year, tx, onDone }: { year: number; tx: InboxRow
                 aria-pressed={side === 'receipt'}
                 onClick={() => chooseSide('receipt')}
               >
-                {t('bookings.dialog.sideReceipt')} · {describe(conflict)}
+                {t('bookings.dialog.sideReceipt')} · {formatBooking(conflict, t)}
               </button>
             </div>
           </div>

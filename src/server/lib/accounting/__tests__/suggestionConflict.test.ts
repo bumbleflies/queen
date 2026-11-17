@@ -50,6 +50,19 @@ describe('suggestionConflict', () => {
     expect(suggestionConflict(rule(), fromReceipt({ mode: 'reverseCharge', vatRate: 0.19 }))).toMatchObject({ mode: 'reverseCharge' });
   });
 
+  it('keeps a §13b receipt with the same account and rate a real conflict, not a spurious one', () => {
+    // Reported in production: rule 6837 / 19 % normal against receipt 6837 / 19 %
+    // reverse charge. The postings differ (1406 Vorsteuer vs 1407/3837), so the
+    // row must stay a conflict — and the client has to label the two sides
+    // distinguishably (`§13b`), which is where the report came from.
+    const conflict = suggestionConflict(rule(), fromReceipt({ mode: 'reverseCharge', vatRate: 0.19 }));
+    expect(conflict).toEqual({ account: '6837', vatRate: 0.19, mode: 'reverseCharge', split: undefined });
+  });
+
+  it('is null for two identical §13b sides', () => {
+    expect(suggestionConflict(rule({ mode: 'reverseCharge' }), fromReceipt({ mode: 'reverseCharge' }))).toBeNull();
+  });
+
   it('treats a split receipt as a conflict with any single rule', () => {
     expect(suggestionConflict(rule({ account: '6640' }), splitReceipt())?.split).toHaveLength(2);
   });

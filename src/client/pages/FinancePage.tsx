@@ -13,6 +13,7 @@ import { LedgerViews } from '../components/LedgerViews';
 import { RuleDialog, RulesSection, draftFromTransaction, type RuleDraft } from '../components/RulesSection';
 import { FullSyncDialog, ReceiptPickDialog, StornoDialog, type StornoTarget } from '../components/FinanceDialogs';
 import { suggestionsFor, type OpenItem, type Suggestion } from '../lib/paymentSuggest';
+import { formatBooking } from '../lib/bookingLabel';
 import type { BankBookingMode, SplitPart } from '../../server/lib/accounting/postingRules';
 
 type Tab = 'open' | 'done' | 'ignored' | 'rules' | 'journal' | 'bills';
@@ -376,12 +377,7 @@ export function FinancePage() {
       </span>
     ) : null;
     const s = r.suggestion;
-    const label = (x: { account?: string; vatRate?: number; mode: BankBookingMode; split?: SplitPart[] }) =>
-      x.split && x.split.length > 1
-        ? t('finance.outcome.split').replace('{n}', String(x.split.length))
-        : x.mode === 'vatOnly'
-          ? t('finance.outcome.vatOnly')
-          : `${x.account ?? '—'} · ${Math.round((x.vatRate ?? 0) * 100)} %`;
+    const label = (x: { account?: string; vatRate?: number; mode: BankBookingMode; split?: SplitPart[] }) => formatBooking(x, t);
     return (
       <>
         {r.direction === 'in' ? <div className="lbl" style={{ marginTop: 6 }}>{invoiceResult.reason}</div> : null}
@@ -395,9 +391,7 @@ export function FinancePage() {
         ) : s ? (
           <div className="outcome ok">
             <span className="what">
-              ✓ {s.split ? t('finance.outcome.split').replace('{n}', String(s.split.length)) : s.mode === 'vatOnly' ? t('finance.outcome.vatOnly') : `${s.account ?? '—'} ${accountNames.get(s.account ?? '') ?? ''}`.trim()}
-              {s.mode === 'reverseCharge' ? ` · ${t('finance.outcome.reverseCharge')}` : ''}
-              {s.vatRate !== undefined ? ` · ${Math.round(s.vatRate * 100)} %` : ''}
+              ✓ {formatBooking(s, t, (n) => accountNames.get(n))}
             </span>
             <span className="rc">
               {s.matchedBy === 'receipt'
@@ -408,7 +402,7 @@ export function FinancePage() {
                   ? t('finance.outcome.history').replace('{date}', formatDate(s.lastBookedAt))
                   : t('finance.outcome.rule').replace('{name}', s.supplierName)}
             </span>
-            {s.reading
+            {s.reading && !s.split
               ? s.reading.lines.map((l) => (
                 <span className="rc num" key={`${l.account}-${l.vatRate}-${l.grossCents}`}>
                   {Math.round(l.vatRate * 100)} % · {formatEUR(l.grossCents)}
