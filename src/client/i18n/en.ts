@@ -651,6 +651,7 @@ export const en: Dict = {
   'bills.fetch': 'Fetch now',
   'bills.fetching': 'Fetching…',
   'bills.fetched': 'Fetched: {new} new, {known} already known, {failed} failed',
+  'bills.replyFailed': 'Bill filed, confirmation mail failed: {error}',
   'bills.empty': 'No bills from the mailbox in this year yet.',
   'bills.col.received': 'Received',
   'bills.col.sender': 'Sender',

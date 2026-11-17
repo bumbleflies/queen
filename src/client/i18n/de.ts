@@ -648,6 +648,7 @@ export const de = {
   'bills.fetch': 'Jetzt abrufen',
   'bills.fetching': 'Rufe ab …',
   'bills.fetched': 'Abgerufen: {new} neu, {known} bereits vorhanden, {failed} Fehler',
+  'bills.replyFailed': 'Beleg abgelegt, Bestätigungsmail fehlgeschlagen: {error}',
   'bills.empty': 'Noch keine Rechnungen aus dem Postfach in diesem Jahr.',
   'bills.col.received': 'Eingang',
   'bills.col.sender': 'Absender',

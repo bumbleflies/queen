@@ -36,7 +36,10 @@ per run and sent only by the cron entrypoint (`cron/billIntake.ts` did the send;
   failed, and the `…/finance?tab=bills` link. Plain text only.
 - **A send failure never fails intake.** It lands on the result as
   `notifyErrors` (plus a `notified` counter) and the cron only warns; `created`/
-  `failed` and the exit code are untouched.
+  `failed` and the exit code are untouched. The Belege tab reports it too: after
+  "Jetzt abrufen" the admin sees `Beleg abgelegt, Bestätigungsmail
+  fehlgeschlagen: …` next to the fetched-count message (`bills.replyFailed`,
+  DE + EN), so a token without `gmail.send` is visible where the click happened.
 
 ## Why
 
@@ -56,6 +59,7 @@ attachment, so a reply can never match the query. Commented in
 - `src/server/jobs/billIntake.ts` — reply per mail inside `runBillIntake`, `sendReply`/`appUrl` deps, `notified`/`notifyErrors` on the result, `createdBills` and `sendIntakeConfirmation` removed.
 - `src/server/cron/billIntake.ts` — no send of its own; logs `notified` and warns per `notifyErrors` entry.
 - `src/server/routers/bills.ts` — `intakeNow` documents that it replies too (no code change needed: it runs the same job).
+- `src/client/components/BillsSection.tsx`, `src/client/i18n/{de,en}.ts` — the "Jetzt abrufen" result warns when a reply could not be sent (`bills.replyFailed`) (+ test).
 - `src/server/jobs/__tests__/helpers/intakeFixtures.ts` — shared Gmail/Drive fakes for the job and router tests.
 - `AGENTS.md`, `docs/plans/2026-11-17_intake-threaded-reply.md`.
 
