@@ -14,8 +14,9 @@ import {
   listBillMessages,
   sendMail,
   type GmailClientLike,
+  type OutgoingMail,
 } from '../services/GmailService';
-import { intakeMail, type IntakeMailBill } from '../lib/bills/intakeMail';
+import { intakeReply, type IntakeReplyBill } from '../lib/bills/intakeMail';
 import { ensureYearFolder, type FolderDriveLike } from '../services/receiptsFolder';
 import { createOAuth2Client, uploadInvoicePdf, type DriveClientLike } from '../services/DriveService';
 import { extractPdfText } from '../services/receiptText';
@@ -45,6 +46,14 @@ export interface BillIntakeDeps {
   upload: (file: { buffer: Buffer; fileName: string; folderId: string }) => Promise<{ fileId: string; link: string }>;
   receiptsFolderId: string;
   mailbox: string;
+  /**
+   * Sends one confirmation reply, in the thread of the mail it answers.
+   * Production posts it through Gmail (`sendMail`); injectable so tests and
+   * other callers never need a network.
+   */
+  sendReply?: (mail: OutgoingMail) => Promise<string>;
+  /** Origin for the link in the reply; defaults to `QUEEN_APP_URL`, then production. */
+  appUrl?: string;
   parse?: typeof parseBillText;
   extractText?: (bytes: Uint8Array) => Promise<string>;
   now?: Date;
@@ -61,8 +70,13 @@ export interface BillIntakeResult {
   /** Bills that could not be filed or read; a `failed` bill is retried next run. */
   failed: number;
   errors: string[];
-  /** The bills this run filed, for the confirmation mail; empty when nothing arrived. */
-  createdBills: IntakeMailBill[];
+  /** Confirmation replies posted, one per mail that produced a bill. */
+  notified: number;
+  /**
+   * Replies that could not be sent. Never counted in `failed` and never a
+   * reason to fail the run: the bills are already filed.
+   */
+  notifyErrors: string[];
 }
 
 function message(err: unknown): string {
@@ -75,18 +89,22 @@ function isDuplicateKey(err: unknown): boolean {
 
 /**
  * One intake pass: list bill mails, read every PDF attachment, file it into
- * `<receipts folder>/<year>/` and store what the PDF said.
+ * `<receipts folder>/<year>/`, store what the PDF said and answer each mail
+ * that produced a bill — in that mail's own Gmail thread.
  *
- * Writes `Bill` documents and Drive files only. It never touches
- * `BankTransaction`, `Supplier`, `JournalEntry` or a booking rule: a bill that
- * arrived is not a payment, and a vendor address in a PDF is not a rule an
+ * Writes `Bill` documents, Drive files and one reply per handled mail. It never
+ * touches `BankTransaction`, `Supplier`, `JournalEntry` or a booking rule: a bill
+ * that arrived is not a payment, and a vendor address in a PDF is not a rule an
  * admin confirmed. Idempotent per (messageId, attachmentId) and per content
- * hash, so re-running is safe and cheap.
+ * hash, so re-running is safe and cheap — and silent: a mail whose bills are
+ * already known produced nothing and therefore gets no second reply.
  */
 export async function runBillIntake(deps: BillIntakeDeps): Promise<BillIntakeResult> {
   const now = deps.now ?? new Date();
   const parse = deps.parse ?? parseBillText;
   const extractText = deps.extractText ?? extractPdfText;
+  const appUrl = deps.appUrl ?? intakeAppUrl();
+  const sendReply = deps.sendReply ?? ((mail: OutgoingMail) => sendMail(deps.gmail, mail));
   const result: BillIntakeResult = {
     messages: 0,
     attachments: 0,
@@ -95,7 +113,8 @@ export async function runBillIntake(deps: BillIntakeDeps): Promise<BillIntakeRes
     noText: 0,
     failed: 0,
     errors: [],
-    createdBills: [],
+    notified: 0,
+    notifyErrors: [],
   };
 
   const messages = await listBillMessages(deps.gmail, {
@@ -117,6 +136,10 @@ export async function runBillIntake(deps: BillIntakeDeps): Promise<BillIntakeRes
     const receivedAt = msg.internalDate ? new Date(Number(msg.internalDate)) : now;
     const from = headerValue(msg, 'From');
     const subject = headerValue(msg, 'Subject');
+    // What this mail produced: its reply lists exactly these bills, plus the
+    // attachments of this same mail that failed in this run.
+    const replyBills: IntakeReplyBill[] = [];
+    const failedAttachments: string[] = [];
 
     let attachments;
     try {
@@ -168,6 +191,7 @@ export async function runBillIntake(deps: BillIntakeDeps): Promise<BillIntakeRes
         // bill is not recorded and the next run tries again.
         result.failed += 1;
         result.errors.push(`${attachment.fileName}: ${message(err)}`);
+        failedAttachments.push(attachment.fileName);
         continue;
       }
 
@@ -200,18 +224,23 @@ export async function runBillIntake(deps: BillIntakeDeps): Promise<BillIntakeRes
           await Bill.create(doc);
         }
         result.created += 1;
-        result.createdBills.push({
-          // The name as it arrived: the summary is read in the mailbox, where
-          // the attachment is what the reader recognises.
-          fileName: attachment.fileName,
-          vendorName: parsed?.vendorName ?? displayNameFromHeader(from),
-          grossCents: parsed?.grossCents ?? null,
-          receivedAt,
-        });
+        if (status === 'parsed' || status === 'noText') {
+          replyBills.push({
+            // The name as it arrived: the reply is read in the mailbox, where the
+            // attachment is what the reader recognises.
+            fileName: attachment.fileName,
+            vendorName: parsed?.vendorName ?? displayNameFromHeader(from),
+            invoiceNumber: parsed?.invoiceNumber ?? '',
+            grossCents: parsed?.grossCents ?? null,
+            scan: status === 'noText',
+            receivedAt,
+          });
+        }
         if (status === 'noText') result.noText += 1;
         if (status === 'failed') {
           result.failed += 1;
           result.errors.push(`${attachment.fileName}: ${textError}`);
+          failedAttachments.push(attachment.fileName);
         }
       } catch (err) {
         if (isDuplicateKey(err)) {
@@ -221,6 +250,35 @@ export async function runBillIntake(deps: BillIntakeDeps): Promise<BillIntakeRes
         result.failed += 1;
         result.errors.push(`${attachment.fileName}: ${message(err)}`);
       }
+    }
+
+    // One reply per incoming mail, in that mail's own thread — from the hourly
+    // cron and from "Jetzt abrufen" alike. A reply carries no attachment and the
+    // intake query is `has:attachment`, so a reply can never be picked up again.
+    if (replyBills.length === 0) continue;
+    const reply = intakeReply({
+      subject,
+      bills: replyBills,
+      failed: failedAttachments,
+      appUrl,
+      processedAt: now,
+    });
+    if (!reply) continue;
+
+    const originalMessageId = headerValue(msg, 'Message-ID');
+    try {
+      await sendReply({
+        to: deps.mailbox,
+        subject: reply.subject,
+        text: reply.text,
+        ...(msg.threadId ? { threadId: msg.threadId } : {}),
+        ...(originalMessageId ? { inReplyTo: originalMessageId, references: originalMessageId } : {}),
+      });
+      result.notified += 1;
+    } catch (err) {
+      // A reply is a notification: it never fails the intake, and the bills are
+      // filed either way. The cron only warns.
+      result.notifyErrors.push(`Nachricht ${id}: ${message(err)}`);
     }
   }
 
@@ -301,28 +359,6 @@ export async function rematchBills(opts: { year?: number } = {}): Promise<{ link
 }
 
 /**
- * Tell the mailbox what just arrived. One mail per run that filed something,
- * so an hourly schedule stays quiet when there is no new bill.
- *
- * Returns the Gmail message id, or `null` when there was nothing to report.
- * Callers must treat a throw as informational: the bills are already filed,
- * and a token minted before `gmail.send` was added simply cannot send.
- */
-export async function sendIntakeConfirmation(
-  result: BillIntakeResult,
-  deps: { gmail: GmailClientLike; to: string; appUrl: string },
-): Promise<string | null> {
-  const mail = intakeMail({
-    created: result.createdBills,
-    noText: result.noText,
-    failed: result.failed,
-    appUrl: deps.appUrl,
-  });
-  if (!mail) return null;
-  return sendMail(deps.gmail, { ...mail, to: deps.to });
-}
-
-/**
  * Production dependencies: the receipts folder from settings, the Gmail/Drive
  * credential of the admin who saved them. Throws with a human sentence when
  * something is not configured — the caller decides how to show it.
@@ -339,8 +375,9 @@ export async function resolveBillIntakeDeps(): Promise<BillIntakeDeps> {
   const auth = createOAuth2Client(access.refreshToken);
   auth.setCredentials({ refresh_token: access.refreshToken, access_token: access.accessToken });
   const drive = google.drive({ version: 'v3', auth }) as unknown as FolderDriveLike & DriveClientLike;
+  const gmail = createGmailClient(access.refreshToken, access.accessToken);
   return {
-    gmail: createGmailClient(access.refreshToken, access.accessToken),
+    gmail,
     drive,
     upload: (file) =>
       // `skip`: a vendor PDF already in the year folder is the same document.
@@ -348,6 +385,8 @@ export async function resolveBillIntakeDeps(): Promise<BillIntakeDeps> {
       uploadInvoicePdf({ auth, ifExists: 'skip', ...file }, { drive }),
     receiptsFolderId: folder.id,
     mailbox: billsMailbox(),
+    appUrl: intakeAppUrl(),
+    sendReply: (mail) => sendMail(gmail, mail),
   };
 }
 

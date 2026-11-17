@@ -24,8 +24,12 @@ export interface GmailClientLike {
       /**
        * Sending needs the `gmail.send` scope, which a token minted for reading
        * does not carry — so it stays optional and `sendMail` says what to do.
+       * `threadId` posts the message into an existing conversation.
        */
-      send?(params: { userId: string; requestBody: { raw: string } }): Promise<{ data: { id?: string | null } }>;
+      send?(params: {
+        userId: string;
+        requestBody: { raw: string; threadId?: string };
+      }): Promise<{ data: { id?: string | null } }>;
     };
   };
 }
@@ -166,6 +170,12 @@ export interface OutgoingMail {
   replyTo?: string;
   date?: Date;
   messageId?: string;
+  /** Gmail thread to post into: a reply lands in that conversation and not as a new one. */
+  threadId?: string;
+  /** `Message-ID` of the mail being answered, with its angle brackets. */
+  inReplyTo?: string;
+  /** The same chain for mail clients that only look at `References`. */
+  references?: string;
 }
 
 /** RFC 2047 encoded-word for anything that is not plain printable ASCII. */
@@ -195,6 +205,8 @@ export function buildRawMail(mail: OutgoingMail): string {
     `Subject: ${encodeHeader(mail.subject)}`,
     `Date: ${date.toUTCString()}`,
     `Message-ID: ${messageId}`,
+    ...(mail.inReplyTo ? [`In-Reply-To: ${mail.inReplyTo}`] : []),
+    ...(mail.references ? [`References: ${mail.references}`] : []),
     'MIME-Version: 1.0',
     'Content-Type: text/plain; charset=UTF-8',
     'Content-Transfer-Encoding: base64',
@@ -204,7 +216,9 @@ export function buildRawMail(mail: OutgoingMail): string {
 
 /**
  * Send one mail as the authenticated account. Returns the Gmail message id.
- * Throws a sentence naming the missing scope when the token cannot send.
+ * With a `threadId` the message is posted into that thread, so a reply shows
+ * up under the mail it answers. Throws a sentence naming the missing scope when
+ * the token cannot send.
  */
 export async function sendMail(client: GmailClientLike, mail: OutgoingMail): Promise<string> {
   if (!client.users.messages.send) {
@@ -212,7 +226,10 @@ export async function sendMail(client: GmailClientLike, mail: OutgoingMail): Pro
   }
   const res = await client.users.messages.send({
     userId: 'me',
-    requestBody: { raw: Buffer.from(buildRawMail(mail), 'utf8').toString('base64url') },
+    requestBody: {
+      raw: Buffer.from(buildRawMail(mail), 'utf8').toString('base64url'),
+      ...(mail.threadId ? { threadId: mail.threadId } : {}),
+    },
   });
   return res.data.id ?? '';
 }

@@ -13,7 +13,8 @@ import {
   isMissingGmailScope,
   type BillIntakeDeps,
 } from '../billIntake';
-import type { GmailClientLike, GmailMessage } from '../../services/GmailService';
+import type { OutgoingMail } from '../../services/GmailService';
+import { driveStub, gmailThread, gmailWith, intakeDeps, resetBills } from './helpers/intakeFixtures';
 
 beforeAll(async () => {
   await connectMongo();
@@ -23,102 +24,22 @@ beforeAll(async () => {
 beforeEach(async () => {
   if (mongoose.connection.readyState !== 1) return;
   await Promise.all([
-    Bill.deleteMany({}),
+    resetBills(),
     BankTransaction.deleteMany({}),
     Supplier.deleteMany({}),
     Counter.deleteMany({}),
   ]);
 });
 
-const PDF_TEXT = `Hetzner Online GmbH
-Rechnungsnummer: R-1000
-IBAN: DE44 5009 2100 0000 0595 12
-Summe netto 100,00 EUR
-19,00 % USt 19,00 EUR
-Summe brutto 119,00 EUR`;
-
-/** Nested multipart exactly like Gmail sends it: attachment bytes come from attachments.get. */
-function gmailWith(files: { id: string; fileName: string; bytes: Buffer; internalDate?: string }[], opts: { inline?: boolean } = {}) {
-  const fetched: string[] = [];
-  const messages = new Map<string, GmailMessage>();
-  for (const file of files) {
-    const attachmentId = `att-${file.id}`;
-    messages.set(file.id, {
-      id: file.id,
-      internalDate: file.internalDate ?? String(Date.UTC(2026, 9, 1, 8)),
-      payload: {
-        mimeType: 'multipart/mixed',
-        headers: [
-          { name: 'From', value: '"Hetzner Online GmbH" <billing@hetzner.com>' },
-          { name: 'Subject', value: 'Ihre Rechnung' },
-        ],
-        parts: [
-          {
-            mimeType: 'multipart/alternative',
-            parts: [
-              { mimeType: 'text/plain', body: { data: Buffer.from('siehe Anhang').toString('base64url') } },
-              {
-                mimeType: 'application/pdf',
-                filename: file.fileName,
-                body: opts.inline
-                  ? { data: file.bytes.toString('base64url'), size: file.bytes.length }
-                  : { attachmentId, size: file.bytes.length },
-              },
-            ],
-          },
-        ],
-      },
-    });
-  }
-  const client: GmailClientLike = {
-    users: {
-      messages: {
-        list: async () => ({ data: { messages: files.map((f) => ({ id: f.id })) } }),
-        get: async ({ id }) => ({ data: messages.get(id)! }),
-        attachments: {
-          get: async ({ id }) => {
-            fetched.push(id);
-            const file = files.find((f) => `att-${f.id}` === id)!;
-            return { data: { data: file.bytes.toString('base64url'), size: file.bytes.length } };
-          },
-        },
-      },
-    },
-  };
-  return { client, fetched };
-}
-
-function driveStub() {
-  const created: { name: string; parent: string }[] = [];
+/** Collects the replies a run would post, without touching Gmail. */
+function replySpy() {
+  const replies: OutgoingMail[] = [];
   return {
-    created,
-    drive: {
-      files: {
-        list: async () => ({ data: { files: [] } }),
-        create: async ({ requestBody }: { requestBody: { name: string; parents?: string[] } }) => {
-          created.push({ name: requestBody.name, parent: requestBody.parents?.[0] ?? '' });
-          return { data: { id: `folder-${requestBody.name}` } };
-        },
-      },
+    replies,
+    sendReply: async (mail: OutgoingMail) => {
+      replies.push(mail);
+      return `sent-${replies.length}`;
     },
-  };
-}
-
-function deps(over: Partial<BillIntakeDeps> & { client: GmailClientLike }): BillIntakeDeps {
-  const { drive } = driveStub();
-  const uploaded: string[] = [];
-  return {
-    gmail: over.client,
-    drive: (over.drive ?? drive) as BillIntakeDeps['drive'],
-    upload: over.upload ?? (async (file) => {
-      uploaded.push(file.fileName);
-      return { fileId: `file-${uploaded.length}`, link: `https://drive.example/${uploaded.length}` };
-    }),
-    receiptsFolderId: 'root',
-    mailbox: 'bills@bumbleflies.de',
-    extractText: async () => PDF_TEXT,
-    now: new Date(2026, 9, 2),
-    ...over,
   };
 }
 
@@ -133,19 +54,10 @@ describe('runBillIntake', () => {
   it('finds a PDF nested in multipart and stores what it said', async (ctx) => {
     if (mongoose.connection.readyState !== 1) ctx.skip();
     const { client, fetched } = gmailWith([{ id: 'm1', fileName: 'rechnung.pdf', bytes: Buffer.from('%PDF-1.4 x') }]);
-    const result = await runBillIntake(deps({ client }));
+    const result = await runBillIntake(intakeDeps({ client }));
 
     expect(result).toMatchObject({ messages: 1, attachments: 1, created: 1, skipped: 0, failed: 0 });
     expect(fetched).toEqual(['att-m1']);
-
-    // The run reports what it filed, so the cron can mail a summary.
-    expect(result.createdBills).toHaveLength(1);
-    expect(result.createdBills[0]).toMatchObject({
-      fileName: 'rechnung.pdf',
-      vendorName: 'Hetzner Online GmbH',
-      grossCents: 11900,
-    });
-    expect(result.createdBills[0].receivedAt.toISOString()).toBe(new Date(Date.UTC(2026, 9, 1, 8)).toISOString());
 
     const bill = await Bill.findOne({ messageId: 'm1' });
     expect(bill?.status).toBe('parsed');
@@ -164,7 +76,7 @@ describe('runBillIntake', () => {
   it('writes no bank transaction, no supplier and no ledger entry', async (ctx) => {
     if (mongoose.connection.readyState !== 1) ctx.skip();
     const { client } = gmailWith([{ id: 'm1', fileName: 'rechnung.pdf', bytes: Buffer.from('%PDF-1.4 x') }]);
-    await runBillIntake(deps({ client }));
+    await runBillIntake(intakeDeps({ client }));
 
     expect(await BankTransaction.countDocuments()).toBe(0);
     expect(await Supplier.countDocuments()).toBe(0);
@@ -175,8 +87,8 @@ describe('runBillIntake', () => {
   it('is idempotent: a second run files and stores nothing again', async (ctx) => {
     if (mongoose.connection.readyState !== 1) ctx.skip();
     const { client } = gmailWith([{ id: 'm1', fileName: 'rechnung.pdf', bytes: Buffer.from('%PDF-1.4 x') }]);
-    await runBillIntake(deps({ client }));
-    const again = await runBillIntake(deps({ client }));
+    await runBillIntake(intakeDeps({ client }));
+    const again = await runBillIntake(intakeDeps({ client }));
 
     expect(again).toMatchObject({ created: 0, skipped: 1 });
     expect(await Bill.countDocuments()).toBe(1);
@@ -189,14 +101,14 @@ describe('runBillIntake', () => {
       { id: 'm1', fileName: 'a.pdf', bytes },
       { id: 'm2', fileName: 'b.pdf', bytes },
     ]);
-    const result = await runBillIntake(deps({ client }));
+    const result = await runBillIntake(intakeDeps({ client }));
     expect(result).toMatchObject({ attachments: 2, created: 1, skipped: 1 });
   });
 
   it('files a scan without text layer as noText instead of dropping it', async (ctx) => {
     if (mongoose.connection.readyState !== 1) ctx.skip();
     const { client } = gmailWith([{ id: 'm1', fileName: 'scan.pdf', bytes: Buffer.from('%PDF-1.4 x') }]);
-    const result = await runBillIntake(deps({ client, extractText: async () => '   ' }));
+    const result = await runBillIntake(intakeDeps({ client, extractText: async () => '   ' }));
 
     expect(result).toMatchObject({ created: 1, noText: 1 });
     const bill = await Bill.findOne({ messageId: 'm1' });
@@ -208,7 +120,7 @@ describe('runBillIntake', () => {
     if (mongoose.connection.readyState !== 1) ctx.skip();
     const { client } = gmailWith([{ id: 'm1', fileName: 'rechnung.pdf', bytes: Buffer.from('%PDF-1.4 x') }]);
     const result = await runBillIntake(
-      deps({ client, upload: async () => { throw new Error('Drive 403'); } }),
+      intakeDeps({ client, upload: async () => { throw new Error('Drive 403'); } }),
     );
 
     expect(result).toMatchObject({ created: 0, failed: 1 });
@@ -222,7 +134,7 @@ describe('runBillIntake', () => {
     // every bill looked like a scan and stayed `noText` forever.
     const { client } = gmailWith([{ id: 'm1', fileName: 'rechnung.pdf', bytes: Buffer.from('%PDF-1.4 x') }]);
     const broken = await runBillIntake(
-      deps({ client, extractText: async () => { throw new Error('Please provide binary data as `Uint8Array`'); } }),
+      intakeDeps({ client, extractText: async () => { throw new Error('Please provide binary data as `Uint8Array`'); } }),
     );
 
     expect(broken).toMatchObject({ created: 1, noText: 0, failed: 1 });
@@ -233,7 +145,7 @@ describe('runBillIntake', () => {
     expect(failed?.driveFileId).toBe('file-1');
 
     // A `failed` bill is not an answer: the next run reads it again.
-    const repaired = await runBillIntake(deps({ client }));
+    const repaired = await runBillIntake(intakeDeps({ client }));
     expect(repaired).toMatchObject({ created: 1, skipped: 0, failed: 0 });
 
     const bill = await Bill.findOne({ messageId: 'm1' });
@@ -249,7 +161,7 @@ describe('runBillIntake', () => {
       [{ id: 'm1', fileName: 'klein.pdf', bytes: Buffer.from('%PDF-1.4 inline') }],
       { inline: true },
     );
-    const result = await runBillIntake(deps({ client }));
+    const result = await runBillIntake(intakeDeps({ client }));
 
     expect(result.created).toBe(1);
     expect(fetched).toEqual([]);
@@ -261,8 +173,164 @@ describe('runBillIntake', () => {
       { id: 'm1', fileName: 'rechnung.pdf', bytes: Buffer.from('%PDF-1.4 x'), internalDate: String(Date.UTC(2025, 11, 20)) },
     ]);
     const stub = driveStub();
-    await runBillIntake(deps({ client, drive: stub.drive as BillIntakeDeps['drive'] }));
+    await runBillIntake(intakeDeps({ client, drive: stub.drive as BillIntakeDeps['drive'] }));
     expect(stub.created).toEqual([{ name: '2025', parent: 'root' }]);
+  });
+});
+
+describe('runBillIntake confirmation replies', () => {
+  it('sends one reply per mail, in its thread, listing every PDF that mail carried', async (ctx) => {
+    if (mongoose.connection.readyState !== 1) ctx.skip();
+    const { client } = gmailThread([
+      {
+        id: 'm1',
+        subject: 'Zwei Rechnungen',
+        messageId: '<m1@mail.example>',
+        threadId: 'thread-m1',
+        files: [
+          { fileName: 'a.pdf', bytes: Buffer.from('%PDF-1.4 a') },
+          { fileName: 'b.pdf', bytes: Buffer.from('%PDF-1.4 b') },
+        ],
+      },
+    ]);
+    const { replies, sendReply } = replySpy();
+    const result = await runBillIntake(intakeDeps({ client, sendReply }));
+
+    expect(result).toMatchObject({ created: 2, notified: 1, notifyErrors: [] });
+    expect(replies).toHaveLength(1);
+    expect(replies[0]).toMatchObject({
+      to: 'bills@bumbleflies.de',
+      subject: 'Re: Zwei Rechnungen',
+      threadId: 'thread-m1',
+      inReplyTo: '<m1@mail.example>',
+      references: '<m1@mail.example>',
+    });
+    expect(replies[0].text).toContain('abgelegt als a.pdf');
+    expect(replies[0].text).toContain('abgelegt als b.pdf');
+    expect(replies[0].text).toContain('https://queen.example/finance?tab=bills');
+  });
+
+  it('answers each mail separately, in that mail’s own thread', async (ctx) => {
+    if (mongoose.connection.readyState !== 1) ctx.skip();
+    const { client } = gmailWith([
+      { id: 'm1', fileName: 'a.pdf', bytes: Buffer.from('%PDF-1.4 first') },
+      { id: 'm2', fileName: 'b.pdf', bytes: Buffer.from('%PDF-1.4 second') },
+    ]);
+    const { replies, sendReply } = replySpy();
+    const result = await runBillIntake(intakeDeps({ client, sendReply }));
+
+    expect(result).toMatchObject({ created: 2, notified: 2 });
+    expect(replies.map((r) => r.threadId)).toEqual(['thread-m1', 'thread-m2']);
+    expect(replies.map((r) => r.inReplyTo)).toEqual(['<m1@mail.example>', '<m2@mail.example>']);
+    expect(replies[0].text).toContain('a.pdf');
+    expect(replies[0].text).not.toContain('b.pdf');
+  });
+
+  it('stays silent on a re-run over the same mail', async (ctx) => {
+    if (mongoose.connection.readyState !== 1) ctx.skip();
+    const { client } = gmailWith([{ id: 'm1', fileName: 'rechnung.pdf', bytes: Buffer.from('%PDF-1.4 x') }]);
+    const { replies, sendReply } = replySpy();
+    await runBillIntake(intakeDeps({ client, sendReply }));
+    const again = await runBillIntake(intakeDeps({ client, sendReply }));
+
+    expect(replies).toHaveLength(1);
+    expect(again).toMatchObject({ created: 0, skipped: 1, notified: 0, notifyErrors: [] });
+  });
+
+  it('sends nothing when the only PDF of a mail could not be filed', async (ctx) => {
+    if (mongoose.connection.readyState !== 1) ctx.skip();
+    const { client } = gmailWith([{ id: 'm1', fileName: 'rechnung.pdf', bytes: Buffer.from('%PDF-1.4 x') }]);
+    const { replies, sendReply } = replySpy();
+    const result = await runBillIntake(
+      intakeDeps({ client, sendReply, upload: async () => { throw new Error('Drive 403'); } }),
+    );
+
+    expect(result).toMatchObject({ created: 0, failed: 1, notified: 0 });
+    expect(replies).toEqual([]);
+  });
+
+  it('lists a failed attachment inside the reply of the bill that did arrive', async (ctx) => {
+    if (mongoose.connection.readyState !== 1) ctx.skip();
+    const { client } = gmailThread([
+      {
+        id: 'm1',
+        files: [
+          { fileName: 'kaputt.pdf', bytes: Buffer.from('%PDF-1.4 broken') },
+          { fileName: 'gut.pdf', bytes: Buffer.from('%PDF-1.4 good') },
+        ],
+      },
+    ]);
+    const { replies, sendReply } = replySpy();
+    const result = await runBillIntake(
+      intakeDeps({
+        client,
+        sendReply,
+        upload: async (file) => {
+          // The upload gets the filed name, so key the failure on the bytes.
+          if (file.buffer.toString('utf8').includes('broken')) throw new Error('Drive 403');
+          return { fileId: 'file-1', link: 'https://drive.example/1' };
+        },
+      }),
+    );
+
+    expect(result).toMatchObject({ created: 1, failed: 1, notified: 1 });
+    expect(replies).toHaveLength(1);
+    expect(replies[0].text).toContain('abgelegt als gut.pdf');
+    expect(replies[0].text).toContain('Nicht verarbeitet (wird beim nächsten Lauf erneut versucht):');
+    expect(replies[0].text).toContain('  • kaputt.pdf');
+  });
+
+  it('sends a reply when a previously failed bill is repaired', async (ctx) => {
+    if (mongoose.connection.readyState !== 1) ctx.skip();
+    const { client } = gmailWith([{ id: 'm1', fileName: 'rechnung.pdf', bytes: Buffer.from('%PDF-1.4 x') }]);
+    const { replies, sendReply } = replySpy();
+
+    // The text reader threw, so this bill is `failed`, not recorded: no reply.
+    const broken = await runBillIntake(
+      intakeDeps({ client, sendReply, extractText: async () => { throw new Error('Uint8Array'); } }),
+    );
+    expect(broken).toMatchObject({ created: 1, failed: 1, notified: 0 });
+    expect(replies).toEqual([]);
+
+    // The next run repairs it — a recorded bill now, so it is answered.
+    const repaired = await runBillIntake(intakeDeps({ client, sendReply }));
+    expect(repaired).toMatchObject({ created: 1, failed: 0, notified: 1 });
+    expect(replies).toHaveLength(1);
+    expect(replies[0].text).toContain('abgelegt als rechnung.pdf');
+  });
+
+  it('records a send failure on the result without failing the run', async (ctx) => {
+    if (mongoose.connection.readyState !== 1) ctx.skip();
+    const { client } = gmailWith([{ id: 'm1', fileName: 'rechnung.pdf', bytes: Buffer.from('%PDF-1.4 x') }]);
+    const result = await runBillIntake(
+      intakeDeps({
+        client,
+        sendReply: async () => {
+          throw new Error('Gmail-Versand steht nicht zur Verfügung — es fehlt der Zugriff `gmail.send`');
+        },
+      }),
+    );
+
+    // The bills are filed regardless; the failure is a warning, not an error.
+    expect(result).toMatchObject({ created: 1, notified: 0 });
+    expect(result.notifyErrors).toHaveLength(1);
+    expect(result.notifyErrors[0]).toContain('gmail.send');
+    expect(await Bill.countDocuments()).toBe(1);
+  });
+
+  it('threads the default reply through Gmail, in the mail’s thread', async (ctx) => {
+    if (mongoose.connection.readyState !== 1) ctx.skip();
+    const { client, sent } = gmailWith([{ id: 'm1', fileName: 'rechnung.pdf', bytes: Buffer.from('%PDF-1.4 x') }]);
+    const result = await runBillIntake(intakeDeps({ client }));
+
+    expect(result.notified).toBe(1);
+    expect(sent).toHaveLength(1);
+    expect(sent[0].threadId).toBe('thread-m1');
+    const headers = Buffer.from(sent[0].raw, 'base64url').toString('utf8').split('\r\n\r\n')[0].split('\r\n');
+    expect(headers).toContain('To: bills@bumbleflies.de');
+    expect(headers).toContain('In-Reply-To: <m1@mail.example>');
+    expect(headers).toContain('References: <m1@mail.example>');
+    expect(headers.some((h) => h.startsWith('From: '))).toBe(false);
   });
 });
 

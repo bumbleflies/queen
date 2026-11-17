@@ -80,6 +80,12 @@ export function BillsSection({ year: yearProp, onFetchNow }: BillsSectionProps =
           .replace('{known}', String(result.skipped))
           .replace('{failed}', String(result.failed)),
       );
+      // The bills are filed, but the confirmation reply may have been skipped
+      // (e.g. no `gmail.send`): say so instead of leaving the admin guessing.
+      const notifyErrors = result.notifyErrors ?? [];
+      if (notifyErrors.length > 0) {
+        toast.error(t('bills.replyFailed').replace('{error}', notifyErrors[0]));
+      }
     } catch (err) {
       toast.error((err as Error).message);
     }
