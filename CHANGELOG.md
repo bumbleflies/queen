@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.34.0](https://github.com/bumbleflies/queen/compare/queen-v0.33.3...queen-v0.34.0) (2026-11-18)
+
+
+### Features
+
+* **bills:** read table invoices right and correct a misread by hand ([#339](https://github.com/bumbleflies/queen/issues/339)) ([11f6659](https://github.com/bumbleflies/queen/commit/11f665940bc618e82ec9e2c7ddd97171e59cbab5))
+
+
+### Bug Fixes
+
+* **deps:** update dependency vitest to v5.1.1 ([#341](https://github.com/bumbleflies/queen/issues/341)) ([c520ae7](https://github.com/bumbleflies/queen/commit/c520ae7992545f2eb0d4f55d1d457dc0445d34ef))
+
 ## [0.33.3](https://github.com/bumbleflies/queen/compare/queen-v0.33.2...queen-v0.33.3) (2026-11-18)
 
 
