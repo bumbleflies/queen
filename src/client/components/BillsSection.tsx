@@ -3,11 +3,13 @@ import { trpc } from '../lib/trpc';
 import { useToast } from '../components/Toast';
 import { useLanguage } from '../i18n/LanguageContext';
 import { formatDate, formatEUR } from '../lib/format';
+import { BillCorrectDialog, type BillToCorrect } from './BillCorrectDialog';
 
 interface BillParse {
   vendorName?: string;
   invoiceNumber?: string;
   grossCents?: number | null;
+  netCents?: number | null;
   vatCents?: number | null;
   vatRate?: number | null;
   iban?: string;
@@ -26,6 +28,8 @@ interface BillRow {
   ignored: boolean;
   error?: string | null;
   parse?: BillParse | null;
+  /** Set when an admin corrected the read by hand. */
+  corrected?: { at: string | Date | null; by: string } | null;
   transaction?: {
     id: string;
     date: string | Date;
@@ -61,6 +65,7 @@ export function BillsSection({ year: yearProp, onFetchNow }: BillsSectionProps =
   const intake = trpc.bills.intakeNow.useMutation();
   const setIgnored = trpc.bills.setIgnored.useMutation();
   const reread = trpc.bills.reread.useMutation();
+  const [correcting, setCorrecting] = useState<BillToCorrect | null>(null);
 
   const rows = (bills.data ?? []) as unknown as BillRow[];
   const years = [currentYear, currentYear - 1, currentYear - 2];
@@ -107,6 +112,22 @@ export function BillsSection({ year: yearProp, onFetchNow }: BillsSectionProps =
     } catch (err) {
       toast.error((err as Error).message);
     }
+  }
+
+  /** Prefill from what the bill says now — the read, or an earlier correction. */
+  function startCorrecting(row: BillRow) {
+    const parsed = row.parse ?? {};
+    setCorrecting({
+      id: row.id,
+      fileName: row.fileName,
+      vendorName: parsed.vendorName ?? senderName(row.from),
+      invoiceNumber: parsed.invoiceNumber ?? '',
+      grossCents: parsed.grossCents ?? null,
+      netCents: parsed.netCents ?? null,
+      vatCents: parsed.vatCents ?? null,
+      vatRate: parsed.vatRate ?? null,
+      dueDate: parsed.dueDate ?? null,
+    });
   }
 
   return (
@@ -169,6 +190,11 @@ export function BillsSection({ year: yearProp, onFetchNow }: BillsSectionProps =
                           {row.status === 'parsed' ? t('bills.status.parsed') : row.status === 'noText' ? t('bills.status.noText') : t('bills.status.failed')}
                         </span>
                       </div>
+                      {row.corrected ? (
+                        <div className="rc" style={{ fontSize: 12 }} title={row.corrected.at ? formatDate(row.corrected.at) : undefined}>
+                          {t('bills.corrected')}
+                        </div>
+                      ) : null}
                       {row.error ? <div className="rc" style={{ fontSize: 12 }}>{row.error}</div> : null}
                     </td>
                     <td data-l={t('bills.col.due')} className="num">{parsed.dueDate ? formatDate(parsed.dueDate) : '—'}</td>
@@ -195,6 +221,14 @@ export function BillsSection({ year: yearProp, onFetchNow }: BillsSectionProps =
                     <td>
                       {isAdmin ? (
                         <>
+                          <button
+                            type="button"
+                            className="btn ghost sm"
+                            onClick={() => startCorrecting(row)}
+                            title={t('bills.correct')}
+                          >
+                            {t('bills.correctLabel')}
+                          </button>
                           {row.status === 'failed' || row.error ? (
                             <button
                               type="button"
@@ -220,6 +254,7 @@ export function BillsSection({ year: yearProp, onFetchNow }: BillsSectionProps =
         </div>
       )}
       <p className="muted" style={{ fontSize: 13, marginTop: 10 }}>{t('bills.hint')}</p>
+      {correcting ? <BillCorrectDialog bill={correcting} onClose={() => setCorrecting(null)} /> : null}
     </section>
   );
 }

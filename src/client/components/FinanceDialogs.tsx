@@ -5,7 +5,7 @@ import { useToast } from './Toast';
 import { useLanguage } from '../i18n/LanguageContext';
 
 /** Shared modal frame: backdrop click and Escape close it. */
-function Modal({ title, sub, onClose, children }: { title: string; sub?: ReactNode; onClose: () => void; children: ReactNode }) {
+export function Modal({ title, sub, onClose, children }: { title: string; sub?: ReactNode; onClose: () => void; children: ReactNode }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();

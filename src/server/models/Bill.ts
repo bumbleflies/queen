@@ -6,18 +6,31 @@ import mongoose, { Schema, type InferSchemaType } from 'mongoose';
  * and files the PDF as a receipt, so nothing is booked, matched to an invoice
  * or taught as a rule before a human (or the existing booking flow) decides.
  */
-const parsedBillSchema = new Schema(
+const parsedFields = () => ({
+  vendorName: { type: String, default: '' },
+  invoiceNumber: { type: String, default: '' },
+  grossCents: { type: Number },
+  netCents: { type: Number },
+  vatCents: { type: Number },
+  /** 0.19 / 0.07 / 0 only when the document states it; null when unknown. */
+  vatRate: { type: Number },
+  iban: { type: String, default: '' },
+  dueDate: { type: Date },
+  reverseCharge: { type: Boolean, default: false },
+});
+
+const parsedBillSchema = new Schema(parsedFields(), { _id: false });
+
+/**
+ * An admin's correction of a wrong read (`bills.correct`). It wins over `parse`
+ * field by field (`services/billMatch.billFieldsOf`); the read itself is never
+ * overwritten — the PDF is the document, this is the human's word about it.
+ */
+const billCorrectionSchema = new Schema(
   {
-    vendorName: { type: String, default: '' },
-    invoiceNumber: { type: String, default: '' },
-    grossCents: { type: Number },
-    netCents: { type: Number },
-    vatCents: { type: Number },
-    /** 0.19 / 0.07 / 0 only when the document states it; null when unknown. */
-    vatRate: { type: Number },
-    iban: { type: String, default: '' },
-    dueDate: { type: Date },
-    reverseCharge: { type: Boolean, default: false },
+    ...parsedFields(),
+    correctedAt: { type: Date, required: true },
+    correctedBy: { type: String, required: true },
   },
   { _id: false },
 );
@@ -42,6 +55,8 @@ const billSchema = new Schema(
     /** `noText` = filed but the PDF has no readable text layer (a scan). */
     status: { type: String, enum: ['parsed', 'noText', 'failed'], required: true, default: 'parsed' },
     parse: { type: parsedBillSchema },
+    /** What an admin corrected by hand; `reread` never touches it. */
+    corrected: { type: billCorrectionSchema },
     error: { type: String },
     /** Hidden from the list; bills are never deleted (audit trail). */
     ignored: { type: Boolean, required: true, default: false },

@@ -8,9 +8,28 @@ import { parseBillText } from '../lib/bills/parseBill';
 import { createGmailClient, displayNameFromHeader, fetchPdfAttachments } from '../services/GmailService';
 import { extractPdfText } from '../services/receiptText';
 import { googleAccessForCron } from '../services/driveForUser';
+import { billFieldsOf } from '../services/billMatch';
 import { describeIntakeError, resolveBillIntakeDeps, rematchBills, runBillIntake } from '../jobs/billIntake';
 
 const yearInput = z.object({ year: z.number().int().min(2000).max(2100) });
+
+/** Euro amount in cents; null clears a field the read got wrong. */
+const centsInput = z.number().int().safe().nullable();
+const textInput = z.string().trim().max(200);
+
+/** Everything an admin may correct on a bill; omitted = leave the read's value. */
+const billCorrectionInput = z.object({
+  vendorName: textInput.optional(),
+  invoiceNumber: textInput.max(60).optional(),
+  grossCents: centsInput.optional(),
+  netCents: centsInput.optional(),
+  vatCents: centsInput.optional(),
+  /** 0.19 / 0.07 / 0, like the read stores it. */
+  vatRate: z.number().min(0).max(1).nullable().optional(),
+  iban: textInput.max(34).optional(),
+  dueDate: z.coerce.date().nullable().optional(),
+  reverseCharge: z.boolean().optional(),
+});
 
 /** Messages per click; the nightly job reads more. Keeps the button responsive. */
 const INTAKE_NOW_MAX_MESSAGES = 10;
@@ -20,6 +39,9 @@ export const billsRouter = router({
    * Bills received by e-mail in a year, each with the payment it belongs to.
    * The link is stored on the Bill document (set by intake + rematch) — it
    * never books anything.
+   *
+   * `parse` is what the bill says today: an admin's correction where there is
+   * one, else the PDF read. `corrected` only marks that someone fixed it.
    */
   list: authedProcedure.input(yearInput).query(async ({ input }) => {
     const [bills, txs] = await Promise.all([
@@ -40,7 +62,10 @@ export const billsRouter = router({
         status: bill.status,
         ignored: !!bill.ignored,
         error: bill.error ?? null,
-        parse: bill.parse ?? null,
+        parse: billFieldsOf(bill),
+        corrected: bill.corrected
+          ? { at: bill.corrected.correctedAt ?? null, by: bill.corrected.correctedBy ?? '' }
+          : null,
         matchMethod: bill.matchMethod ?? null,
         amountMismatch: bill.amountMismatch ?? null,
         transaction: tx
@@ -91,6 +116,30 @@ export const billsRouter = router({
       const updated = await Bill.findByIdAndUpdate(input.id, { ignored: input.ignored }, { returnDocument: 'after' });
       if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Beleg nicht gefunden' });
       return { id: String(updated._id), ignored: !!updated.ignored };
+    }),
+
+  /**
+   * Correct a wrong read by hand (admin). The PDF's own values stay in `parse`;
+   * the correction lives beside them and wins (`billFieldsOf`), so a later
+   * `reread` repairs the read without discarding the human's numbers. Never
+   * books anything — the payment still has to be booked in the inbox.
+   */
+  correct: adminProcedure
+    .input(billCorrectionInput.extend({ id: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const { id, ...changes } = input;
+      const bill = await Bill.findById(id);
+      if (!bill) throw new TRPCError({ code: 'NOT_FOUND', message: 'Beleg nicht gefunden' });
+
+      const before = billFieldsOf(bill);
+      bill.set('corrected', {
+        ...before,
+        ...changes,
+        correctedAt: new Date(),
+        correctedBy: ctx.user.sub,
+      });
+      await bill.save();
+      return { id: String(bill._id), parse: billFieldsOf(bill) };
     }),
 
   /** Re-read a bill's PDF attachment from Gmail and re-parse it.

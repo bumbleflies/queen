@@ -12,6 +12,31 @@ Summe netto 100,00 EUR
 Summe brutto 119,00 EUR
 Vielen Dank für Ihren Auftrag.`;
 
+// The PDF text layer of a Hetzner invoice: a table whose period column
+// (`10/2026`) sits right before the first money column, a `Total (excl. VAT)`
+// table header, a VAT registration number, and a `Total` row that lists net,
+// VAT and gross in one line.
+const HETZNER_TABLE = `Hetzner Online GmbH • Industriestr. 25 • 91710 Gunzenhausen • Germany
+bumbleflies UG (haftungsbeschränkt)
+Gleiwitzer-Str., 6d
+81929 München
+Germany
+VAT Reg. No.: DE812871812
+Invoice no.: 087001370124
+Invoice date: 16/11/2026
+Invoice 087001370124
+Overview
+Service Period Total (excl. VAT) Tax Total
+Project "servy" 10/2026 € 7.00 € 1.33A1 € 8.33
+Storage 10/2026 € 3.20 € 0.61A1 € 3.81
+Total € 10.20 € 1.94 € 12.14
+Tax code Tax rate Total (excl. VAT) Taxable Tax Total
+A1 19 % € 10.20 € 10.20 € 1.94 € 12.14
+Total € 10.20 € 10.20 € 1.94 € 12.14
+The amount will be debited from the following account.
+IBAN: DE92 7607 0012 0750 0077 00
+Due date of payment: 19/11/2026`;
+
 const GOOGLE = `Google Ireland Limited
 Gordon House, Barrow Street, Dublin 4, Ireland
 Invoice number: 5100-1234
@@ -150,5 +175,39 @@ Netto-Rechnungsbetrag
     expect(bill.invoiceNumber).toBe('98848178');
     expect(bill.grossCents).toBe(4915);
     expect(bill.iban).toBe('DE57370100500000399509');
+  });
+
+  it('reads a table invoice: the gross of a Total row, not its net column or a period', () => {
+    // "Service Period Total (excl. VAT) Tax Total" used to be taken as the gross
+    // label, and the period of the next row ("10/2026 €") as the amount — which
+    // made a 12,14 € invoice read as 2.026,00 €.
+    const bill = parseBillText(HETZNER_TABLE);
+    expect(bill.grossCents).toBe(1214);
+    expect(bill.invoiceNumber).toBe('087001370124');
+    expect(bill.iban).toBe('DE92760700120750007700');
+    // The letterhead is the vendor line, its address is not part of the name.
+    expect(bill.vendorName).toBe('Hetzner Online GmbH');
+    expect(bill.dueDate && [bill.dueDate.getFullYear(), bill.dueDate.getMonth() + 1, bill.dueDate.getDate()]).toEqual([2026, 11, 19]);
+  });
+
+  it('never reads a VAT registration number as a VAT amount', () => {
+    const bill = parseBillText('Musterfirma GmbH\nVAT Reg. No.: DE336262972\nTotal 12,14 EUR');
+    expect(bill.vatCents).toBeNull();
+    expect(bill.grossCents).toBe(1214);
+    const german = parseBillText('Musterfirma GmbH\nUst-Ident-Nr. DE 122 787 997\nBrutto-Rechnungsbetrag\n49,15');
+    expect(german.vatCents).toBeNull();
+    expect(german.grossCents).toBe(4915);
+  });
+
+  it('does not take a net column header as the gross', () => {
+    const bill = parseBillText('Musterfirma GmbH\nTotal (excl. VAT) € 10.20');
+    expect(bill.grossCents).toBeNull();
+    expect(bill.vatCents).toBeNull();
+  });
+
+  it('prefers the label line over a line item that happens to sit above it', () => {
+    // No value-before-label when the label line states the amount itself.
+    const bill = parseBillText('Musterfirma GmbH\nSpeicher 10/2026 € 3,20\nTotal € 10,20 € 1,94 € 12,14');
+    expect(bill.grossCents).toBe(1214);
   });
 });
