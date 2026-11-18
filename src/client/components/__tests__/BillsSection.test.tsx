@@ -22,13 +22,18 @@ const intakeResult = vi.hoisted(() => ({
 }));
 
 const intakeMutation = vi.fn(async () => intakeResult.current);
+const correctMutation = vi.fn(async () => ({ id: 'bill-1', parse: {} }));
+
+/** Rows `bills.list` answers with (empty unless a test asks for a bill). */
+const rows = vi.hoisted(() => ({ current: [] as unknown[] }));
 
 vi.mock('../../lib/trpc', () => {
   const bills = {
-    list: { useQuery: () => ({ data: [], isLoading: false }) },
+    list: { useQuery: () => ({ data: rows.current, isLoading: false }) },
     intakeNow: { useMutation: () => ({ mutateAsync: intakeMutation, isPending: false }) },
     setIgnored: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
     reread: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+    correct: { useMutation: () => ({ mutateAsync: correctMutation, isPending: false }) },
   };
   return {
     trpc: {
@@ -57,6 +62,8 @@ async function fetchNow() {
 beforeEach(() => {
   localStorage.setItem('queen-lang', 'de');
   intakeMutation.mockClear();
+  correctMutation.mockClear();
+  rows.current = [];
   intakeResult.current = {
     ok: true,
     messages: 1,
@@ -109,5 +116,77 @@ describe('BillsSection', () => {
 
     expect(await screen.findByText('Abgerufen: 1 neu, 0 bereits vorhanden, 0 Fehler')).toBeInTheDocument();
     expect(screen.queryByText(/Bestätigungsmail fehlgeschlagen/)).not.toBeInTheDocument();
+  });
+
+  it('lets an admin correct an amount the PDF read wrong', async () => {
+    // The Hetzner invoice that read as 2.026,00 € instead of 12,14 €.
+    rows.current = [
+      {
+        id: 'bill-1',
+        receivedAt: '2026-11-16T00:00:00.000Z',
+        from: 'Hetzner Online GmbH <billing@hetzner.com>',
+        subject: 'Hetzner Online GmbH - Invoice 087001370124',
+        fileName: 'Hetzner_2026-11-16_087001370124.pdf',
+        driveLink: 'https://drive.example/1',
+        status: 'parsed',
+        ignored: false,
+        parse: {
+          vendorName: 'Hetzner Online GmbH',
+          invoiceNumber: '087001370124',
+          grossCents: 202600,
+          netCents: null,
+          vatCents: null,
+          vatRate: null,
+          dueDate: null,
+        },
+        transaction: null,
+      },
+    ];
+    renderSection();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Korrigieren' }));
+    const gross = screen.getByLabelText('Bruttobetrag');
+    expect(gross).toHaveValue('2026,00');
+    await userEvent.clear(gross);
+    await userEvent.type(gross, '12,14');
+    await userEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+
+    expect(correctMutation).toHaveBeenCalledTimes(1);
+    expect(correctMutation.mock.calls[0][0]).toMatchObject({
+      id: 'bill-1',
+      invoiceNumber: '087001370124',
+      grossCents: 1214,
+      netCents: null,
+      vatCents: null,
+      vatRate: null,
+      dueDate: null,
+    });
+  });
+
+  it('refuses an amount it cannot read instead of writing a wrong one', async () => {
+    rows.current = [
+      {
+        id: 'bill-1',
+        receivedAt: '2026-11-16T00:00:00.000Z',
+        from: 'Hetzner Online GmbH <billing@hetzner.com>',
+        subject: 'Rechnung',
+        fileName: 'rechnung.pdf',
+        driveLink: '',
+        status: 'parsed',
+        ignored: false,
+        parse: { grossCents: 202600 },
+        transaction: null,
+      },
+    ];
+    renderSection();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Korrigieren' }));
+    const gross = screen.getByLabelText('Bruttobetrag');
+    await userEvent.clear(gross);
+    await userEvent.type(gross, 'zwoelf');
+    await userEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+
+    expect(await screen.findByText('Betrag „zwoelf“ ist keine Zahl')).toBeInTheDocument();
+    expect(correctMutation).not.toHaveBeenCalled();
   });
 });

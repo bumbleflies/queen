@@ -30,6 +30,22 @@ const VAT_LABEL = /(?:\bust\.?|\bmwst\.?|umsatzsteuer|\bvat\b|\btax\b)/i;
 const REVERSE_CHARGE = /reverse[-\s]?charge|§\s*13\s*b|steuerschuldnerschaft\s*des\s*leistungsempf/i;
 const ANY_LABEL = new RegExp(`${GROSS_LABEL.source}|${NET_LABEL.source}|${VAT_LABEL.source}`, 'i');
 
+// "Total (excl. VAT) € 10.20" is the NET column of a table, not this bill's
+// total — the gross sits in the last column of the same row.
+const NET_COLUMN = /(?:excl\.?|exkl\.?|ohne|net\s+of)\s*(?:vat|ust|mwst)/i;
+
+// "VAT Reg. No.: DE812871812", "Ust-Ident-Nr. DE 122 787 997": an identification
+// number, never an amount (997,00 € was read off a tax number).
+const TAX_ID_LINE = /steuernummer|(?:vat|ust|umsatzsteuer)[\s.-]{0,2}(?:reg|ident|id|nr|no)(?![a-zäöü])/i;
+// A number glued to a `/` is a period or a date (`10/2026`, `16/11/2026`), and a
+// bare 19xx/20xx/21xx is a year: "10/2026 € 7.00" used to read as "2026 €",
+// turning a 12,14 € invoice into 2.026,00 €.
+const AMOUNT_TOKEN = /(?<![\d/.,-])-?\d[\d.,]*/g;
+// The mark sits before the number on German tables ("€ 10,20") and after it on
+// English ones ("10.20 EUR"), so both orders count as money.
+const CURRENCY_AMOUNT = /(?<![\d/.,-])-?\d[\d.,]*\s*(?:EUR|€)|(?:EUR|€)\s*(?<![\d/.,-])-?\d[\d.,]*/gi;
+const YEAR = /^(?:19|20|21)\d{2}$/;
+
 // Company legal forms: a line carrying one of these is the letterhead vendor,
 // not an address or a line item. Preferred over the mail's From header for
 // forwarded mails, where the sender is the forwarder, not the vendor.
@@ -96,13 +112,26 @@ export function parseAmountToken(token: string): number | null {
   }
 }
 
+/** Every amount on the line that carries a currency mark, in reading order. */
+function currencyAmounts(line: string): number[] {
+  const amounts: number[] = [];
+  for (const match of line.matchAll(CURRENCY_AMOUNT)) {
+    const token = match[0].replace(/EUR|€/gi, '').trim();
+    if (YEAR.test(token)) continue;
+    const cents = parseAmountToken(token);
+    if (cents !== null) amounts.push(cents);
+  }
+  return amounts;
+}
+
 /** First currency amount on the line, else its last bare amount. */
 function amountOnLine(line: string): number | null {
-  const withCurrency = line.match(/(-?\d[\d.,]*)\s*(?:EUR|€)/i);
-  if (withCurrency) return parseAmountToken(withCurrency[1]);
-  const bare = line.match(/-?\d[\d.,]*/g);
+  const currency = currencyAmounts(line);
+  if (currency.length > 0) return currency[0];
+  const bare = line.match(AMOUNT_TOKEN);
   if (!bare) return null;
   for (const token of [...bare].reverse()) {
+    if (YEAR.test(token)) continue;
     const cents = parseAmountToken(token);
     if (cents !== null) return cents;
   }
@@ -113,21 +142,34 @@ function amountOnLine(line: string): number | null {
  * Used for value-before-label gross so a bare day/year on the same line isn't
  * mistaken for the total. */
 function moneyAmountOnLine(line: string): number | null {
-  const withCurrency = line.match(/(-?\d[\d.,]*)\s*(?:EUR|€)/i);
-  if (withCurrency) return parseAmountToken(withCurrency[1]);
-  const bare = line.match(/-?\d[\d.,]*/g);
+  const currency = currencyAmounts(line);
+  if (currency.length > 0) return currency[0];
+  const bare = line.match(AMOUNT_TOKEN);
   if (!bare) return null;
   for (const token of bare) {
+    if (YEAR.test(token)) continue;
     if (/[.,]/.test(token)) {
       const cents = parseAmountToken(token);
       if (cents !== null) return cents;
     }
   }
   for (const token of bare) {
+    if (YEAR.test(token)) continue;
     const cents = parseAmountToken(token);
     if (cents !== null) return cents;
   }
   return null;
+}
+
+/**
+ * The gross total on a total row. Such a row lists net, VAT and gross left to
+ * right ("Total € 10.20 € 1.94 € 12.14"), so the total is the largest of its
+ * currency amounts — taking the first one reads the net column.
+ */
+function grossOnLine(line: string): number | null {
+  const amounts = currencyAmounts(line);
+  if (amounts.length === 0) return amountOnLine(line);
+  return amounts.reduce((biggest, cents) => (Math.abs(cents) > Math.abs(biggest) ? cents : biggest));
 }
 
 function parseGermanDate(token: string): Date | null {
@@ -168,6 +210,9 @@ function cleanVendorName(value: string): string {
   return value
     .replace(/<[^>]*>/g, '')
     .replace(/["']/g, '')
+    // German sender lines read "Hetzner Online GmbH • Industriestr. 25 • 91710 Ort":
+    // the company is the part before the first bullet, the rest is its address.
+    .split('•')[0]
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -208,13 +253,19 @@ export function parseBillText(text: string, hints: BillHints = {}): ParsedBill {
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
     if (!line) continue;
+    // An identification number is metadata, not money: "VAT Reg. No.: DE812871812".
+    if (TAX_ID_LINE.test(line)) continue;
+    // A net column header ("Total (excl. VAT)") states no total of this bill.
+    if (NET_COLUMN.test(line)) continue;
     const next = lines[i + 1] ?? '';
     const isLineItem = LINE_ITEM.test(line);
 
     // Value before label: "49,15\nBrutto-Rechnungsbetrag" — the amount sits on
     // the line right before the gross label. Only when this line isn't itself a
     // line item or another amount label (net/VAT), and carries a real money
-    // amount (decimals or currency) — never a bare date or year.
+    // amount (decimals or currency) — never a bare date or year. A label line
+    // that carries its own amounts (or is followed by them) is read there
+    // instead: a line item above "Total € 10.20 € 1.94 € 12.14" is not the total.
     if (
       !isLineItem &&
       grossCents === null &&
@@ -222,14 +273,16 @@ export function parseBillText(text: string, hints: BillHints = {}): ParsedBill {
       !NET_LABEL.test(line) &&
       !VAT_LABEL.test(line) &&
       /\d[.,]\d{1,2}/.test(line) &&
-      GROSS_LABEL.test(next)
+      GROSS_LABEL.test(next) &&
+      amountOnLine(next) === null &&
+      amountOnLine(lines[i + 2] ?? '') === null
     ) {
       const cents = moneyAmountOnLine(line);
       if (cents !== null) grossCents ??= cents;
     }
 
     if (GROSS_LABEL.test(line) && !isLineItem) {
-      const cents = amountOnLine(line) ?? (next && !LINE_ITEM.test(next) ? amountOnLine(next) : null);
+      const cents = grossOnLine(line) ?? (next && !LINE_ITEM.test(next) ? grossOnLine(next) : null);
       if (cents !== null) grossCents ??= cents;
       continue;
     }
@@ -279,7 +332,7 @@ export function parseBillText(text: string, hints: BillHints = {}): ParsedBill {
   }
 
   const dueMatch = text.match(
-    /(?:fällig(?:keitsdatum|keit|am)?|zahlbar\s*bis|payment\s*due|due\s*date)[\s:]*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{4}-\d{2}-\d{2}|[A-Za-z]{3,9}\.?\s+\d{1,2},?\s+\d{4})/i,
+    /(?:fällig(?:keitsdatum|keit|am)?|zahlbar\s*bis|payment\s*due|due\s*date)(?:\s+of\s+payment)?[\s:]*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{4}-\d{2}-\d{2}|[A-Za-z]{3,9}\.?\s+\d{1,2},?\s+\d{4})/i,
   );
 
   const fromName = hints.fromName ? cleanVendorName(hints.fromName) : '';

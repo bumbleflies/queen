@@ -126,6 +126,83 @@ describe('bills.list', () => {
   });
 });
 
+describe('bills.correct', () => {
+  const wrongRead = {
+    ...BILL.parse,
+    vendorName: 'Hetzner Online GmbH • Industriestr. 25 • 91710 Gunzenhausen • Germany',
+    grossCents: 202600,
+    netCents: null,
+    vatCents: 33626297200,
+    vatRate: null,
+  };
+
+  it('is admin-only', async (ctx) => {
+    skipIfNoDb(ctx);
+    const bill = await Bill.create({ ...BILL, parse: wrongRead });
+    await expect(
+      userCaller().bills.correct({ id: String(bill._id), grossCents: 1214 }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('reports an unknown bill instead of creating one', async (ctx) => {
+    skipIfNoDb(ctx);
+    await expect(
+      adminCaller().bills.correct({ id: String(new mongoose.Types.ObjectId()), grossCents: 1214 }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('lets the correction win over the read, keeping the read itself', async (ctx) => {
+    skipIfNoDb(ctx);
+    const bill = await Bill.create({ ...BILL, parse: wrongRead });
+    await adminCaller().bills.correct({
+      id: String(bill._id),
+      grossCents: 1214,
+      netCents: 1020,
+      vatCents: null,
+      vatRate: null,
+    });
+
+    const rows = await adminCaller().bills.list({ year: 2026 });
+    expect(rows[0].parse?.grossCents).toBe(1214);
+    expect(rows[0].parse?.netCents).toBe(1020);
+    expect(rows[0].parse?.vatCents).toBeNull();
+    // Untouched fields keep the read's value.
+    expect(rows[0].parse?.invoiceNumber).toBe('R-1');
+    expect(rows[0].corrected).toMatchObject({ by: 'admin-id-1' });
+
+    // The read stays on the document: a later reread repairs it, never the human's numbers.
+    const stored = await Bill.findById(bill._id).lean();
+    expect(stored?.parse?.grossCents).toBe(202600);
+    expect(stored?.corrected?.grossCents).toBe(1214);
+  });
+
+  it('survives a re-read of the same PDF', async (ctx) => {
+    skipIfNoDb(ctx);
+    const bill = await Bill.create({ ...BILL, parse: wrongRead });
+    await adminCaller().bills.correct({ id: String(bill._id), grossCents: 1214 });
+
+    // What bills.reread does: replace the read, leave the correction alone.
+    await Bill.findByIdAndUpdate(bill._id, { $set: { parse: { ...wrongRead, grossCents: 202600 } } });
+
+    const rows = await adminCaller().bills.list({ year: 2026 });
+    expect(rows[0].parse?.grossCents).toBe(1214);
+  });
+
+  it('feeds the corrected amount into the bill↔payment match', async (ctx) => {
+    skipIfNoDb(ctx);
+    const bill = await Bill.create({ ...BILL, parse: { ...wrongRead, iban: '' } });
+    const tx = await bankTx({ amountCents: 1214, counterpartyIban: null, description: 'Hetzner' });
+    await rematchBills({ year: 2026 });
+    expect((await adminCaller().bills.list({ year: 2026 }))[0].transaction).toBeNull();
+
+    await adminCaller().bills.correct({ id: String(bill._id), grossCents: 1214 });
+    await rematchBills({ year: 2026 });
+    const rows = await adminCaller().bills.list({ year: 2026 });
+    expect(rows[0].transaction?.id).toBe(String(tx._id));
+    expect(rows[0].matchMethod).toBe('amount');
+  });
+});
+
 describe('bills mutations', () => {
   it('intakeNow and setIgnored are admin-only', async (ctx) => {
     skipIfNoDb(ctx);
