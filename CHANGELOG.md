@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.34.3](https://github.com/bumbleflies/queen/compare/queen-v0.34.2...queen-v0.34.3) (2026-11-19)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @tanstack/react-query to v5.108.1 ([#347](https://github.com/bumbleflies/queen/issues/347)) ([5fb2081](https://github.com/bumbleflies/queen/commit/5fb2081406791acd9dc22aa4c6d384bc17963e9e))
+* **deps:** update trpc monorepo to v11.29.5 ([#348](https://github.com/bumbleflies/queen/issues/348)) ([d210860](https://github.com/bumbleflies/queen/commit/d210860431b5006feb4e7226d04e5a632b6a78b5))
+
 ## [0.34.2](https://github.com/bumbleflies/queen/compare/queen-v0.34.1...queen-v0.34.2) (2026-11-19)
 
 
