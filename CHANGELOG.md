@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.34.2](https://github.com/bumbleflies/queen/compare/queen-v0.34.1...queen-v0.34.2) (2026-11-19)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @testing-library/user-event to v14.6.13 ([#344](https://github.com/bumbleflies/queen/issues/344)) ([9a8e7bb](https://github.com/bumbleflies/queen/commit/9a8e7bb49dcc6981fc15592d5a0ca36fd43ec5b8))
+* **deps:** update dependency express-rate-limit to v8.7.5 ([#345](https://github.com/bumbleflies/queen/issues/345)) ([b1f3b63](https://github.com/bumbleflies/queen/commit/b1f3b634542c8015b4aac83c2d76c9e96cdd4e6b))
+
 ## [0.34.1](https://github.com/bumbleflies/queen/compare/queen-v0.34.0...queen-v0.34.1) (2026-11-18)
 
 
