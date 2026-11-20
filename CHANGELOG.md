@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.34.4](https://github.com/bumbleflies/queen/compare/queen-v0.34.3...queen-v0.34.4) (2026-11-20)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @testing-library/jest-dom to v8 ([#351](https://github.com/bumbleflies/queen/issues/351)) ([31a7ada](https://github.com/bumbleflies/queen/commit/31a7adad145e5269689c5885be64199ff01c76f0))
+* **deps:** update dependency pdfkit to ^0.21.0 ([#350](https://github.com/bumbleflies/queen/issues/350)) ([7081a71](https://github.com/bumbleflies/queen/commit/7081a717ae5563c984f6003c67fe9a44f9ecb508))
+
 ## [0.34.3](https://github.com/bumbleflies/queen/compare/queen-v0.34.2...queen-v0.34.3) (2026-11-19)
 
 
