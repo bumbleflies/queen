@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.34.8](https://github.com/bumbleflies/queen/compare/queen-v0.34.7...queen-v0.34.8) (2026-11-21)
+
+
+### Bug Fixes
+
+* **deps:** update dependency mongodb-memory-server to v11.4.0 ([#361](https://github.com/bumbleflies/queen/issues/361)) ([a2c1424](https://github.com/bumbleflies/queen/commit/a2c142476d2ea838127153dc280fa56c8e2e8262))
+* **deps:** update trpc monorepo to v11.29.7 ([#360](https://github.com/bumbleflies/queen/issues/360)) ([bdc1854](https://github.com/bumbleflies/queen/commit/bdc1854062fe2c9c9a2aadb2cb60116c2f489e63))
+
 ## [0.34.7](https://github.com/bumbleflies/queen/compare/queen-v0.34.6...queen-v0.34.7) (2026-11-21)
 
 
