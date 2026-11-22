@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.9](https://github.com/bumbleflies/queen/compare/queen-v0.34.8...queen-v0.34.9) (2026-11-22)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @tanstack/react-query to v5.108.3 ([#363](https://github.com/bumbleflies/queen/issues/363)) ([eb3c23f](https://github.com/bumbleflies/queen/commit/eb3c23f928f4b16a8c41f0e83aaae932272e7961))
+
 ## [0.34.8](https://github.com/bumbleflies/queen/compare/queen-v0.34.7...queen-v0.34.8) (2026-11-21)
 
 
