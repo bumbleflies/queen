@@ -15,6 +15,7 @@ import { settingsRouter } from './routers/settings';
 import { usersRouter } from './routers/users';
 import { foundersRouter } from './routers/founders';
 import { expensesRouter } from './routers/expenses';
+import { payoutsRouter } from './routers/payouts';
 
 export * from './trpcInit';
 
@@ -40,6 +41,7 @@ export const appRouter = router({
   users: usersRouter,
   founders: foundersRouter,
   expenses: expensesRouter,
+  payouts: payoutsRouter,
 });
 
 export type AppRouter = typeof appRouter;

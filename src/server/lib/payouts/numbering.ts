@@ -12,3 +12,13 @@ export async function nextPayoutNumber(year: number): Promise<string> {
   ).lean();
   return `SP-${year}-${String(doc?.seq ?? 1).padStart(4, '0')}`;
 }
+
+/**
+ * Non-consuming look at the next number, for a preview's purpose/payload. Only
+ * `nextPayoutNumber` reserves a number; a preview may be opened any number of
+ * times. The real number is allocated when the draft is created.
+ */
+export async function peekPayoutNumber(year: number): Promise<string> {
+  const doc = await Counter.findOne({ _id: `payout:${year}` }).lean();
+  return `SP-${year}-${String((doc?.seq ?? 0) + 1).padStart(4, '0')}`;
+}
