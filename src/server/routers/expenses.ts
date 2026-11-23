@@ -7,6 +7,9 @@ import { Founder } from '../models/Founder';
 import { Account } from '../models/Account';
 import { FiscalYear } from '../models/FiscalYear';
 import { claimFieldsOf, isConfidentClaim, periodOf } from '../lib/expenses/claimFields';
+import { bookExpenseClaim, ClaimError, rebookExpenseClaim } from '../lib/accounting/claimBooking';
+import { LedgerError } from '../lib/accounting/ledger';
+import { PostingError } from '../lib/accounting/postingRules';
 import { addressFromHeader } from '../services/GmailService';
 import { getExpenseAutoBookLimitCents } from '../services/appSettings';
 import { describeIntakeError } from '../jobs/billIntake';
@@ -37,6 +40,29 @@ const claimCorrectionInput = z.object({
 
 /** Messages per click; the hourly job reads more. Keeps the button responsive. */
 const INTAKE_NOW_MAX_MESSAGES = 10;
+
+/**
+ * Domain errors become sentences, not 5xx: Traefik in front of the app replaces
+ * a 5xx body with its own HTML page, which reaches the browser as
+ * `Unexpected token '<'`.
+ */
+function claimErrorToTRPC(err: unknown): TRPCError {
+  if (err instanceof ClaimError) {
+    return new TRPCError({
+      code: err.code === 'NOT_FOUND' ? 'NOT_FOUND' : 'PRECONDITION_FAILED',
+      message: err.message,
+    });
+  }
+  if (err instanceof LedgerError) {
+    return new TRPCError({ code: 'PRECONDITION_FAILED', message: err.message });
+  }
+  if (err instanceof PostingError) {
+    return new TRPCError({ code: 'BAD_REQUEST', message: err.message });
+  }
+  return err instanceof TRPCError
+    ? err
+    : new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: (err as Error).message });
+}
 
 const claimsRouter = router({
   /**
@@ -218,11 +244,44 @@ const claimsRouter = router({
     }),
 
   /**
-   * Book the claim (increment 2). The procedure exists so the router shape is
-   * stable, but nothing may write a JournalEntry yet.
+   * Book the claim, or rebook it after a correction (admin). Booking is
+   * idempotent, so a double click returns the same entry; a correction is
+   * applied by reversing the live entry and posting the claim again.
    */
-  confirm: adminProcedure.input(z.object({ id: z.string().min(1) })).mutation(async () => {
-    throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Buchen kommt mit dem nächsten Schritt' });
+  confirm: adminProcedure.input(z.object({ id: z.string().min(1) })).mutation(async ({ ctx, input }) => {
+    const claim = await ExpenseClaim.findById(input.id);
+    if (!claim) throw new TRPCError({ code: 'NOT_FOUND', message: 'Beleg nicht gefunden' });
+
+    try {
+      if (claim.status === 'booked') {
+        // Nothing changed since the booking: no reversal churn.
+        if (!claim.corrected) {
+          return {
+            id: String(claim._id),
+            status: 'booked' as const,
+            entryId: claim.journalEntryId ? String(claim.journalEntryId) : null,
+            rebooked: false,
+          };
+        }
+        const entry = await rebookExpenseClaim({ claimId: input.id, actor: ctx.user.sub });
+        return {
+          id: String(claim._id),
+          status: 'booked' as const,
+          entryId: String(entry._id),
+          rebooked: true,
+        };
+      }
+
+      const entry = await bookExpenseClaim({ claimId: input.id, actor: ctx.user.sub });
+      return {
+        id: String(claim._id),
+        status: 'booked' as const,
+        entryId: String(entry._id),
+        rebooked: false,
+      };
+    } catch (err) {
+      throw claimErrorToTRPC(err);
+    }
   }),
 
   /** Hide a claim from the list. Claims are never deleted: the mail is the audit trail. */
