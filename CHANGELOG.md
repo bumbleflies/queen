@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.34.11](https://github.com/bumbleflies/queen/compare/queen-v0.34.10...queen-v0.34.11) (2026-11-23)
+
+
+### Bug Fixes
+
+* **deps:** update dependency ioredis to v6.1.0 ([#373](https://github.com/bumbleflies/queen/issues/373)) ([583cc03](https://github.com/bumbleflies/queen/commit/583cc03589dd9e199c91b542a2cef8df8457c8ba))
+* **deps:** update trpc monorepo to v11.29.12 ([#372](https://github.com/bumbleflies/queen/issues/372)) ([5de0685](https://github.com/bumbleflies/queen/commit/5de0685a32934eb9bf25b51df7a3889e2e513d6b))
+
 ## [0.34.10](https://github.com/bumbleflies/queen/compare/queen-v0.34.9...queen-v0.34.10) (2026-11-23)
 
 
