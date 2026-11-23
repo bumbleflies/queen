@@ -5,6 +5,8 @@ import { splitGross } from '../accounting/postingRules';
 export interface ParsedClaim extends ParsedBill {
   /** Receipt date from the document; null when it states none. */
   date: Date | null;
+  /** SKR04 expense account an admin picked; null until one is chosen. */
+  account?: string | null;
   addressedToCompany: boolean;
   /** 'EUR' or 'other'; a foreign receipt queues instead of being booked. */
   currency: string;

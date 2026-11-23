@@ -82,3 +82,24 @@ export async function setTaxEstimateRate(rate: number, updatedBy: string): Promi
     { upsert: true },
   );
 }
+
+const EXPENSE_KEY = 'expenses';
+/** Auto-book a founder receipt only up to 100 € until an admin raises the limit. */
+export const DEFAULT_EXPENSE_AUTO_BOOK_LIMIT_CENTS = 10000;
+
+/** Gross limit in cents under which a confident expense claim may book itself. */
+export async function getExpenseAutoBookLimitCents(): Promise<number> {
+  const doc = await Setting.findOne({ key: EXPENSE_KEY });
+  const cents = (doc?.value as { autoBookLimitCents?: number } | undefined)?.autoBookLimitCents;
+  return typeof cents === 'number' && Number.isInteger(cents) && cents >= 0
+    ? cents
+    : DEFAULT_EXPENSE_AUTO_BOOK_LIMIT_CENTS;
+}
+
+export async function setExpenseAutoBookLimitCents(cents: number, updatedBy: string): Promise<void> {
+  await Setting.updateOne(
+    { key: EXPENSE_KEY },
+    { key: EXPENSE_KEY, value: { autoBookLimitCents: cents }, updatedBy, updatedAt: new Date() },
+    { upsert: true },
+  );
+}
