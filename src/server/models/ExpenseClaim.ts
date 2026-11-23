@@ -13,6 +13,8 @@ const claimPaymentFields = () => ({
   netCents: { type: Number },
   vatCents: { type: Number },
   vatRate: { type: Number },
+  /** Vendor IBAN from the document; matches an earlier claim's account suggestion. */
+  iban: { type: String, default: '' },
   account: { type: String },
   reverseCharge: { type: Boolean, default: false },
   /** True only when the PDF names bumbleflies as recipient; drives Vorsteuer. */

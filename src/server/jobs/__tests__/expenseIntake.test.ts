@@ -155,10 +155,12 @@ describe('runExpenseIntake', () => {
     expect(uploaded).toEqual([{ fileName: 'Spesen-TP-202601-Bahn.pdf', folderId: 'folder-2026' }]);
   });
 
-  it('never writes a JournalEntry in increment 1', async (ctx) => {
+  it('leaves a claim without an account suggestion unbooked', async (ctx) => {
     skipIfNoDb(ctx);
+    // No earlier claim with this vendor/IBAN: there is no account to book to.
     await runExpenseIntake(deps());
     expect(await JournalEntry.countDocuments()).toBe(0);
+    expect((await ExpenseClaim.findOne({ messageId: 'm1' }).lean())?.status).toBe('received');
   });
 
   it('leaves an unknown sender unassigned but still records the claim', async (ctx) => {
