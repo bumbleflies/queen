@@ -1,5 +1,6 @@
 import { createGmailClient, headerValue, sendMail, type OutgoingMail } from '../../services/GmailService';
 import { googleAccessForCron } from '../../services/driveForUser';
+import { formatGermanEUR } from '../money';
 
 /** Origin of the payout deep link; same setting the intakes use. */
 function appUrl(env: NodeJS.ProcessEnv = process.env): string {
@@ -25,13 +26,13 @@ export function payoutReleaseMail(
     text: [
       `Hallo ${founder.name},`,
       '',
-      `deine Spesen sind freigegeben: ${payout.purpose}`,
-      `Betrag: ${(payout.amountCents / 100).toFixed(2)} EUR`,
+      `deine Spesen-Auszahlung ist freigegeben: ${payout.purpose}`,
+      `Betrag: ${formatGermanEUR(payout.amountCents)}`,
       `Referenz: ${payout.number}`,
       '',
-      `Bitte melde dich an und bestätige die Auszahlung auf dieser Seite: ${link}`,
-      'Nach der Freigabe erscheint ein QR-Code. In der GLS-App scannen und dort mit TAN bestätigen.',
-      'Danach gleicht die Bankzeile die Auszahlung automatisch aus.',
+      `Bitte melde dich an und öffne deine Auszahlung: ${link}`,
+      'Dort erscheint der QR-Code. In der GLS-App scannen und dort mit TAN bestätigen.',
+      'Danach hier nichts weiter tun — die Bankzeile gleicht automatisch aus.',
       '',
     ].join('\n'),
   };
