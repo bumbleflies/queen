@@ -102,7 +102,8 @@ export async function autoBookOpen(now: Date): Promise<AutoBookResult> {
 
   for (const year of await bookableYears(now)) {
     // Outgoing only: an unmatched incoming payment may still belong to an invoice.
-    const candidates = (await openTransactions(year)).filter((t) => t.direction === 'out');
+    // A row that settled a founder payout is not an expense for a supplier rule.
+    const candidates = (await openTransactions(year)).filter((t) => t.direction === 'out' && !t.payoutId);
     const reversed = await reversedRefs(candidates.map((t) => t.fireflyJournalId));
     for (const tx of candidates) {
       if (reversed.has(tx.fireflyJournalId)) continue;

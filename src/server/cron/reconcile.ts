@@ -7,6 +7,7 @@ import { isCliEntrypoint, reconcilePendingTransactions } from '../lib/reconcile'
 import { findLastSuccessfulRun, readFireflyEnv } from '../lib/fireflyEnv';
 import { autoBookOpen, type AutoBookResult } from '../lib/accounting/autoBook';
 import { readOpenReceipts } from '../services/receiptReader';
+import { matchPayouts } from '../lib/accounting/payoutMatch';
 
 export interface TransactionSource {
   fetchTransactions(start: Date, end: Date): Promise<FireflyTransaction[]>;
@@ -61,6 +62,15 @@ export async function runReconcile(
       ({ fetched } = await syncBankTransactions({ client: source.client, from, to, now }));
     }
 
+    // A founder payout is settled by its bank row, before invoice matching and
+    // auto-booking can see (or book) that row as something else.
+    const payouts = await matchPayouts().catch((err: unknown) => ({
+      settled: 0,
+      warnings: [`Auszahlungen abgleichen abgebrochen: ${(err as Error).message}`],
+    }));
+    run.payoutSettled = payouts.settled;
+    if (payouts.warnings.length > 0) run.payoutWarning = payouts.warnings.join('; ');
+
     const counts = await reconcilePendingTransactions();
     run.fetched = fetched;
     run.matched = counts.matched;
@@ -110,6 +120,7 @@ async function main(): Promise<void> {
           `partial=${run.partial} unmatched=${run.unmatched} ` +
           `autoBooked=${run.autoBooked} autoBookFailed=${run.autoBookFailed} receiptsRead=${run.receiptsRead}`,
       );
+      if (run.payoutWarning) console.warn(`Auszahlungen: ${run.payoutWarning}`);
       if (run.autoBookWarning) console.warn(`Auto-booking: ${run.autoBookWarning}`);
       if (run.receiptReadWarning) console.warn(`Receipt reading: ${run.receiptReadWarning}`);
     }

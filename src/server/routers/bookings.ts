@@ -169,6 +169,7 @@ export const bookingsRouter = router({
     const billHints = await billHintLookup(input.year);
 
     return txs
+      .filter((t) => !t.payoutId) // settled founder payouts live on their own page
       .map((t) => {
         const covered = coverage.get(t.fireflyJournalId);
         if (t.matchedInvoiceId) {
@@ -206,7 +207,7 @@ export const bookingsRouter = router({
     const [{ txs, coverage }, suppliers, history] = await Promise.all([loadYear(input.year), Supplier.find({ archived: false }), loadHistory()]);
     const billHints = await billHintLookup(input.year);
     return txs
-      .filter((t) => !t.matchedInvoiceId && !coverage.has(t.fireflyJournalId))
+      .filter((t) => !t.matchedInvoiceId && !t.payoutId && !coverage.has(t.fireflyJournalId))
       .map((t) => ({ ...row(t), suggestion: suggestForTx(t, suppliers, history), receiptReading: readingState(t), bill: billHints.get(String(t._id)) ?? null }));
   }),
 

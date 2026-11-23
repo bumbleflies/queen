@@ -1,14 +1,17 @@
 import { BankTransaction, type BankTransactionDoc } from '../../models/BankTransaction';
+import { Payout, type PayoutDoc } from '../../models/Payout';
+import { ExpenseClaim } from '../../models/ExpenseClaim';
+import { Founder } from '../../models/Founder';
 import type { SupplierDoc } from '../../models/Supplier';
 import type { HydratedDocument } from 'mongoose';
 import { Supplier } from '../../models/Supplier';
 import { allocateSupplierNumber } from '../numbering';
-import { findActiveBySource, post, reverse } from './ledger';
-import { bankPosting, bankPostingSplit, type BankBookingMode, type SplitPart } from './postingRules';
+import { findActiveBySource, post, postOnce, reverse } from './ledger';
+import { bankPosting, bankPostingSplit, payoutSettlementPosting, type BankBookingMode, type SplitPart } from './postingRules';
 import { learningKey, type RuleKey } from './ruleLearning';
 import { suggest, type SuggestTx } from './suggest';
 
-export type BookingErrorCode = 'NOT_FOUND' | 'MATCHED' | 'ALREADY_BOOKED' | 'NOT_BOOKED' | 'SUPPLIER_NOT_FOUND' | 'FORBIDDEN';
+export type BookingErrorCode = 'NOT_FOUND' | 'MATCHED' | 'ALREADY_BOOKED' | 'NOT_BOOKED' | 'SUPPLIER_NOT_FOUND' | 'FORBIDDEN' | 'BAD_REQUEST';
 
 export class BookingError extends Error {
   readonly code: BookingErrorCode;
@@ -59,6 +62,9 @@ export async function bookBankTransaction(input: BookBankInput) {
   if (!tx) throw new BookingError('NOT_FOUND', 'Banktransaktion nicht gefunden');
   if (tx.matchedInvoiceId) {
     throw new BookingError('MATCHED', 'Transaktion ist einer Rechnung zugeordnet — Zahlung dort lösen');
+  }
+  if (tx.payoutId) {
+    throw new BookingError('FORBIDDEN', 'Transaktion hat eine Gesellschafter-Auszahlung ausgeglichen');
   }
   if (await findCoverage(tx.fireflyJournalId)) {
     throw new BookingError('ALREADY_BOOKED', 'Transaktion ist bereits gebucht');
@@ -176,6 +182,64 @@ async function rememberRule(
   s.defaultMode = input.mode;
   await s.save();
   return s;
+}
+
+/**
+ * Settle a founder payout from the bank row that actually paid it. The expense
+ * was booked when the claim arrived; this entry only clears the liability
+ * against the bank. The claims' PDFs stay linked on the claims; the first one
+ * becomes the transaction's receipt so the posting carries a document.
+ */
+export async function settlePayout(args: {
+  payout: HydratedDocument<PayoutDoc>;
+  tx: HydratedDocument<BankTransactionDoc>;
+  actor: string;
+}) {
+  const { payout, tx, actor } = args;
+  if (tx.amountCents !== payout.amountCents) {
+    throw new BookingError('BAD_REQUEST', 'Bankbetrag entspricht nicht der Auszahlung');
+  }
+  const founder = await Founder.findById(payout.founderId);
+  if (!founder) throw new BookingError('NOT_FOUND', 'Gesellschafter nicht gefunden');
+  if (!founder.iban?.trim()) throw new BookingError('BAD_REQUEST', 'Keine IBAN hinterlegt');
+
+  const entry = (
+    await postOnce({
+      date: tx.date,
+      text: `Spesen-Auszahlung ${payout.number} ${founder.shortName}`.trim(),
+      lines: payoutSettlementPosting(tx.amountCents, founder.liabilityAccount || '3500'),
+      source: { kind: 'expense_payout', refId: String(payout._id) },
+      createdBy: actor,
+    })
+  ).entry;
+
+  if (!tx.receipt?.driveFileId) {
+    const claims = await ExpenseClaim.find({ _id: { $in: payout.claimIds } });
+    const withPdf = claims.find((claim) => claim.driveFileId || claim.driveLink);
+    if (withPdf) {
+      tx.receipt = {
+        driveFileId: withPdf.driveFileId || undefined,
+        fileName: withPdf.fileName,
+        link: withPdf.driveLink ||
+          (withPdf.driveFileId ? `https://drive.google.com/file/d/${withPdf.driveFileId}/view` : ''),
+      };
+    }
+  }
+  tx.payoutId = payout._id as BankTransactionDoc['payoutId'];
+  await tx.save();
+
+  const wasReleased = payout.status === 'released';
+  payout.status = 'settled';
+  if (wasReleased && !payout.executedAt) {
+    payout.executedAt = new Date(); // the bank row proves the transfer left
+    payout.executedBy = actor;
+  }
+  await payout.save();
+  await ExpenseClaim.updateMany(
+    { _id: { $in: payout.claimIds } },
+    { $set: { status: 'settled', payoutId: payout._id } },
+  );
+  return entry;
 }
 
 export async function unbookBankTransaction(bankTxId: string, reason: string, createdBy: string) {
