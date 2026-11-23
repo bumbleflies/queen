@@ -172,7 +172,8 @@ function grossOnLine(line: string): number | null {
   return amounts.reduce((biggest, cents) => (Math.abs(cents) > Math.abs(biggest) ? cents : biggest));
 }
 
-function parseGermanDate(token: string): Date | null {
+/** German, ISO or English date token → local Date; null when it is not a real date. */
+export function parseGermanDate(token: string): Date | null {
   const german = token.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/);
   if (german) {
     const day = Number(german[1]);

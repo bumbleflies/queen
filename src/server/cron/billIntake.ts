@@ -2,6 +2,37 @@ import 'dotenv/config';
 import { connectMongo, disconnectMongo } from '../db/mongo';
 import { isCliEntrypoint } from '../lib/reconcile';
 import { rematchBills, resolveBillIntakeDeps, runBillIntake } from '../jobs/billIntake';
+import { resolveExpenseIntakeDeps, runExpenseIntake } from '../jobs/expenseIntake';
+
+/**
+ * Expense-intake pass: the same hourly slot as the bills pass, but a separate
+ * mailbox (`expenses@`) and a separate failure domain — a broken expense read
+ * must never stop bills from being filed.
+ */
+async function expensePass(): Promise<void> {
+  try {
+    const deps = await resolveExpenseIntakeDeps();
+    const result = await runExpenseIntake(deps);
+    console.log(
+      `Expense intake done: messages=${result.messages} attachments=${result.attachments} ` +
+        `created=${result.created} skipped=${result.skipped} noText=${result.noText} failed=${result.failed} ` +
+        `notified=${result.notified}`,
+    );
+    for (const error of result.errors) console.warn(`Expense intake: ${error}`);
+    if (result.failed > 0) process.exitCode = 1;
+
+    if (result.notified > 0) {
+      console.log(`Expense intake confirmation sent: ${result.notified}`);
+    }
+    for (const error of result.notifyErrors) {
+      console.warn(`Expense intake confirmation not sent: ${error}`);
+    }
+  } catch (err) {
+    // Not configured (no receipts folder / no Google access) is a warning here,
+    // not a reason to mark the bills run red.
+    console.warn(`Expense intake skipped: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
 
 /**
  * Bill-intake entrypoint for the scheduler (Ofelia job-exec, hourly). Reads the
@@ -29,6 +60,8 @@ async function main(): Promise<void> {
     for (const error of result.notifyErrors) {
       console.warn(`Bill intake confirmation not sent: ${error}`);
     }
+
+    await expensePass();
 
     const rematch = await rematchBills();
     console.log(

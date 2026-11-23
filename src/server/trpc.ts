@@ -13,6 +13,8 @@ import { billsRouter } from './routers/bills';
 import { receiptsRouter } from './routers/receipts';
 import { settingsRouter } from './routers/settings';
 import { usersRouter } from './routers/users';
+import { foundersRouter } from './routers/founders';
+import { expensesRouter } from './routers/expenses';
 
 export * from './trpcInit';
 
@@ -36,6 +38,8 @@ export const appRouter = router({
   receipts: receiptsRouter,
   settings: settingsRouter,
   users: usersRouter,
+  founders: foundersRouter,
+  expenses: expensesRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -15,6 +15,7 @@ export function InvitePage() {
 
   useEffect(() => {
     const token = window.location.hash.replace(/^#/, '');
+    const next = new URLSearchParams(window.location.search).get('next');
     if (!token) {
       setInvalid(true);
       return;
@@ -25,12 +26,21 @@ export function InvitePage() {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ token }),
+      body: JSON.stringify({ token, ...(next ? { next } : {}) }),
     })
-      .then((res) => {
+      .then(async (res) => {
         if (cancelled) return;
-        if (res.ok) navigate('/dashboard', { replace: true });
-        else setInvalid(true);
+        if (!res.ok) {
+          setInvalid(true);
+          return;
+        }
+        // The server validated the path. Older servers answer without `next`.
+        const answer = (await res.json().catch(() => ({}))) as { next?: unknown };
+        const target =
+          typeof answer.next === 'string' && answer.next.startsWith('/') && !answer.next.startsWith('//')
+            ? answer.next
+            : '/dashboard';
+        navigate(target, { replace: true });
       })
       .catch(() => {
         if (!cancelled) setInvalid(true);

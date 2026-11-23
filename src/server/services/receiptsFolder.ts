@@ -29,9 +29,17 @@ function quoted(value: string): string {
 
 /** Id of `<root>/<year>/`, created when it does not exist yet. */
 export async function ensureYearFolder(drive: FolderDriveLike, rootFolderId: string, year: number): Promise<string> {
-  const name = String(year);
+  return ensureSubfolder(drive, rootFolderId, String(year));
+}
+
+/** Id of `<parentFolderId>/<name>/`, created when it does not exist yet. */
+export async function ensureSubfolder(
+  drive: FolderDriveLike,
+  parentFolderId: string,
+  name: string,
+): Promise<string> {
   const found = await drive.files.list({
-    q: `${quoted(rootFolderId)} in parents and name = ${quoted(name)} and mimeType = '${FOLDER_MIME}' and trashed = false`,
+    q: `${quoted(parentFolderId)} in parents and name = ${quoted(name)} and mimeType = '${FOLDER_MIME}' and trashed = false`,
     fields: 'files(id, name)',
     spaces: 'drive',
     includeItemsFromAllDrives: true,
@@ -41,7 +49,7 @@ export async function ensureYearFolder(drive: FolderDriveLike, rootFolderId: str
   if (existing) return existing;
 
   const created = await drive.files.create({
-    requestBody: { name, mimeType: FOLDER_MIME, parents: [rootFolderId] },
+    requestBody: { name, mimeType: FOLDER_MIME, parents: [parentFolderId] },
     fields: 'id',
   });
   const id = created.data.id;

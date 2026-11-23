@@ -9,6 +9,44 @@ import { hashInviteToken } from '../lib/inviteToken';
 
 export const AUTH_COOKIE = 'queen_token';
 
+/**
+ * Where the browser should land after a login round trip. A cookie (not a query
+ * param on the callback) because the OAuth callback URL is fixed at Google and
+ * must not carry app state.
+ */
+export const POST_LOGIN_COOKIE = 'queen_next';
+/** The return-to is a redirect target, not a session: ten minutes is plenty. */
+const POST_LOGIN_MAX_AGE_MS = 10 * 60 * 1000;
+
+/**
+ * A return-to target is only ever an absolute path on this origin. Anything
+ * else — a scheme, a host, a protocol-relative `//evil`, a backslash trick, a
+ * control character — is dropped, so the login cannot become an open redirect.
+ */
+export function safeNext(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const raw = value.trim();
+  if (!raw || raw.length > 512) return null;
+  if (!raw.startsWith('/') || raw.startsWith('//') || raw.includes('\\')) return null;
+  for (const char of raw) {
+    const code = char.charCodeAt(0);
+    // Also covers spaces: a redirect target never needs one, and a header
+    // injection needs whitespace or a control character somewhere.
+    if (code <= 0x20 || code === 0x7f) return null;
+  }
+  return raw;
+}
+
+function nextCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: 'lax' as const,
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: POST_LOGIN_MAX_AGE_MS,
+  };
+}
+
 function authCookieOptions(maxAgeMs: number = SESSION_HOURS * 60 * 60 * 1000) {
   return {
     httpOnly: true,
@@ -134,6 +172,13 @@ export function requireAdmin(_req: Request, res: Response, next: NextFunction): 
 export function createAuthRouter() {
   const router = Router();
 
+  /** Remember where the user wanted to go before the round trip to Google. */
+  router.get('/google', (req: Request, res: Response, next: NextFunction) => {
+    const target = safeNext(req.query.next);
+    if (target) res.cookie(POST_LOGIN_COOKIE, target, nextCookieOptions());
+    next();
+  });
+
   router.get(
     '/google',
     googleOAuthUnavailable,
@@ -170,7 +215,12 @@ export function createAuthRouter() {
         const role = roleParsed.success ? roleParsed.data : 'user';
         const token = signToken({ sub: userId, email, role });
         res.cookie(AUTH_COOKIE, token, authCookieOptions());
-        res.redirect('/');
+        // Consume the return-to once: a stale cookie must not redirect a later,
+        // unrelated login. `safeNext` stops a forged cookie becoming an open redirect.
+        const target = safeNext(req.cookies?.[POST_LOGIN_COOKIE]);
+        const { maxAge: _maxAge, ...clearOptions } = nextCookieOptions();
+        res.clearCookie(POST_LOGIN_COOKIE, clearOptions);
+        res.redirect(target ?? '/');
       } catch {
         res.status(500).json({ error: 'login failed' });
       }
@@ -184,6 +234,9 @@ export function createAuthRouter() {
    */
   router.post('/invite/redeem', async (req: Request, res: Response) => {
     const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
+    // Invites are redeemed in the browser, so the return-to travels in the body.
+    // Only echo it back when one was sent: the normal answer stays `{ ok: true }`.
+    const next = safeNext(req.body?.next);
     if (!token) {
       res.status(400).json({ error: 'invalid invite' });
       return;
@@ -216,7 +269,7 @@ export function createAuthRouter() {
         signToken(payload, { expiresInSeconds: maxAgeMs / 1000 }),
         authCookieOptions(maxAgeMs),
       );
-      res.json({ ok: true });
+      res.json(next ? { ok: true, next } : { ok: true });
     } catch {
       res.status(500).json({ error: 'login failed' });
     }

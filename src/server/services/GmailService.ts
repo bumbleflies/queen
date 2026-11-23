@@ -137,6 +137,13 @@ export function displayNameFromHeader(from: string): string {
   return address.split('@')[0] ?? '';
 }
 
+/** `"Test Person" <tp@example.org>` → `tp@example.org`; '' when the header holds no address. */
+export function addressFromHeader(from: string): string {
+  const match = from.match(/<([^>]+)>/);
+  const address = (match?.[1] ?? from).trim();
+  return /@/.test(address) ? address.toLowerCase() : '';
+}
+
 export interface BillMessage {
   id: string;
 }

@@ -7,7 +7,7 @@ import { useLanguage } from '../i18n/LanguageContext';
 import { useTheme } from '../theme/ThemeContext';
 import type { DictKey } from '../i18n/de';
 
-type IconName = 'home' | 'invoices' | 'clients' | 'bills' | 'bank' | 'reports' | 'settings' | 'logout';
+type IconName = 'home' | 'invoices' | 'clients' | 'bills' | 'expenses' | 'bank' | 'reports' | 'settings' | 'logout';
 
 const ICON_PATHS: Record<IconName, ReactNode> = {
   home: <path d="M3 12h7V3H3zM14 21h7v-9h-7zM14 3h7v5h-7zM3 21h7v-5H3z" />,
@@ -19,6 +19,7 @@ const ICON_PATHS: Record<IconName, ReactNode> = {
     </>
   ),
   bills: <path d="M3 6h18v13H3zM3 6l9 7 9-7" />,
+  expenses: <path d="M6 2h12v20l-3-2-3 2-3-2-3 2zM9 7h6M9 11h6M9 15h4" />,
   bank: <path d="M3 10h18L12 4zM5 10v8M10 10v8M14 10v8M19 10v8M3 20h18" />,
   reports: <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />,
   settings: (
@@ -61,6 +62,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/invoices', labelKey: 'nav.invoices', shortKey: 'nav.invoices', icon: 'invoices' },
   { to: '/clients', labelKey: 'nav.clients', shortKey: 'nav.clients', icon: 'clients' },
   { to: '/finance', labelKey: 'nav.finance', shortKey: 'nav.financeShort', icon: 'bank', badge: 'finance' },
+  { to: '/expenses', labelKey: 'nav.expenses', shortKey: 'nav.expensesShort', icon: 'expenses' },
   { to: '/reports', labelKey: 'nav.reports', shortKey: 'nav.reports', icon: 'reports' },
 ];
 
