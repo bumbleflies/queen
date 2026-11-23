@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.35.0](https://github.com/bumbleflies/queen/compare/queen-v0.34.11...queen-v0.35.0) (2026-11-23)
+
+
+### Features
+
+* book founder expense claims ([#366](https://github.com/bumbleflies/queen/issues/366)) ([c5b36b9](https://github.com/bumbleflies/queen/commit/c5b36b9a33e2ae1ef415cb785a58c0c067164fe0))
+* founder expense intake ([#365](https://github.com/bumbleflies/queen/issues/365)) ([41b6b6e](https://github.com/bumbleflies/queen/commit/41b6b6ea4329fe1bc43cf4436ae37a6ae14f5861))
+* manage founders and create payouts from the UI ([#375](https://github.com/bumbleflies/queen/issues/375)) ([4bd18e9](https://github.com/bumbleflies/queen/commit/4bd18e94d9cfd16e1af2896160cf02a1754ccc71))
+* pay out founder expenses by girocode ([#371](https://github.com/bumbleflies/queen/issues/371)) ([333e97c](https://github.com/bumbleflies/queen/commit/333e97c0656e0df66d336cc50b2ec017e7e2fbd4))
+
 ## [0.34.11](https://github.com/bumbleflies/queen/compare/queen-v0.34.10...queen-v0.34.11) (2026-11-23)
 
 
