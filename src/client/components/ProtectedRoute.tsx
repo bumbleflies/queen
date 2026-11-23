@@ -32,7 +32,10 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
     return <p>{t('common.loadingShort')}</p>;
   }
   if (status === 'unauthed') {
-    return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+    // A query param survives the OAuth redirect; router state does not. Keep the
+    // query (e.g. `?claim=…`) so the login lands back on the exact receipt.
+    const requested = location.pathname + location.search;
+    return <Navigate to={`/login?next=${encodeURIComponent(requested)}`} replace />;
   }
   return <>{children}</>;
 }

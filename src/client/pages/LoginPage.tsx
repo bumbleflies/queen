@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom';
 import { Brand } from '../components/Brand';
 import { useLanguage } from '../i18n/LanguageContext';
 
@@ -11,6 +12,13 @@ function GoogleIcon() {
 
 export function LoginPage() {
   const { t } = useLanguage();
+  const [params] = useSearchParams();
+  // ProtectedRoute puts the requested page here. The server validates the path
+  // again before using it as a redirect target, so this is only a convenience.
+  const next = params.get('next');
+  const googleHref = next?.startsWith('/') && !next.startsWith('//')
+    ? `/auth/google?next=${encodeURIComponent(next)}`
+    : '/auth/google';
   return (
     <main className="auth">
       <div className="card auth-card">
@@ -19,7 +27,7 @@ export function LoginPage() {
           <h1>{t('auth.title')}</h1>
           <p className="muted">{t('auth.sub')}</p>
         </div>
-        <a className="btn honey auth-google" href="/auth/google">
+        <a className="btn honey auth-google" href={googleHref}>
           <GoogleIcon />
           {t('auth.google')}
         </a>
