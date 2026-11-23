@@ -10,6 +10,12 @@ import { ToastProvider } from '../../components/Toast';
 const rows = vi.hoisted(() => ({ current: [] as unknown[] }));
 const role = vi.hoisted(() => ({ current: 'admin' }));
 const correctMutation = vi.fn(async () => ({ id: 'claim-1', parse: {}, needsRebook: false }));
+const confirmMutation = vi.fn(async () => ({
+  id: 'claim-1',
+  status: 'booked' as const,
+  entryId: 'entry-1',
+  rebooked: false,
+}));
 
 const FOUNDER = { id: 'f1', name: 'Test Person', shortName: 'TP', active: true };
 
@@ -54,6 +60,7 @@ vi.mock('../../lib/trpc', () => {
     assignFounder: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
     createManual: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
     correct: { useMutation: () => ({ mutateAsync: correctMutation, isPending: false }) },
+    confirm: { useMutation: () => ({ mutateAsync: confirmMutation, isPending: false }) },
   };
   return {
     trpc: {
@@ -82,6 +89,7 @@ beforeEach(() => {
   rows.current = [];
   role.current = 'admin';
   correctMutation.mockClear();
+  confirmMutation.mockClear();
 });
 
 describe('ExpensesPage', () => {
@@ -139,6 +147,49 @@ describe('ExpensesPage', () => {
     });
   });
 
+  it('books a received claim in one click', async () => {
+    rows.current = [claimRow()];
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Buchen' }));
+    expect(confirmMutation).toHaveBeenCalledTimes(1);
+    expect(confirmMutation.mock.calls[0][0]).toEqual({ id: 'claim-1' });
+  });
+
+  it('shows why a queued claim was not booked itself on the booking button', async () => {
+    rows.current = [
+      claimRow({
+        autoBookable: {
+          ok: false,
+          reasons: ['über Auto-Buchungsgrenze'],
+          vatDeductible: false,
+          grossOnly: true,
+        },
+      }),
+    ];
+    renderPage();
+
+    expect(await screen.findByRole('button', { name: 'Buchen' })).toHaveAttribute(
+      'title',
+      'über Auto-Buchungsgrenze',
+    );
+  });
+
+  it('corrects and rebooks a booked claim in one action', async () => {
+    correctMutation.mockResolvedValueOnce({ id: 'claim-1', parse: {}, needsRebook: true });
+    rows.current = [claimRow({ status: 'booked' })];
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Korrigieren & neu buchen' }));
+    const account = screen.getByLabelText('Aufwandskonto');
+    await userEvent.clear(account);
+    await userEvent.type(account, '6640');
+    await userEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+
+    expect(correctMutation).toHaveBeenCalledWith(expect.objectContaining({ id: 'claim-1', account: '6640' }));
+    expect(confirmMutation).toHaveBeenCalledWith({ id: 'claim-1' });
+  });
+
   it('offers no admin actions to a founder', async () => {
     role.current = 'user';
     rows.current = [claimRow()];
@@ -147,6 +198,7 @@ describe('ExpensesPage', () => {
     expect(await screen.findByText('Bahn')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Jetzt abrufen' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Korrigieren' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Buchen' })).not.toBeInTheDocument();
   });
 
   it('marks an unknown sender as unassigned instead of guessing', async () => {

@@ -1,7 +1,7 @@
 /** "Frei verfügbar": the bank balance minus what is already spoken for. */
 export const VAT_ACCOUNTS = ['1401', '1406', '1407', '3801', '3806', '3837', '3820', '3840', '3841'];
 export const PROVISION_ACCOUNTS = ['3020', '3035', '3040'];
-export const LIABILITY_ACCOUNTS = ['3300', '3500', '3501'];
+export const LIABILITY_ACCOUNTS = ['1700', '3300', '3500', '3501'];
 export const INCOME_TAX_ACCOUNTS = ['7600', '7608', '7610', '7641'];
 /** Prepayment accounts that reduce the estimated tax. */
 const PREPAYMENT_ACCOUNTS = ['7600', '7608', '7610'];

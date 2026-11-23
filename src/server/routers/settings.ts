@@ -7,6 +7,8 @@ import {
   setDriveFolders,
   getTaxEstimateRate,
   setTaxEstimateRate,
+  getExpenseAutoBookLimitCents,
+  setExpenseAutoBookLimitCents,
   type FolderRef,
 } from '../services/appSettings';
 import { driveForUser } from '../services/driveForUser';
@@ -73,5 +75,15 @@ export const settingsRouter = router({
     .mutation(async ({ input, ctx }) => {
       await setTaxEstimateRate(input.rate, ctx.user.sub);
       return { rate: await getTaxEstimateRate() };
+    }),
+
+  /** Auto-book limit for founder receipts, stored in cents. Admin-only. */
+  getExpenseLimit: authedProcedure.query(async () => ({ cents: await getExpenseAutoBookLimitCents() })),
+
+  setExpenseLimit: adminProcedure
+    .input(z.object({ cents: z.number().int().min(0).max(1_000_000_00) }))
+    .mutation(async ({ input, ctx }) => {
+      await setExpenseAutoBookLimitCents(input.cents, ctx.user.sub);
+      return { cents: await getExpenseAutoBookLimitCents() };
     }),
 });
