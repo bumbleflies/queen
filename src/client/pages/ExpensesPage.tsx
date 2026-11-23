@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../i18n/LanguageContext';
 import { ClaimsSection } from '../components/ClaimsSection';
+import { PayoutSuggestions } from '../components/PayoutSuggestions';
 import { PayoutCard } from '../components/PayoutCard';
 
 type Tab = 'claims' | 'payouts';
@@ -27,7 +28,14 @@ export function ExpensesPage() {
           {t('expenses.tab.payouts')}
         </button>
       </nav>
-      {tab === 'claims' ? <ClaimsSection /> : <PayoutCard />}
+      {tab === 'claims' ? (
+        <ClaimsSection />
+      ) : (
+        <>
+          <PayoutSuggestions />
+          <PayoutCard />
+        </>
+      )}
     </>
   );
 }

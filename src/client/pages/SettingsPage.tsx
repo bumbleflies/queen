@@ -5,6 +5,7 @@ import { useToast } from '../components/Toast';
 import { LanguageToggle } from '../components/LanguageToggle';
 import { FolderPicker, type PickerFolder, type PickerScope } from '../components/FolderPicker';
 import { UsersSection } from '../components/UsersSection';
+import { FoundersSection } from '../components/FoundersSection';
 import { GoogleAccessSection } from '../components/GoogleAccessSection';
 import { useLanguage } from '../i18n/LanguageContext';
 import type { DictKey } from '../i18n/de';
@@ -164,6 +165,8 @@ export function SettingsPage() {
       {user?.role === 'admin' ? <ExpenseLimitSection /> : null}
 
       {user?.role === 'admin' ? <UsersSection /> : null}
+
+      {user?.role === 'admin' ? <FoundersSection /> : null}
 
       <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h2 style={{ margin: 0, fontSize: 18 }}>{t('settings.theme')}</h2>

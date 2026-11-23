@@ -67,6 +67,11 @@ vi.mock('../../lib/trpc', () => {
       useUtils: () => ({ expenses: { claims: { list: { invalidate: vi.fn() } } } }),
       me: { useQuery: () => ({ data: { user: { role: role.current } } }) },
       founders: { list: { useQuery: () => ({ data: [FOUNDER] }) } },
+      payouts: {
+        list: { useQuery: () => ({ data: [] }) },
+        preview: { useQuery: () => ({ data: null, isLoading: false }) },
+        create: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      },
       expenses: { claims },
     },
   };

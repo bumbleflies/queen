@@ -15,6 +15,13 @@ vi.mock('../lib/trpc', () => ({
       setRole: { useMutation: () => ({ mutateAsync: async () => ({}), isPending: false }) },
       setDisabled: { useMutation: () => ({ mutateAsync: async () => ({}), isPending: false }) },
     },
+    founders: {
+      list: { useQuery: () => ({ data: [], isError: false }) },
+      create: { useMutation: () => ({ mutateAsync: async () => ({}), isPending: false }) },
+      update: { useMutation: () => ({ mutateAsync: async () => ({}), isPending: false }) },
+      setActive: { useMutation: () => ({ mutateAsync: async () => ({}), isPending: false }) },
+      addEmail: { useMutation: () => ({ mutateAsync: async () => ({}), isPending: false }) },
+    },
     settings: {
       getDriveFolders: { useQuery: () => ({ data: null, isError: false }) },
       getTaxRate: { useQuery: () => ({ data: { rate: 0.33 } }) },
