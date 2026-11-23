@@ -32,6 +32,11 @@ the money could be booked twice.
   - Founder payout targets never teach a rule, are never auto-booked, and show
     a `founderHint` instead of an expense suggestion in the Finance inbox.
   - Invariants in `AGENTS.md`, a design summary in `docs/plans/`, and this log.
+- **Increment 4 (this branch):** the two missing admin UIs — a founder registry
+  in Settings (create/edit, intake addresses, archive/restore) and payout
+  suggestions on the Expenses → Auszahlungen tab (one preview per active
+  founder, create a draft and open it). No founder data is hard-coded; DE/EN
+  keys and client tests cover both flows.
 
 ## Field finding (GLS GiroCode)
 
@@ -68,6 +73,8 @@ advisor confirms the mapping. No real amounts, IBANs or names are stored here.
 - `src/server/models/{BankTransaction,ReconcileRun}.ts`
 - `src/client/pages/{PayoutPage,ExpensesPage}.tsx`, `src/client/components/PayoutCard.tsx`,
   `src/client/main.tsx`, i18n dictionaries, `package.json` (`qrcode`)
+- `src/client/components/{FoundersSection,PayoutSuggestions}.tsx`, `SettingsPage.tsx`
+  and client tests for both admin flows
 - tests for numbering, payout router, payout mail, matching and the founder guard
 - `AGENTS.md`, `docs/plans/2026-11-23-founder-expenses.md`
 
