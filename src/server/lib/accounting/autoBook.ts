@@ -9,6 +9,7 @@ import { openTransactions } from './bankCoverage';
 import { LedgerError } from './ledger';
 import { loadHistory } from './history';
 import { suggestForTx } from './txSuggestion';
+import { activeFounderIbans, isFounderIban } from './founderIbans';
 import { rankReceipts, strongReceipt, type ReceiptFile } from './receipts';
 import type { Suggestion } from './suggest';
 
@@ -71,7 +72,10 @@ export interface AutoBookResult {
  */
 export async function autoBookOpen(now: Date): Promise<AutoBookResult> {
   const result: AutoBookResult = { booked: 0, failed: 0 };
-  const suppliers = await Supplier.find({ archived: false });
+  const [suppliers, founderIbans] = await Promise.all([
+    Supplier.find({ archived: false }),
+    activeFounderIbans(),
+  ]);
   const flagged = new Map(suppliers.filter((s) => s.autoBook).map((s) => [String(s._id), s]));
   if (flagged.size === 0) return result;
   const history = await loadHistory(now);
@@ -102,7 +106,10 @@ export async function autoBookOpen(now: Date): Promise<AutoBookResult> {
 
   for (const year of await bookableYears(now)) {
     // Outgoing only: an unmatched incoming payment may still belong to an invoice.
-    const candidates = (await openTransactions(year)).filter((t) => t.direction === 'out');
+    // A row that settled a founder payout is not an expense for a supplier rule.
+    const candidates = (await openTransactions(year)).filter(
+      (t) => t.direction === 'out' && !t.payoutId && !isFounderIban(founderIbans, t.counterpartyIban),
+    );
     const reversed = await reversedRefs(candidates.map((t) => t.fireflyJournalId));
     for (const tx of candidates) {
       if (reversed.has(tx.fireflyJournalId)) continue;

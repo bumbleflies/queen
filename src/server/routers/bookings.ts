@@ -3,6 +3,8 @@ import { TRPCError } from '@trpc/server';
 import type { HydratedDocument } from 'mongoose';
 import { router, authedProcedure } from '../trpcInit';
 import { BankTransaction, type BankTransactionDoc } from '../models/BankTransaction';
+import { Founder } from '../models/Founder';
+import { ExpenseClaim } from '../models/ExpenseClaim';
 import { Bill } from '../models/Bill';
 import { JournalEntry } from '../models/JournalEntry';
 import { Invoice } from '../models/Invoice';
@@ -15,6 +17,7 @@ import { cachedReading, type ReceiptReading } from '../lib/accounting/receiptRea
 import { suggestForTx } from '../lib/accounting/txSuggestion';
 import type { Suggestion } from '../lib/accounting/suggest';
 import { loadYear, openTransactions } from '../lib/accounting/bankCoverage';
+import { isFounderIban } from '../lib/accounting/founderIbans';
 import { AUTO_BOOK_USER } from '../lib/accounting/autoBook';
 import { billHintOf, type BillHint } from '../services/billMatch';
 import { rankReceipts, receiptCandidates, strongReceipt, type ReceiptFile } from '../lib/accounting/receipts';
@@ -61,6 +64,30 @@ async function billHintLookup(year: number): Promise<Map<string, BillHint>> {
     if (bill.transactionId) map.set(String(bill.transactionId), billHintOf(bill));
   }
   return map;
+}
+
+export interface FounderHint {
+  founderId: string;
+  name: string;
+  openClaims: number;
+}
+
+/**
+ * A transfer to a founder's payout IBAN is a reimbursement, not an expense for
+ * a supplier rule. Each hint also carries how many booked claims are waiting,
+ * so the inbox can say "Spesenausgleich" instead of offering a booking.
+ */
+async function founderHintLookup(txs: HydratedDocument<BankTransactionDoc>[]): Promise<Map<string, FounderHint>> {
+  const founders = await Founder.find({ active: true }).select('name iban').lean();
+  const hints = new Map<string, FounderHint>();
+  for (const tx of txs) {
+    if (!tx.counterpartyIban) continue;
+    const founder = founders.find((f) => f.iban && isFounderIban([f.iban], tx.counterpartyIban));
+    if (!founder) continue;
+    const openClaims = await ExpenseClaim.countDocuments({ founderId: founder._id, status: 'booked' });
+    hints.set(String(tx._id), { founderId: String(founder._id), name: founder.name, openClaims });
+  }
+  return hints;
 }
 
 function row(tx: HydratedDocument<BankTransactionDoc>) {
@@ -167,8 +194,10 @@ export const bookingsRouter = router({
     const supplierIds = txs.flatMap((t) => (t.supplierId ? [t.supplierId] : []));
     const names = new Map((await Supplier.find({ _id: { $in: supplierIds } }).lean() as unknown as { _id: unknown; name: string }[]).map((s) => [String(s._id), s.name]));
     const billHints = await billHintLookup(input.year);
+    const founderHints = await founderHintLookup(txs);
 
     return txs
+      .filter((t) => !t.payoutId) // settled founder payouts live on their own page
       .map((t) => {
         const covered = coverage.get(t.fireflyJournalId);
         if (t.matchedInvoiceId) {
@@ -194,7 +223,8 @@ export const bookingsRouter = router({
         return {
           ...row(t),
           state: 'open' as const,
-          suggestion: suggestForTx(t, suppliers, history),
+          founderHint: founderHints.get(String(t._id)) ?? null,
+          suggestion: founderHints.has(String(t._id)) ? null : suggestForTx(t, suppliers, history),
           receiptReading: readingState(t),
           bill: billHints.get(String(t._id)) ?? null,
         };
@@ -205,9 +235,16 @@ export const bookingsRouter = router({
   inbox: authedProcedure.input(yearInput).query(async ({ input }) => {
     const [{ txs, coverage }, suppliers, history] = await Promise.all([loadYear(input.year), Supplier.find({ archived: false }), loadHistory()]);
     const billHints = await billHintLookup(input.year);
+    const founderHints = await founderHintLookup(txs);
     return txs
-      .filter((t) => !t.matchedInvoiceId && !coverage.has(t.fireflyJournalId))
-      .map((t) => ({ ...row(t), suggestion: suggestForTx(t, suppliers, history), receiptReading: readingState(t), bill: billHints.get(String(t._id)) ?? null }));
+      .filter((t) => !t.matchedInvoiceId && !t.payoutId && !coverage.has(t.fireflyJournalId))
+      .map((t) => ({
+        ...row(t),
+        founderHint: founderHints.get(String(t._id)) ?? null,
+        suggestion: founderHints.has(String(t._id)) ? null : suggestForTx(t, suppliers, history),
+        receiptReading: readingState(t),
+        bill: billHints.get(String(t._id)) ?? null,
+      }));
   }),
 
   /** Clear receipt match per open row (inbox hint). Drive trouble → `available: false`, never an error. */

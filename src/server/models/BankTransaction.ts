@@ -70,6 +70,8 @@ const bankTransactionSchema = new Schema(
     receiptReading: { type: receiptFileReadingSchema },
     matchedInvoiceId: { type: Schema.Types.ObjectId, ref: 'Invoice' },
     matchMethod: { type: String, enum: ['reference', 'manual'] },
+    /** The founder payout this row settled; such rows are never auto-booked. */
+    payoutId: { type: Schema.Types.ObjectId, ref: 'Payout' },
     ignored: { type: Boolean, required: true, default: false },
     importedAt: { type: Date, required: true, default: Date.now },
   },

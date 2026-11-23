@@ -11,6 +11,8 @@ const reconcileRunSchema = new Schema(
     autoBooked: { type: Number, required: true, default: 0 },
     autoBookFailed: { type: Number, required: true, default: 0 },
     autoBookWarning: { type: String },
+    payoutSettled: { type: Number, required: true, default: 0 },
+    payoutWarning: { type: String },
     receiptsRead: { type: Number, required: true, default: 0 },
     receiptReadWarning: { type: String },
     error: { type: String },
