@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.34.10](https://github.com/bumbleflies/queen/compare/queen-v0.34.9...queen-v0.34.10) (2026-11-23)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @tanstack/react-query to v5.108.4 ([#367](https://github.com/bumbleflies/queen/issues/367)) ([cb0f2c7](https://github.com/bumbleflies/queen/commit/cb0f2c702474abd6773aa95d98a3a314807ea2cf))
+* **deps:** update dependency unpdf to v2.2.2 ([#368](https://github.com/bumbleflies/queen/issues/368)) ([a754b39](https://github.com/bumbleflies/queen/commit/a754b39fa3cf57b2566c79bbaf0de99b4daf3eba))
+
 ## [0.34.9](https://github.com/bumbleflies/queen/compare/queen-v0.34.8...queen-v0.34.9) (2026-11-22)
 
 
