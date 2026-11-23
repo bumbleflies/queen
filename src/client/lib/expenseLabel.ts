@@ -27,3 +27,30 @@ export function claimStatusKey(status: string): DictKey {
 export function claimStatusClass(status: string): string {
   return STATUS_CLASS[status as ClaimStatus] ?? 'b-draft';
 }
+
+/** Payout states use the same badge vocabulary as claims. */
+export type PayoutStatus = 'draft' | 'released' | 'executed' | 'settled' | 'canceled';
+
+const PAYOUT_STATUS_KEY: Record<PayoutStatus, DictKey> = {
+  draft: 'payout.status.draft',
+  released: 'payout.status.released',
+  executed: 'payout.status.executed',
+  settled: 'payout.status.settled',
+  canceled: 'payout.status.canceled',
+};
+
+const PAYOUT_STATUS_CLASS: Record<PayoutStatus, string> = {
+  draft: 'b-draft',
+  released: 'b-sent',
+  executed: 'b-part',
+  settled: 'b-paid',
+  canceled: 'b-cancel',
+};
+
+export function payoutStatusKey(status: string): DictKey {
+  return PAYOUT_STATUS_KEY[status as PayoutStatus] ?? 'payout.status.draft';
+}
+
+export function payoutStatusClass(status: string): string {
+  return PAYOUT_STATUS_CLASS[status as PayoutStatus] ?? 'b-draft';
+}

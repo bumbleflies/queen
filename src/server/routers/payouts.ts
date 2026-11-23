@@ -99,6 +99,24 @@ function view(payout: PayoutDoc) {
 }
 
 export const payoutsRouter = router({
+  /** Recent payouts for the Expenses → Auszahlungen tab. */
+  list: adminProcedure.query(async () => {
+    const payouts = await Payout.find().sort({ createdAt: -1 }).limit(100);
+    const founderIds = [...new Set(payouts.map((payout) => String(payout.founderId)))];
+    const founders = await Founder.find({ _id: { $in: founderIds } }).select('name shortName');
+    const byId = new Map(founders.map((founder) => [String(founder._id), founder]));
+    return payouts.map((payout) => {
+      const founder = byId.get(String(payout.founderId));
+      return {
+        ...view(payout),
+        createdAt: payout.createdAt,
+        founder: founder
+          ? { name: founder.name, shortName: founder.shortName }
+          : { name: '', shortName: '' },
+      };
+    });
+  }),
+
   /** Everything needed to offer a payout, without reserving a number. */
   preview: adminProcedure
     .input(z.object({ founderId: z.string().min(1) }))
