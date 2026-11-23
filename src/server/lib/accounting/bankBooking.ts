@@ -1,5 +1,5 @@
 import { BankTransaction, type BankTransactionDoc } from '../../models/BankTransaction';
-import { Payout, type PayoutDoc } from '../../models/Payout';
+import type { PayoutDoc } from '../../models/Payout';
 import { ExpenseClaim } from '../../models/ExpenseClaim';
 import { Founder } from '../../models/Founder';
 import type { SupplierDoc } from '../../models/Supplier';
@@ -9,6 +9,7 @@ import { allocateSupplierNumber } from '../numbering';
 import { findActiveBySource, post, postOnce, reverse } from './ledger';
 import { bankPosting, bankPostingSplit, payoutSettlementPosting, type BankBookingMode, type SplitPart } from './postingRules';
 import { learningKey, type RuleKey } from './ruleLearning';
+import { activeFounderIbans, isFounderIban } from './founderIbans';
 import { suggest, type SuggestTx } from './suggest';
 
 export type BookingErrorCode = 'NOT_FOUND' | 'MATCHED' | 'ALREADY_BOOKED' | 'NOT_BOOKED' | 'SUPPLIER_NOT_FOUND' | 'FORBIDDEN' | 'BAD_REQUEST';
@@ -106,6 +107,9 @@ async function learnFromBooking(
   supplier: HydratedDocument<SupplierDoc> | null,
   direction: 'in' | 'out',
 ): Promise<HydratedDocument<SupplierDoc> | null> {
+  // A founder's payout target is not a supplier rule — never create or extend
+  // one from a booked reimbursement, even when an admin confirmed the booking.
+  if (isFounderIban(await activeFounderIbans(), tx.counterpartyIban)) return supplier;
   const key = learningKey({
     direction,
     split: !!input.split,
