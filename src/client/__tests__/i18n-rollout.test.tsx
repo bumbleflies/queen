@@ -19,6 +19,8 @@ vi.mock('../lib/trpc', () => ({
       getDriveFolders: { useQuery: () => ({ data: null, isError: false }) },
       getTaxRate: { useQuery: () => ({ data: { rate: 0.33 } }) },
       setTaxRate: { useMutation: () => ({ mutateAsync: async () => ({}), isPending: false }) },
+      getExpenseLimit: { useQuery: () => ({ data: { cents: 10000 } }) },
+      setExpenseLimit: { useMutation: () => ({ mutateAsync: async () => ({}), isPending: false }) },
     },
     useUtils: () => ({}),
   },

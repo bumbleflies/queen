@@ -216,7 +216,8 @@ describe('expenses.claims mutations', () => {
     expect(second.entryId).not.toBe(first.entryId);
     const old = await JournalEntry.findById(first.entryId!).lean();
     expect(old?.active).toBe(false);
-    expect(await JournalEntry.countDocuments({ active: true })).toBe(1);
+    const active = await JournalEntry.find({ active: true }, { 'source.kind': 1 }).lean();
+    expect(active.map((e) => e.source?.kind).sort()).toEqual(['expense_claim', 'reversal']);
   });
 
   it('reports a booking problem as a sentence, not a 5xx', async (ctx) => {

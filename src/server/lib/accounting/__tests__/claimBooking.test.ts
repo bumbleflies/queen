@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import mongoose from 'mongoose';
-import { ExpenseClaim } from '../../models/ExpenseClaim';
-import { Founder } from '../../models/Founder';
-import { FiscalYear } from '../../models/FiscalYear';
-import { JournalEntry } from '../../models/JournalEntry';
+import { ExpenseClaim } from '../../../models/ExpenseClaim';
+import { Founder } from '../../../models/Founder';
+import { FiscalYear } from '../../../models/FiscalYear';
+import { JournalEntry } from '../../../models/JournalEntry';
 import { bookExpenseClaim, rebookExpenseClaim, ClaimError } from '../claimBooking';
 import { LedgerError } from '../ledger';
-import { initLedgerModels, resetLedgerDb, skipIfNoDb } from '../../routers/__tests__/helpers/ledgerFixtures';
+import { initLedgerModels, resetLedgerDb, skipIfNoDb } from '../../../routers/__tests__/helpers/ledgerFixtures';
 
 const FOUNDER = {
   name: 'Test Person',
@@ -165,8 +165,9 @@ describe('rebookExpenseClaim', () => {
     expect(stored?.status).toBe('booked');
     expect(String(stored?.journalEntryId)).toBe(String(second._id));
     expect((stored?.reversedEntryIds ?? []).map(String)).toContain(String(first._id));
-    // One live claim entry plus its reversal.
-    expect(await JournalEntry.countDocuments({ active: true })).toBe(1);
+    // The reversal is a live posting too; the old claim entry and it are retired.
+    const active = await JournalEntry.find({ active: true }, { 'source.kind': 1 }).lean();
+    expect(active.map((e) => e.source?.kind).sort()).toEqual(['expense_claim', 'reversal']);
   });
 
   it('refuses to touch a claim that is already in a payout', async (ctx) => {
