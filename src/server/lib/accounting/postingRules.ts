@@ -158,6 +158,95 @@ export function bankPosting(input: BankPostingInput): PostingLine[] {
   return toLines(signed);
 }
 
+const CLAIM_VAT_RATES = [0, 0.07, 0.19] as const;
+const LIABILITY_ACCOUNT = /^\d{4}$/;
+
+export interface ExpenseClaimPostingInput {
+  grossCents: number;
+  /** Net and VAT as the receipt states them; omitted → split from gross. */
+  netCents?: number;
+  vatCents?: number;
+  vatRate: number;
+  /** SKR04 expense account, e.g. 6837. */
+  account: string;
+  /** Founder liability account (3500, or 1700 once the advisor confirms). */
+  liabilityAccount: string;
+  vatDeductible: boolean;
+  reverseCharge: boolean;
+}
+
+/**
+ * A receipt a founder paid privately: the expense (plus deductible Vorsteuer)
+ * against the founder liability — never against the bank, because no money left
+ * the company's account. The later payout settles that liability
+ * (`payoutSettlementPosting`).
+ *
+ * `reverseCharge` (§13b) books the expense gross with Vorsteuer 1407 and
+ * Umsatzsteuer 3837 at 19 % of gross, mirroring `bankPosting`.
+ */
+export function expenseClaimPosting(input: ExpenseClaimPostingInput): PostingLine[] {
+  const { grossCents, vatRate, account, liabilityAccount, vatDeductible, reverseCharge } = input;
+  if (!Number.isInteger(grossCents) || grossCents <= 0) {
+    throw new PostingError(`Expense amount must be positive integer cents, got ${grossCents}`);
+  }
+  if (!(CLAIM_VAT_RATES as readonly number[]).includes(vatRate)) {
+    throw new PostingError(`Unsupported VAT rate ${vatRate}`);
+  }
+  if (!account) throw new PostingError('Booking account is required');
+  if (account === BANK) throw new PostingError('Cannot book an expense claim to the bank account');
+  if (!LIABILITY_ACCOUNT.test(liabilityAccount)) {
+    throw new PostingError(`Founder liability account must have 4 digits, got ${liabilityAccount}`);
+  }
+
+  const split =
+    input.netCents === undefined || input.vatCents === undefined
+      ? splitGross(grossCents, vatRate)
+      : { netCents: input.netCents, vatCents: input.vatCents };
+  if (split.netCents < 0 || split.vatCents < 0 || Math.abs(split.netCents + split.vatCents - grossCents) > 1) {
+    throw new PostingError(
+      `Net + VAT must equal gross: ${split.netCents} + ${split.vatCents} ≠ ${grossCents}`,
+    );
+  }
+
+  const signed = new Map<string, number>();
+  if (reverseCharge) {
+    if (vatRate !== REVERSE_CHARGE_RATE) throw new PostingError('§13b immer mit 19 %');
+    const vatCents = Math.round(grossCents * REVERSE_CHARGE_RATE);
+    add(signed, account, grossCents);
+    add(signed, '1407', vatCents);
+    add(signed, '3837', -vatCents);
+    add(signed, liabilityAccount, -grossCents);
+    return toLines(signed);
+  }
+
+  if (vatDeductible && vatRate > 0) {
+    const vatAccount = INPUT_VAT[String(vatRate)];
+    if (!vatAccount) throw new PostingError(`No input VAT account for rate ${vatRate}`);
+    add(signed, account, split.netCents);
+    add(signed, vatAccount, split.vatCents);
+    add(signed, liabilityAccount, -grossCents);
+    return toLines(signed);
+  }
+
+  add(signed, account, grossCents);
+  add(signed, liabilityAccount, -grossCents);
+  return toLines(signed);
+}
+
+/** Reimburse a founder: the liability shrinks, the bank pays. */
+export function payoutSettlementPosting(amountCents: number, liabilityAccount: string): PostingLine[] {
+  if (!Number.isInteger(amountCents) || amountCents <= 0) {
+    throw new PostingError(`Payout amount must be positive integer cents, got ${amountCents}`);
+  }
+  if (!LIABILITY_ACCOUNT.test(liabilityAccount)) {
+    throw new PostingError(`Founder liability account must have 4 digits, got ${liabilityAccount}`);
+  }
+  return [
+    { account: BANK, debitCents: 0, creditCents: amountCents },
+    { account: liabilityAccount, debitCents: amountCents, creditCents: 0 },
+  ];
+}
+
 export interface SplitPart {
   account: string;
   vatRate: number;
