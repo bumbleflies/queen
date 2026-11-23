@@ -67,6 +67,52 @@ function TaxRateSection() {
   );
 }
 
+function ExpenseLimitSection() {
+  const { t } = useLanguage();
+  const toast = useToast();
+  const utils = trpc.useUtils();
+  const limit = trpc.settings.getExpenseLimit.useQuery();
+  const setLimit = trpc.settings.setExpenseLimit.useMutation();
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = draft ?? (limit.data === undefined ? '' : (limit.data.cents / 100).toFixed(2).replace('.', ','));
+  const euros = Number(shown.replace(',', '.'));
+  const valid = shown.trim() !== '' && Number.isFinite(euros) && euros >= 0 && euros <= 1_000_000;
+
+  async function save() {
+    try {
+      await setLimit.mutateAsync({ cents: Math.round(euros * 100) });
+      await utils.settings.getExpenseLimit.invalidate();
+      setDraft(null);
+      toast.show(t('settings.expenseSaved'));
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
+  return (
+    <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <h2 style={{ margin: 0, fontSize: 18 }}>{t('settings.expenseTitle')}</h2>
+      <div>
+        <label className="lbl" htmlFor="expense-limit">{t('settings.expenseLimit')}</label>
+        <div className="row" style={{ marginTop: 4 }}>
+          <input
+            id="expense-limit"
+            className="field num"
+            inputMode="decimal"
+            value={shown}
+            onChange={(e) => setDraft(e.target.value)}
+            style={{ width: '6rem' }}
+          />
+          <button type="button" className="btn" disabled={!valid || setLimit.isPending || draft === null} onClick={save}>
+            {t('settings.expenseSave')}
+          </button>
+        </div>
+        <p className="muted" style={{ margin: '6px 0 0', fontSize: 14 }}>{t('settings.expenseHint')}</p>
+      </div>
+    </section>
+  );
+}
+
 export function SettingsPage() {
   const me = trpc.me.useQuery();
   const user = me.data?.user;
@@ -114,6 +160,8 @@ export function SettingsPage() {
       {user?.role === 'admin' ? <GoogleAccessSection /> : null}
 
       {user?.role === 'admin' ? <TaxRateSection /> : null}
+
+      {user?.role === 'admin' ? <ExpenseLimitSection /> : null}
 
       {user?.role === 'admin' ? <UsersSection /> : null}
 

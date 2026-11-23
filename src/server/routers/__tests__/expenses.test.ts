@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import mongoose from 'mongoose';
 import { ExpenseClaim } from '../../models/ExpenseClaim';
 import { Founder } from '../../models/Founder';
+import { JournalEntry } from '../../models/JournalEntry';
 import { appRouter } from '../../trpc';
 import { adminCaller, initLedgerModels, resetLedgerDb, skipIfNoDb } from './helpers/ledgerFixtures';
 
@@ -186,12 +187,45 @@ describe('expenses.claims mutations', () => {
     expect((await ExpenseClaim.findById(claim._id).lean())?.status).toBe('booked');
   });
 
-  it('refuses to book in increment 1 with a sentence, not a 5xx', async (ctx) => {
+  it('books a received claim and is idempotent on a second click', async (ctx) => {
     skipIfNoDb(ctx);
-    const claim = await ExpenseClaim.create(claimDoc());
+    const founder = (await Founder.findOne())!;
+    const claim = await ExpenseClaim.create(claimDoc({ founderId: founder._id }));
+
+    const first = await adminCaller().expenses.claims.confirm({ id: String(claim._id) });
+    expect(first).toMatchObject({ status: 'booked', rebooked: false });
+    expect(first.entryId).toBeTruthy();
+    expect(await JournalEntry.countDocuments()).toBe(1);
+
+    const second = await adminCaller().expenses.claims.confirm({ id: String(claim._id) });
+    expect(second.entryId).toBe(first.entryId);
+    expect(second.rebooked).toBe(false);
+    expect(await JournalEntry.countDocuments()).toBe(1);
+  });
+
+  it('rebooks after a correction by reversing the live entry', async (ctx) => {
+    skipIfNoDb(ctx);
+    const founder = (await Founder.findOne())!;
+    const claim = await ExpenseClaim.create(claimDoc({ founderId: founder._id }));
+    const first = await adminCaller().expenses.claims.confirm({ id: String(claim._id) });
+
+    await adminCaller().expenses.claims.correct({ id: String(claim._id), account: '6640' });
+    const second = await adminCaller().expenses.claims.confirm({ id: String(claim._id) });
+
+    expect(second.rebooked).toBe(true);
+    expect(second.entryId).not.toBe(first.entryId);
+    const old = await JournalEntry.findById(first.entryId!).lean();
+    expect(old?.active).toBe(false);
+    const active = await JournalEntry.find({ active: true }, { 'source.kind': 1 }).lean();
+    expect(active.map((e) => e.source?.kind).sort()).toEqual(['expense_claim', 'reversal']);
+  });
+
+  it('reports a booking problem as a sentence, not a 5xx', async (ctx) => {
+    skipIfNoDb(ctx);
+    const claim = await ExpenseClaim.create(claimDoc({ founderId: null }));
     await expect(
       adminCaller().expenses.claims.confirm({ id: String(claim._id) }),
-    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED', message: 'Buchen kommt mit dem nächsten Schritt' });
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED', message: 'Kein Gesellschafter zugeordnet' });
   });
 
   it('ignores and restores a claim before the payout', async (ctx) => {

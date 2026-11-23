@@ -14,6 +14,7 @@ export const SKR04_ACCOUNTS: AccountSeed[] = [
   { number: '1401', name: 'Abziehbare Vorsteuer 7 %', type: 'asset', vatRate: 0.07 },
   { number: '1406', name: 'Abziehbare Vorsteuer 19 %', type: 'asset', vatRate: 0.19 },
   { number: '1407', name: 'Abziehbare Vorsteuer nach § 13b UStG 19 %', type: 'asset', vatRate: 0.19 },
+  { number: '1700', name: 'Verbindlichkeiten gegenüber Gesellschaftern', type: 'liability' },
   { number: '1800', name: 'Bank', type: 'asset' },
   { number: '2900', name: 'Gezeichnetes Kapital', type: 'equity' },
   { number: '2930', name: 'Gesetzliche Rücklage', type: 'equity' },

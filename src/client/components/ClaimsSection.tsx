@@ -203,10 +203,10 @@ function ManualClaimDialog({ onClose }: { onClose: () => void }) {
 
 /**
  * Founder expenses: what arrived in `expenses@`, who paid it, whether the read is
- * complete enough to book itself later — and a way to correct it.
+ * complete enough to book itself later — and a way to book or correct it.
  *
- * Nothing here books. `confirm` arrives with the booking step, so there is no
- * button for it: a claim that is read and confirmed stays `received`.
+ * Booking a claim posts the expense against the founder's liability (3500), not
+ * against the bank; the payout is a separate booking from the bank transaction.
  */
 export function ClaimsSection({ year: yearProp }: { year?: number } = {}) {
   const { t } = useLanguage();
@@ -224,6 +224,7 @@ export function ClaimsSection({ year: yearProp }: { year?: number } = {}) {
   const intake = trpc.expenses.claims.intakeNow.useMutation();
   const setIgnored = trpc.expenses.claims.setIgnored.useMutation();
   const assignFounder = trpc.expenses.claims.assignFounder.useMutation();
+  const confirm = trpc.expenses.claims.confirm.useMutation();
 
   const [correcting, setCorrecting] = useState<ClaimToCorrect | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
@@ -255,6 +256,17 @@ export function ClaimsSection({ year: yearProp }: { year?: number } = {}) {
     }
   }
 
+  /** One click books the claim; on a booked claim this applies a saved correction. */
+  async function book(row: ClaimRow) {
+    try {
+      const result = await confirm.mutateAsync({ id: row.id });
+      await utils.expenses.claims.list.invalidate();
+      toast.show(t(result.rebooked ? 'expenses.rebooked' : 'expenses.booked'));
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
   async function toggleIgnored(row: ClaimRow) {
     try {
       await setIgnored.mutateAsync({ id: row.id, ignored: row.status !== 'ignored' });
@@ -281,6 +293,7 @@ export function ClaimsSection({ year: yearProp }: { year?: number } = {}) {
     setCorrecting({
       id: row.id,
       fileName: row.fileName,
+      status: row.status,
       date: parsed.date ?? null,
       vendorName: parsed.vendorName ?? senderName(row.from),
       invoiceNumber: parsed.invoiceNumber ?? '',
@@ -426,16 +439,35 @@ export function ClaimsSection({ year: yearProp }: { year?: number } = {}) {
                       ) : null}
                     </td>
                     <td>
-                      {isAdmin ? (
+                      {isAdmin && row.status !== 'payoutPending' && row.status !== 'settled' ? (
                         <>
-                          <button
-                            type="button"
-                            className="btn ghost sm"
-                            onClick={() => startCorrecting(row)}
-                            title={t('expenses.correct')}
-                          >
-                            {t('expenses.correctLabel')}
-                          </button>
+                          {row.status === 'received' ? (
+                            <>
+                              <button
+                                type="button"
+                                className="btn ghost sm"
+                                onClick={() => startCorrecting(row)}
+                                title={t('expenses.correct')}
+                              >
+                                {t('expenses.correctLabel')}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn sm"
+                                disabled={confirm.isPending}
+                                onClick={() => book(row)}
+                                // A queued claim can still be booked by hand: say why it queued.
+                                title={row.autoBookable?.ok ? undefined : (row.autoBookable?.reasons ?? []).join(' · ')}
+                              >
+                                {confirm.isPending ? t('expenses.booking') : t('expenses.book')}
+                              </button>
+                            </>
+                          ) : null}
+                          {row.status === 'booked' ? (
+                            <button type="button" className="btn sm" onClick={() => startCorrecting(row)}>
+                              {t('expenses.rebook')}
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             className="btn ghost sm"
@@ -455,7 +487,13 @@ export function ClaimsSection({ year: yearProp }: { year?: number } = {}) {
         </div>
       )}
       <p className="muted" style={{ fontSize: 13, marginTop: 10 }}>{t('expenses.hint')}</p>
-      {correcting ? <ClaimCorrectDialog claim={correcting} onClose={() => setCorrecting(null)} /> : null}
+      {correcting ? (
+        <ClaimCorrectDialog
+          claim={correcting}
+          booked={correcting.status === 'booked'}
+          onClose={() => setCorrecting(null)}
+        />
+      ) : null}
       {manualOpen ? <ManualClaimDialog onClose={() => setManualOpen(false)} /> : null}
     </section>
   );

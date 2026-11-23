@@ -10,7 +10,11 @@ const foldersState = vi.hoisted(() => ({ invoices: null, receipts: null }));
 vi.mock('../lib/trpc', () => ({
   trpc: {
     useUtils: () => ({
-      settings: { getDriveFolders: { invalidate: async () => {} }, getTaxRate: { invalidate: async () => {} } },
+      settings: {
+        getDriveFolders: { invalidate: async () => {} },
+        getTaxRate: { invalidate: async () => {} },
+        getExpenseLimit: { invalidate: async () => {} },
+      },
       ledger: { availableCash: { invalidate: async () => {} } },
       invalidate: async () => {},
     }),
@@ -26,6 +30,8 @@ vi.mock('../lib/trpc', () => ({
       getDriveFolders: q(foldersState),
       getTaxRate: q({ rate: 0.33 }),
       setTaxRate: { useMutation: () => ({ mutateAsync: async () => ({}), isPending: false }) },
+      getExpenseLimit: q({ cents: 10000 }),
+      setExpenseLimit: { useMutation: () => ({ mutateAsync: async () => ({}), isPending: false }) },
       browseDriveFolders: q([{ id: 'f1', name: 'Abrechnungen' }]),
       setDriveFolders: {
         useMutation: () => ({

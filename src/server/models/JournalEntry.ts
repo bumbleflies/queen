@@ -12,6 +12,8 @@ export const SOURCE_KINDS = [
   'appropriation',
   'closing',
   'reversal',
+  'expense_claim',
+  'expense_payout',
 ] as const;
 export type SourceKind = (typeof SOURCE_KINDS)[number];
 

@@ -1,7 +1,10 @@
 import { createHash } from 'crypto';
+import type { HydratedDocument } from 'mongoose';
 import { google } from 'googleapis';
 import { Founder, type FounderDoc } from '../models/Founder';
-import { ExpenseClaim } from '../models/ExpenseClaim';
+import { ExpenseClaim, type ExpenseClaimDoc } from '../models/ExpenseClaim';
+import { Account } from '../models/Account';
+import { FiscalYear } from '../models/FiscalYear';
 import {
   createGmailClient,
   displayNameFromHeader,
@@ -16,9 +19,11 @@ import {
 import { ensureSubfolder, type FolderDriveLike } from '../services/receiptsFolder';
 import { createOAuth2Client, uploadInvoicePdf, type DriveClientLike } from '../services/DriveService';
 import { extractPdfText } from '../services/receiptText';
-import { getReceiptsFolder } from '../services/appSettings';
+import { getExpenseAutoBookLimitCents, getReceiptsFolder } from '../services/appSettings';
 import { googleAccessForCron } from '../services/driveForUser';
-import { parseExpenseText, periodOf, type ParsedClaim } from '../lib/expenses/claimFields';
+import { parseExpenseText, periodOf, isConfidentClaim, type ParsedClaim } from '../lib/expenses/claimFields';
+import { suggestAccount, type AccountSuggestion } from '../lib/expenses/suggestAccount';
+import { AUTO_BOOK_ACTOR, bookExpenseClaim } from '../lib/accounting/claimBooking';
 import { claimFileName } from '../lib/expenses/claimFileName';
 import { claimIntakeReply, type ClaimReplyLine } from '../lib/expenses/intakeMail';
 
@@ -44,6 +49,12 @@ export interface ExpenseIntakeDeps {
   parse?: (text: string, opts: { fromName?: string }) => ParsedClaim;
   now?: Date;
   maxMessages?: number;
+  /** Gross limit for auto-booking; production reads the setting. */
+  autoBookLimitCents?: number;
+  /** Suggested expense account; a test can pin it, production uses the history. */
+  suggestAccount?: (input: { iban?: string; vendorName?: string }) => Promise<AccountSuggestion | null>;
+  /** The booking itself; overridable so a failure can be proven not to fail the run. */
+  bookClaim?: (args: { claimId: string; actor: string }) => Promise<unknown>;
 }
 
 export interface ExpenseIntakeResult {
@@ -71,14 +82,71 @@ function isDuplicateKey(err: unknown): boolean {
 }
 
 /**
+ * Book a freshly recorded claim when the read is complete and the amount is
+ * under the limit. A failure here is a note on the claim and a warning in the
+ * run: a receipt that arrived must never make the intake fail.
+ */
+async function autoBookClaim(args: {
+  claim: HydratedDocument<ExpenseClaimDoc>;
+  parsed: ParsedClaim;
+  founder: FounderDoc;
+  limitCents: number;
+  suggest: (input: { iban?: string; vendorName?: string }) => Promise<AccountSuggestion | null>;
+  book: (input: { claimId: string; actor: string }) => Promise<unknown>;
+  errors: string[];
+}): Promise<void> {
+  const { claim, parsed, founder } = args;
+
+  let suggestion: AccountSuggestion | null = null;
+  try {
+    suggestion = await args.suggest({ iban: parsed.iban ?? '', vendorName: parsed.vendorName });
+  } catch {
+    // A failed suggestion only means the claim queues for review.
+    suggestion = null;
+  }
+  const account = suggestion?.account ?? parsed.account ?? null;
+  // The booking reads the claim, not this local object: persist what was suggested.
+  if (suggestion?.account && !parsed.account) {
+    claim.set('parse.account', suggestion.account);
+    await claim.save();
+  }
+
+  const date = parsed.date ?? claim.receivedAt;
+  const [accountExists, yearClosed] = await Promise.all([
+    account ? Account.exists({ number: account, archived: { $ne: true } }).then(Boolean) : Promise.resolve(false),
+    FiscalYear.exists({ year: date.getFullYear(), status: 'closed' }).then(Boolean),
+  ]);
+  const confidence = isConfidentClaim({
+    parse: parsed,
+    founderActive: founder.active,
+    account,
+    accountExists,
+    limitCents: args.limitCents,
+    yearClosed,
+    duplicate: false,
+    reverseChargeNeedsCompany: parsed.reverseCharge,
+  });
+  if (!confidence.ok) return;
+
+  try {
+    await args.book({ claimId: String(claim._id), actor: AUTO_BOOK_ACTOR });
+  } catch (err) {
+    claim.error = `Buchung fehlgeschlagen: ${message(err)}`;
+    await claim.save();
+    args.errors.push(`${claim.fileName}: Buchung fehlgeschlagen — ${message(err)}`);
+  }
+}
+
+/**
  * One expense-intake pass: read the `expenses` mailbox, file every PDF under
  * `<receipts>/Spesen/<year>/`, map the sender to a founder and store one claim
  * per attachment — then answer each mail that produced a claim in its own
  * thread.
  *
- * Writes `ExpenseClaim` documents and Drive files only. It never writes a
- * `JournalEntry`, a `BankTransaction` or a supplier rule: a receipt that
- * arrived is not a payment, and nothing is booked before an admin confirms.
+ * Writes `ExpenseClaim` documents and Drive files; a complete, low-value claim
+ * may then book itself against the founder's liability (`autoBookClaim`). It
+ * never writes a `BankTransaction` or a supplier rule: a receipt that arrived
+ * is not a payment, and an IBAN in a receipt is not a rule an admin confirmed.
  * Idempotent per (messageId, attachmentId) and per content hash.
  */
 export async function runExpenseIntake(deps: ExpenseIntakeDeps): Promise<ExpenseIntakeResult> {
@@ -103,6 +171,15 @@ export async function runExpenseIntake(deps: ExpenseIntakeDeps): Promise<Expense
     maxResults: deps.maxMessages ?? 25,
   });
   result.messages = messages.length;
+
+  const suggest = deps.suggestAccount ?? suggestAccount;
+  const book = deps.bookClaim ?? bookExpenseClaim;
+  let limit: Promise<number> | null = null;
+  const limitCents = () =>
+    (limit ??=
+      deps.autoBookLimitCents !== undefined
+        ? Promise.resolve(deps.autoBookLimitCents)
+        : getExpenseAutoBookLimitCents());
 
   const founders = await Founder.find({ active: true }).lean();
   const founderByEmail = new Map<string, FounderDoc>();
@@ -216,6 +293,22 @@ export async function runExpenseIntake(deps: ExpenseIntakeDeps): Promise<Expense
         const claim = await ExpenseClaim.create(doc);
         result.created += 1;
         if (!parsed) result.noText += 1;
+        if (parsed && founder) {
+          try {
+            await autoBookClaim({
+              claim,
+              parsed,
+              founder,
+              limitCents: await limitCents(),
+              suggest,
+              book,
+              errors: result.errors,
+            });
+          } catch (err) {
+            // Even an unexpected failure in the auto-book step is a warning.
+            result.errors.push(`${fileName}: Auto-Buchung — ${message(err)}`);
+          }
+        }
         replyLines.push({
           fileName,
           vendor: parsed?.vendorName ?? '',

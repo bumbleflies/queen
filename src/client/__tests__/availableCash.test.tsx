@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { LanguageProvider } from '../i18n/LanguageContext';
 
@@ -26,7 +26,11 @@ vi.mock('../components/Toast', () => ({ useToast: () => ({ show: () => {}, error
 vi.mock('../lib/trpc', () => ({
   trpc: {
     useUtils: () => ({
-      settings: { getTaxRate: { invalidate: async () => {} } },
+      settings: {
+        getDriveFolders: { invalidate: async () => {} },
+        getTaxRate: { invalidate: async () => {} },
+        getExpenseLimit: { invalidate: async () => {} },
+      },
       ledger: { availableCash: { invalidate: async () => {} } },
     }),
     me: { useQuery: () => ({ data: { user: { email: 'a@example.de', role: 'admin' } } }) },
@@ -41,6 +45,8 @@ vi.mock('../lib/trpc', () => ({
       getDriveFolders: { useQuery: () => ({ data: null, isError: false }) },
       getTaxRate: { useQuery: () => ({ data: { rate: 0.33 } }) },
       setTaxRate: { useMutation: () => ({ mutateAsync: setRate, isPending: false }) },
+      getExpenseLimit: { useQuery: () => ({ data: { cents: 10000 } }) },
+      setExpenseLimit: { useMutation: () => ({ mutateAsync: async () => ({}), isPending: false }) },
     },
     ledger: { availableCash: { useQuery: () => ({ data: cash.current, isError: false }) } },
   },
@@ -119,7 +125,8 @@ describe('SettingsPage tax rate', () => {
     const input = screen.getByLabelText('Steuersatz für Schätzung (%)');
     expect(input).toHaveValue('33');
     fireEvent.change(input, { target: { value: '30' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+    const taxSection = input.closest('section') as HTMLElement;
+    fireEvent.click(within(taxSection).getByRole('button', { name: 'Speichern' }));
     await waitFor(() => expect(setRate).toHaveBeenCalledWith({ rate: 0.3 }));
   });
 });

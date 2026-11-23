@@ -9,6 +9,8 @@ import { Modal } from './FinanceDialogs';
 export interface ClaimToCorrect {
   id: string;
   fileName: string;
+  /** A booked claim is rebooked after the correction has been saved. */
+  status: string;
   date: string | Date | null;
   vendorName: string;
   invoiceNumber: string;
@@ -54,14 +56,23 @@ function dateInput(value: string | Date | null | undefined): string {
 
 /**
  * Correct what a receipt's PDF read got wrong (date, issuer, amounts, VAT rate,
- * account). The read stays on the document; the correction wins over it. A
- * correction never books and never rebooks: booking is a separate step.
+ * account). The read stays on the document; the correction wins over it. For a
+ * booked claim the dialog also rebooks (reversal + new posting) after saving.
  */
-export function ClaimCorrectDialog({ claim, onClose }: { claim: ClaimToCorrect; onClose: () => void }) {
+export function ClaimCorrectDialog({
+  claim,
+  onClose,
+  booked = false,
+}: {
+  claim: ClaimToCorrect;
+  onClose: () => void;
+  booked?: boolean;
+}) {
   const { t } = useLanguage();
   const toast = useToast();
   const utils = trpc.useUtils();
   const correct = trpc.expenses.claims.correct.useMutation();
+  const confirm = trpc.expenses.claims.confirm.useMutation();
 
   const [date, setDate] = useState(dateInput(claim.date));
   const [vendorName, setVendorName] = useState(claim.vendorName);
@@ -112,8 +123,15 @@ export function ClaimCorrectDialog({ claim, onClose }: { claim: ClaimToCorrect; 
         account: account.trim() || null,
       });
       await utils.expenses.claims.list.invalidate();
-      // A booked claim is not rebooked here: say so instead of pretending.
-      toast.show(result.needsRebook ? t('expenses.needsRebook') : t('expenses.correct.saved'));
+      // A booked claim is not silently left with a stale entry: reverse and
+      // rebook it here, so "Korrigieren & neu buchen" is one action.
+      if (result.needsRebook && booked) {
+        await confirm.mutateAsync({ id: claim.id });
+        await utils.expenses.claims.list.invalidate();
+        toast.show(t('expenses.rebooked'));
+      } else {
+        toast.show(result.needsRebook ? t('expenses.needsRebook') : t('expenses.correct.saved'));
+      }
       onClose();
     } catch (err) {
       toast.error((err as Error).message);
