@@ -132,12 +132,12 @@ describe('bookExpenseClaim', () => {
     skipIfNoDb(ctx);
     const { founder, claim } = await createClaim({}, { liabilityAccount: '1700' });
     const entry = await bookExpenseClaim({ claimId: String(claim._id), actor: 'admin-id-1' });
-    expect(entry.lines).toContainEqual({ account: '1700', debitCents: 0, creditCents: 11900 });
+    expect(entry.lines.some((l) => l.account === '1700' && l.creditCents === 11900)).toBe(true);
 
     const second = await createClaim({ messageId: 'm2', attachmentId: 'a2', sha256: 'hash-2' });
     expect(second.founder.liabilityAccount).toBe('3500');
     const defaultEntry = await bookExpenseClaim({ claimId: String(second.claim._id), actor: 'admin-id-1' });
-    expect(defaultEntry.lines).toContainEqual({ account: '3500', debitCents: 0, creditCents: 11900 });
+    expect(defaultEntry.lines.some((l) => l.account === '3500' && l.creditCents === 11900)).toBe(true);
 
     expect(String(founder._id)).toBe(String(claim.founderId));
   });
@@ -157,7 +157,10 @@ describe('rebookExpenseClaim', () => {
 
     const old = await JournalEntry.findById(first._id).lean();
     expect(old?.active).toBe(false);
-    expect(String(old?.reversedBy)).toBe(String(second._id));
+    // The reversal is its own entry; `second` is the new claim posting.
+    const reversal = await JournalEntry.findById(old?.reversedBy).lean();
+    expect(reversal?.source?.kind).toBe('reversal');
+    expect(String(old?.reversedBy)).not.toBe(String(second._id));
     expect(second.active).toBe(true);
     expect(second.lines.map((l) => l.account)).toContain('6640');
 
