@@ -22,6 +22,7 @@ import { createOAuth2Client, uploadInvoicePdf, type DriveClientLike } from '../s
 import { extractPdfText } from '../services/receiptText';
 import { getReceiptsFolder } from '../services/appSettings';
 import { googleAccessForCron } from '../services/driveForUser';
+import { formatRateLimitMessage, rateLimitInfo } from '../lib/gmailRateLimit';
 
 /** Mailbox that receives vendor invoices (env override for tests/other installs). */
 export const DEFAULT_BILLS_MAILBOX = 'bills@bumbleflies.de';
@@ -405,6 +406,10 @@ export function isMissingGmailScope(err: unknown): boolean {
  * browser as `Unexpected token '<'` instead of the reason (2026-10-30).
  */
 export function describeIntakeError(err: unknown): string {
+  // A Gmail 429 carries an ISO timestamp in its text. The raw string is kept in
+  // server logs; the toast gets a local time and a rounded countdown.
+  const rateLimit = rateLimitInfo(err);
+  if (rateLimit) return formatRateLimitMessage(rateLimit);
   const text = message(err);
   if (/has not been used in project|accessNotConfigured|SERVICE_DISABLED|is disabled/i.test(text)) {
     const project = text.match(/project (\d{6,})/)?.[1];

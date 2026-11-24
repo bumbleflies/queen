@@ -3,6 +3,7 @@ import { connectMongo, disconnectMongo } from '../db/mongo';
 import { isCliEntrypoint } from '../lib/reconcile';
 import { rematchBills, resolveBillIntakeDeps, runBillIntake } from '../jobs/billIntake';
 import { resolveExpenseIntakeDeps, runExpenseIntake } from '../jobs/expenseIntake';
+import { describeRateLimitForLog, rateLimitInfo } from '../lib/gmailRateLimit';
 
 /**
  * Expense-intake pass: the same hourly slot as the bills pass, but a separate
@@ -75,7 +76,13 @@ async function main(): Promise<void> {
 
 if (isCliEntrypoint(process.argv[1], 'billIntake')) {
   void main().catch((err: unknown) => {
-    console.error(`Bill intake failed: ${err instanceof Error ? err.message : String(err)}`);
+    // The scheduler owns the retry: fail fast, log the quota timestamp and let
+    // the next hourly run pick it up. No in-process waiting here.
+    console.error(
+      rateLimitInfo(err)
+        ? describeRateLimitForLog(err)
+        : `Bill intake failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
     process.exitCode = 1;
   });
 }
