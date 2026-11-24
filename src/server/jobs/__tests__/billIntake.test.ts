@@ -347,6 +347,20 @@ describe('describeIntakeError', () => {
     expect(describeIntakeError(new Error('Request had insufficient authentication scopes.'))).toContain('Google-Zugang erneuern');
   });
 
+  it('turns a Gmail 429 into a friendly retry message, not a raw ISO timestamp', () => {
+    const text = describeIntakeError(
+      new Error('User-rate limit exceeded.  Retry after 2026-11-24T10:19:35.315Z'),
+    );
+    expect(text).toMatch(/^Gmail is rate-limited\. /);
+    expect(text).not.toContain('2026-11-24T10:19:35.315Z');
+  });
+
+  it('has a safe fallback when a 429 carries no retry-after', () => {
+    expect(describeIntakeError(new Error('User-rate limit exceeded.'))).toBe(
+      'Gmail is rate-limited. Please try again in a few minutes.',
+    );
+  });
+
   it('passes anything else through unchanged', () => {
     expect(describeIntakeError(new Error('Drive 403'))).toBe('Drive 403');
   });

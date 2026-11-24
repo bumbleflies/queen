@@ -10,6 +10,7 @@ import { extractPdfText } from '../services/receiptText';
 import { googleAccessForCron } from '../services/driveForUser';
 import { billFieldsOf } from '../services/billMatch';
 import { describeIntakeError, resolveBillIntakeDeps, rematchBills, runBillIntake } from '../jobs/billIntake';
+import { withRateLimitRetry } from '../lib/gmailRateLimit';
 
 const yearInput = z.object({ year: z.number().int().min(2000).max(2100) });
 
@@ -103,7 +104,14 @@ export const billsRouter = router({
   intakeNow: adminProcedure.mutation(async () => {
     try {
       const deps = await resolveBillIntakeDeps();
-      return { ok: true as const, ...(await runBillIntake({ ...deps, maxMessages: INTAKE_NOW_MAX_MESSAGES })) };
+      // A short Gmail 429 can clear itself within seconds. Retries are safe:
+      // intake is idempotent per (message, attachment) and content hash, and a
+      // second pass sends no reply for mail whose bills were already recorded.
+      // The hourly cron deliberately does NOT retry — its next run is the retry.
+      const result = await withRateLimitRetry(() =>
+        runBillIntake({ ...deps, maxMessages: INTAKE_NOW_MAX_MESSAGES }),
+      );
+      return { ok: true as const, ...result };
     } catch (err) {
       return { ok: false as const, error: describeIntakeError(err) };
     }
