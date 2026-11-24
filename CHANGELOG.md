@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.36.3](https://github.com/bumbleflies/queen/compare/queen-v0.36.2...queen-v0.36.3) (2026-11-24)
+
+
+### Bug Fixes
+
+* **intake:** handle Gmail 429 with backoff and clear retry message ([#390](https://github.com/bumbleflies/queen/issues/390)) ([f1a9a3a](https://github.com/bumbleflies/queen/commit/f1a9a3a70f514eb617ab7d64f7e597134842dc3d))
+
 ## [0.36.2](https://github.com/bumbleflies/queen/compare/queen-v0.36.1...queen-v0.36.2) (2026-11-24)
 
 
