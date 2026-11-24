@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.36.1](https://github.com/bumbleflies/queen/compare/queen-v0.36.0...queen-v0.36.1) (2026-11-24)
+
+
+### Bug Fixes
+
+* **deps:** update dependency mongoose to v9.13.0 ([#380](https://github.com/bumbleflies/queen/issues/380)) ([0b47547](https://github.com/bumbleflies/queen/commit/0b475471932feb2efc6b5d3386283d258cf8ba91))
+
 ## [0.36.0](https://github.com/bumbleflies/queen/compare/queen-v0.35.3...queen-v0.36.0) (2026-11-24)
 
 
