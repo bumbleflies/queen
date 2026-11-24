@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { trpc } from '../lib/trpc';
 import { formatDate, formatDateTime, formatEUR } from '../lib/format';
@@ -8,6 +8,7 @@ import { BookingDialog, type InboxRowLike } from '../components/BookingDialog';
 import { EntryForm } from '../components/EntryForm';
 import { BackfillSection } from '../components/BackfillSection';
 import { BillsSection } from '../components/BillsSection';
+import { ExpensesSection } from '../components/ExpensesSection';
 import { AvailableCashCard } from '../components/AvailableCashCard';
 import { LedgerViews } from '../components/LedgerViews';
 import { RuleDialog, RulesSection, draftFromTransaction, type RuleDraft } from '../components/RulesSection';
@@ -16,10 +17,11 @@ import { suggestionsFor, type OpenItem, type Suggestion } from '../lib/paymentSu
 import { formatBooking } from '../lib/bookingLabel';
 import type { BankBookingMode, SplitPart } from '../../server/lib/accounting/postingRules';
 
-type Tab = 'open' | 'done' | 'ignored' | 'rules' | 'journal' | 'bills';
+type Tab = 'open' | 'done' | 'ignored' | 'bills' | 'expenses' | 'rules' | 'journal';
 type DirFilter = 'all' | 'in' | 'out';
 
-const TABS: Tab[] = ['open', 'done', 'ignored', 'rules', 'journal', 'bills'];
+// Grouped: bank workflow · incoming paperwork · configuration.
+const TABS: Tab[] = ['open', 'done', 'ignored', 'bills', 'expenses', 'rules', 'journal'];
 
 interface StreamSuggestion {
   supplierId?: string;
@@ -199,6 +201,7 @@ export function FinancePage() {
     [accounts.data],
   );
   const bills = trpc.bills.list.useQuery({ year });
+  const claims = trpc.expenses.claims.list.useQuery({ year });
 
   const openItems = (openItemsQuery.data?.items ?? []) as unknown as OpenItem[];
   const rows = (stream.data ?? []) as unknown as StreamRow[];
@@ -508,6 +511,7 @@ export function FinancePage() {
     ignored: counts.ignored,
     rules: (suppliers.data ?? []).length,
     bills: (bills.data ?? []).filter((b) => !b.transaction).length,
+    expenses: (claims.data ?? []).filter((c) => c.status === 'received').length,
   };
   const tabLabel: Record<Tab, string> = {
     open: t('finance.state.open'),
@@ -516,6 +520,7 @@ export function FinancePage() {
     rules: t('finance.rulesToggle'),
     journal: t('finance.journalToggle'),
     bills: t('nav.bills'),
+    expenses: t('nav.expenses'),
   };
 
   const dirSwitch = (
@@ -615,10 +620,13 @@ export function FinancePage() {
 
       <nav className="tabs" role="tablist" aria-label={t('ledger.view')}>
         {TABS.map((id) => (
-          <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'tab on' : 'tab'} onClick={() => setTab(id)}>
-            {tabLabel[id]}
-            {tabCount[id] !== undefined ? <span className="count num">{tabCount[id]}</span> : null}
-          </button>
+          <Fragment key={id}>
+            {id === 'bills' || id === 'rules' ? <span className="tab-divider" aria-hidden="true" /> : null}
+            <button type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'tab on' : 'tab'} onClick={() => setTab(id)}>
+              {tabLabel[id]}
+              {tabCount[id] !== undefined ? <span className="count num">{tabCount[id]}</span> : null}
+            </button>
+          </Fragment>
         ))}
       </nav>
 
@@ -824,6 +832,8 @@ export function FinancePage() {
       ) : null}
 
       {tab === 'bills' ? <BillsSection key={`bills-${year}`} year={year} /> : null}
+
+      {tab === 'expenses' ? <ExpensesSection key={`expenses-${year}`} year={year} /> : null}
 
       {active ? <BookingDialog year={year} tx={active} onDone={() => setActive(null)} /> : null}
       {ruleDraft ? <RuleDialog draft={ruleDraft} openRows={openRows} onDone={() => setRuleDraft(null)} /> : null}

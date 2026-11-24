@@ -7,7 +7,7 @@ import { MemoryRouter } from 'react-router-dom';
 
 const q = vi.hoisted(() => (data: unknown) => ({ useQuery: () => ({ data, isError: false }) }));
 const receiptRows = vi.hoisted(() => ({ current: [] as { id: string; name: string; link: string; score: number }[] }));
-const state = vi.hoisted(() => ({ role: 'admin', rows: null as unknown[] | null, matches: {} as Record<string, unknown>, readingAvailable: true, readResult: { status: 'ok', suggestion: null, reading: null } as unknown, openItems: { items: [] } as unknown, overview: [] as unknown[] }));
+const state = vi.hoisted(() => ({ role: 'admin', rows: null as unknown[] | null, matches: {} as Record<string, unknown>, readingAvailable: true, readResult: { status: 'ok', suggestion: null, reading: null } as unknown, openItems: { items: [] } as unknown, overview: [] as unknown[], claims: [] as unknown[] }));
 const calls: Record<string, unknown[]> = {};
 const shown: string[] = [];
 const actions: { label: string; onClick: () => void }[] = [];
@@ -139,6 +139,22 @@ vi.mock('../lib/trpc', () => ({
     bills: {
       list: { useQuery: () => ({ data: [], isError: false }) },
     },
+    expenses: {
+      claims: {
+        list: { useQuery: () => ({ data: state.claims, isLoading: false }) },
+        intakeNow: mut('claimIntake', async () => ({ ok: true, created: 0, skipped: 0, failed: 0 })),
+        setIgnored: mut('claimIgnore', async () => ({})),
+        assignFounder: mut('claimAssign', async () => ({})),
+        createManual: mut('claimManual', async () => ({})),
+        confirm: mut('claimConfirm', async () => ({ id: 'c1', status: 'booked', rebooked: false })),
+      },
+    },
+    founders: { list: q([{ id: 'f1', name: 'Test Person', shortName: 'TP', active: true }]) },
+    payouts: {
+      list: q([]),
+      preview: q(null),
+      create: mut('payoutCreate', async () => ({ number: 'SP-2026-0001' })),
+    },
     bookings: {
       stream: { useQuery: () => ({ data: state.rows ?? streamRows, isError: false }) },
       receiptMatches: { useQuery: () => ({ data: { available: true, matches: state.matches, readingAvailable: state.readingAvailable } }) },
@@ -247,6 +263,7 @@ beforeEach(() => {
   state.readResult = { status: 'ok', suggestion: null, reading: null };
   state.openItems = { items: [] };
   state.overview = [];
+  state.claims = [];
 });
 
 function renderPage(url = '/finance') {
@@ -579,6 +596,57 @@ describe('FinancePage — rules and journal tabs', () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: 'Buchung erfassen' }));
     expect(screen.getByRole('heading', { name: 'Buchung erfassen' })).toBeInTheDocument();
+  });
+});
+
+describe('FinancePage — expenses tab', () => {
+  const claim = {
+    id: 'claim-1',
+    receivedAt: '2026-01-20T00:00:00.000Z',
+    period: '2026-01',
+    from: 'Test Person <tp@example.org>',
+    subject: 'Spesen Januar',
+    fileName: 'Spesen-TP-202601-Bahn.pdf',
+    driveFileId: 'drive-1',
+    driveLink: 'https://drive.example/1',
+    status: 'received',
+    error: null,
+    founder: { id: 'f1', name: 'Test Person', shortName: 'TP', active: true },
+    parse: {
+      date: '2026-01-20T00:00:00.000Z',
+      vendorName: 'Bahn',
+      invoiceNumber: 'R-1',
+      grossCents: 4120,
+      netCents: 3462,
+      vatCents: 658,
+      vatRate: 0.19,
+      account: '6837',
+      reverseCharge: false,
+      addressedToCompany: true,
+      currency: 'EUR',
+    },
+    corrected: null,
+    payoutId: null,
+    autoBookable: { ok: true, reasons: [], vatDeductible: true, grossOnly: false },
+  };
+
+  it('opens the embedded expenses view from the URL and counts open claims', () => {
+    state.claims = [claim];
+    renderPage('/finance?tab=expenses');
+    const tab = screen.getByRole('tab', { name: /Spesen/ });
+    expect(tab).toHaveAttribute('aria-selected', 'true');
+    expect(within(tab).getByText('1')).toBeInTheDocument();
+    expect(screen.getByText('Bahn')).toBeInTheDocument();
+    expect(screen.getByText('41,20 €')).toBeInTheDocument();
+    // No second page header — Finance owns the year picker and the title.
+    expect(screen.queryByRole('heading', { name: 'Spesen' })).not.toBeInTheDocument();
+  });
+
+  it('switches to payouts inside the expenses tab', () => {
+    renderPage('/finance?tab=expenses');
+    fireEvent.click(screen.getByRole('tab', { name: 'Auszahlungen' }));
+    expect(screen.getByRole('tab', { name: 'Auszahlungen' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByText('Bahn')).not.toBeInTheDocument();
   });
 });
 

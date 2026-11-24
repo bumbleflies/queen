@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { ExpensesPage } from '../ExpensesPage';
+import { ExpensesSection } from '../ExpensesSection';
 import { LanguageProvider } from '../../i18n/LanguageContext';
-import { ToastProvider } from '../../components/Toast';
+import { ToastProvider } from '../Toast';
 
 /** Rows `expenses.claims.list` answers with. */
 const rows = vi.hoisted(() => ({ current: [] as unknown[] }));
@@ -81,8 +81,8 @@ function renderPage() {
   return render(
     <LanguageProvider>
       <ToastProvider>
-        <MemoryRouter initialEntries={['/expenses']}>
-          <ExpensesPage />
+        <MemoryRouter initialEntries={['/finance?tab=expenses']}>
+          <ExpensesSection year={2026} />
         </MemoryRouter>
       </ToastProvider>
     </LanguageProvider>,
@@ -97,7 +97,7 @@ beforeEach(() => {
   confirmMutation.mockClear();
 });
 
-describe('ExpensesPage', () => {
+describe('ExpensesSection', () => {
   it('shows what a claim says, who paid it and whether it is complete', async () => {
     rows.current = [claimRow()];
     renderPage();

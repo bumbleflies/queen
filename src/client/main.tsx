@@ -18,7 +18,6 @@ import { ClientsPage } from './pages/ClientsPage';
 import { ClientDetailPage } from './pages/ClientDetailPage';
 import { FinancePage } from './pages/FinancePage';
 import { BillsPage } from './pages/BillsPage';
-import { ExpensesPage } from './pages/ExpensesPage';
 import { PayoutPage } from './pages/PayoutPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -57,7 +56,8 @@ function App() {
                 <Route path="/clients/:id" element={<ClientDetailPage />} />
                 <Route path="/finance" element={<FinancePage />} />
                 <Route path="/bills" element={<BillsPage />} />
-                <Route path="/expenses" element={<ExpensesPage />} />
+                <Route path="/expenses" element={<Navigate to="/finance?tab=expenses" replace />} />
+                {/* Payout links stay protected deep links — see AGENTS.md. */}
                 <Route path="/expenses/payouts/:number" element={<PayoutPage />} />
                 <Route path="/bank" element={<Navigate to="/finance" replace />} />
                 <Route path="/bookings" element={<Navigate to="/finance" replace />} />

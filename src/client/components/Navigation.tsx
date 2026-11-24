@@ -62,7 +62,8 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/invoices', labelKey: 'nav.invoices', shortKey: 'nav.invoices', icon: 'invoices' },
   { to: '/clients', labelKey: 'nav.clients', shortKey: 'nav.clients', icon: 'clients' },
   { to: '/finance', labelKey: 'nav.finance', shortKey: 'nav.financeShort', icon: 'bank', badge: 'finance' },
-  { to: '/expenses', labelKey: 'nav.expenses', shortKey: 'nav.expensesShort', icon: 'expenses' },
+  // Expenses live inside Finance now (the "expenses" tab); the old top-level
+  // route only redirects there. See main.tsx.
   { to: '/reports', labelKey: 'nav.reports', shortKey: 'nav.reports', icon: 'reports' },
 ];
 
