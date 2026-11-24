@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.36.4](https://github.com/bumbleflies/queen/compare/queen-v0.36.3...queen-v0.36.4) (2026-11-24)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @types/react to v19.3.1 ([#393](https://github.com/bumbleflies/queen/issues/393)) ([4a2fab9](https://github.com/bumbleflies/queen/commit/4a2fab9bafd41107cec712cd0fd6ffe02022a5be))
+* **deps:** update dependency mongoose to v9.13.1 ([#394](https://github.com/bumbleflies/queen/issues/394)) ([e6cd8c6](https://github.com/bumbleflies/queen/commit/e6cd8c65980d545a2b3b7526d8b23fe682cd56cd))
+
 ## [0.36.3](https://github.com/bumbleflies/queen/compare/queen-v0.36.2...queen-v0.36.3) (2026-11-24)
 
 
