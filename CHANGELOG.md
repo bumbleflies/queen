@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.35.2](https://github.com/bumbleflies/queen/compare/queen-v0.35.1...queen-v0.35.2) (2026-11-24)
+
+
+### Bug Fixes
+
+* **deps:** update dependency redis to v6.4.0 ([#381](https://github.com/bumbleflies/queen/issues/381)) ([80a13c4](https://github.com/bumbleflies/queen/commit/80a13c4d31648d0153e2db9a88002fb5ebb5b527))
+
 ## [0.35.1](https://github.com/bumbleflies/queen/compare/queen-v0.35.0...queen-v0.35.1) (2026-11-23)
 
 
