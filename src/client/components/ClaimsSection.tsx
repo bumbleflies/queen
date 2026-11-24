@@ -78,7 +78,7 @@ function localDate(value: string): Date | null {
  * A paper receipt the founder cannot forward: entered by hand so it shows up in
  * the same review list. It books nothing — like every claim.
  */
-function ManualClaimDialog({ onClose }: { onClose: () => void }) {
+export function ManualClaimDialog({ onClose }: { onClose: () => void }) {
   const { t } = useLanguage();
   const toast = useToast();
   const utils = trpc.useUtils();
@@ -208,7 +208,7 @@ function ManualClaimDialog({ onClose }: { onClose: () => void }) {
  * Booking a claim posts the expense against the founder's liability (3500), not
  * against the bank; the payout is a separate booking from the bank transaction.
  */
-export function ClaimsSection({ year: yearProp }: { year?: number } = {}) {
+export function ClaimsSection({ year, remember = true }: { year: number; remember?: boolean }) {
   const { t } = useLanguage();
   const toast = useToast();
   const utils = trpc.useUtils();
@@ -217,44 +217,15 @@ export function ClaimsSection({ year: yearProp }: { year?: number } = {}) {
   const [searchParams] = useSearchParams();
   const highlighted = searchParams.get('claim');
 
-  const currentYear = new Date().getFullYear();
-  const [year, setYear] = useState(yearProp ?? currentYear);
   const claims = trpc.expenses.claims.list.useQuery({ year });
   const founders = trpc.founders.list.useQuery(undefined, { enabled: isAdmin });
-  const intake = trpc.expenses.claims.intakeNow.useMutation();
   const setIgnored = trpc.expenses.claims.setIgnored.useMutation();
   const assignFounder = trpc.expenses.claims.assignFounder.useMutation();
   const confirm = trpc.expenses.claims.confirm.useMutation();
 
   const [correcting, setCorrecting] = useState<ClaimToCorrect | null>(null);
-  const [manualOpen, setManualOpen] = useState(false);
-  const [remember, setRemember] = useState(true);
 
   const rows = (claims.data ?? []) as unknown as ClaimRow[];
-  const years = [currentYear, currentYear - 1, currentYear - 2];
-
-  async function fetchNow() {
-    try {
-      const result = await intake.mutateAsync();
-      await utils.expenses.claims.list.invalidate();
-      if (!result.ok) {
-        toast.error(result.error);
-        return;
-      }
-      toast.show(
-        t('expenses.fetched')
-          .replace('{new}', String(result.created))
-          .replace('{known}', String(result.skipped))
-          .replace('{failed}', String(result.failed)),
-      );
-      const notifyErrors = result.notifyErrors ?? [];
-      if (notifyErrors.length > 0) {
-        toast.error(t('expenses.replyFailed').replace('{error}', notifyErrors[0]));
-      }
-    } catch (err) {
-      toast.error((err as Error).message);
-    }
-  }
 
   /** One click books the claim; on a booked claim this applies a saved correction. */
   async function book(row: ClaimRow) {
@@ -307,37 +278,16 @@ export function ClaimsSection({ year: yearProp }: { year?: number } = {}) {
 
   return (
     <section className="card flush">
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
-        <select
-          className="field"
-          style={{ width: 'auto' }}
-          value={year}
-          onChange={(e) => setYear(Number(e.target.value))}
-          aria-label={t('common.year')}
-        >
-          {years.map((y) => (
-            <option key={y} value={y}>{y}</option>
-          ))}
-        </select>
-        {isAdmin ? (
-          <>
-            <button type="button" className="btn" onClick={fetchNow} disabled={intake.isPending}>
-              {intake.isPending ? t('expenses.fetching') : t('expenses.fetch')}
-            </button>
-            <button type="button" className="btn ghost" onClick={() => setManualOpen(true)}>
-              {t('expenses.manual')}
-            </button>
-            <label className="chk" style={{ fontSize: 13 }}>
-              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-              {t('expenses.rememberEmail')}
-            </label>
-          </>
-        ) : null}
-      </div>
       {claims.isLoading ? (
         <p className="empty">{t('common.loading')}</p>
       ) : rows.length === 0 ? (
-        <p className="empty">{t('expenses.empty')}</p>
+        <div className="empty-band">
+          <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M6 2h12v20l-3-2-3 2-3-2-3 2zM9 7h6M9 11h6M9 15h4" />
+          </svg>
+          <strong>{t('expenses.empty')}</strong>
+          <p>{t('expenses.emptyHint')}</p>
+        </div>
       ) : (
         <div className="table-wrap">
           <table className="resp">
@@ -486,7 +436,7 @@ export function ClaimsSection({ year: yearProp }: { year?: number } = {}) {
           </table>
         </div>
       )}
-      <p className="muted" style={{ fontSize: 13, marginTop: 10 }}>{t('expenses.hint')}</p>
+      <p className="hint-strip">{t('expenses.hint')}</p>
       {correcting ? (
         <ClaimCorrectDialog
           claim={correcting}
@@ -494,7 +444,6 @@ export function ClaimsSection({ year: yearProp }: { year?: number } = {}) {
           onClose={() => setCorrecting(null)}
         />
       ) : null}
-      {manualOpen ? <ManualClaimDialog onClose={() => setManualOpen(false)} /> : null}
     </section>
   );
 }

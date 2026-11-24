@@ -69,10 +69,13 @@ describe('i18n rollout', () => {
     );
     const header = screen.getByRole('banner');
     expect(within(header).getByText('Rechnungen')).toBeInTheDocument();
+    // Expenses is a tab inside Finance now, not a top-level nav item.
+    expect(within(header).queryByText('Spesen')).not.toBeInTheDocument();
     const toggle = within(header).getByRole('button', { name: 'Wechseln zu Englisch' });
     expect(within(toggle).getByText('EN')).toBeInTheDocument();
     fireEvent.click(toggle);
     expect(within(header).getByText('Invoices')).toBeInTheDocument();
+    expect(within(header).queryByText('Expenses')).not.toBeInTheDocument();
     expect(localStorage.getItem('queen-lang')).toBe('en');
     expect(within(header).getByRole('button', { name: 'Switch to German' })).toBeInTheDocument();
   });
