@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.36.0](https://github.com/bumbleflies/queen/compare/queen-v0.35.3...queen-v0.36.0) (2026-11-24)
+
+
+### Features
+
+* move founder expenses into Finance with tighter layout ([#385](https://github.com/bumbleflies/queen/issues/385)) ([9fc9872](https://github.com/bumbleflies/queen/commit/9fc9872d80b93d7cdfd0133bb802880a3f87ad60))
+
 ## [0.35.3](https://github.com/bumbleflies/queen/compare/queen-v0.35.2...queen-v0.35.3) (2026-11-24)
 
 
