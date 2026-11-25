@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.36.7](https://github.com/bumbleflies/queen/compare/queen-v0.36.6...queen-v0.36.7) (2026-11-25)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @types/react to v19.3.3 ([#400](https://github.com/bumbleflies/queen/issues/400)) ([a44c4a5](https://github.com/bumbleflies/queen/commit/a44c4a561787e0bfc8132ed605beddba1a8b0b4d))
+* **deps:** update dependency vitest to v5.1.2 ([#401](https://github.com/bumbleflies/queen/issues/401)) ([4e64c36](https://github.com/bumbleflies/queen/commit/4e64c36ade3ea29d0e163cadc1abf25308ffc2ab))
+
 ## [0.36.6](https://github.com/bumbleflies/queen/compare/queen-v0.36.5...queen-v0.36.6) (2026-11-25)
 
 
