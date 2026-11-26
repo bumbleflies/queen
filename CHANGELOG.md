@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.37.1](https://github.com/bumbleflies/queen/compare/queen-v0.37.0...queen-v0.37.1) (2026-11-26)
+
+
+### Bug Fixes
+
+* re-import matches the receipt by content hash ([#405](https://github.com/bumbleflies/queen/issues/405)) ([1f7b35d](https://github.com/bumbleflies/queen/commit/1f7b35d7ff2cf8a9644fae6ce066f8298ad34de5))
+
 ## [0.37.0](https://github.com/bumbleflies/queen/compare/queen-v0.36.7...queen-v0.37.0) (2026-11-26)
 
 
