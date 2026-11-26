@@ -422,24 +422,16 @@ h3 {
 .claim-menu[open] > summary::after {
   content: ' ▴';
 }
+/* In-flow, not a floating popup: the table wraps and the card clip overflow. */
 .claim-menu-list {
-  position: absolute;
-  z-index: 5;
-  top: calc(100% + 4px);
-  right: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  width: max-content;
-  min-width: 100%;
+  margin-top: 6px;
   padding: 8px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
-}
-.claim-menu-list .btn {
-  white-space: nowrap;
 }
 
 .chip {
