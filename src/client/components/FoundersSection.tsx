@@ -229,6 +229,115 @@ function AddEmailDialog({ founder, onClose }: { founder: FounderRow; onClose: ()
   );
 }
 
+interface ImportResult {
+  rows: number;
+  created: number;
+  updated: number;
+  unchanged: number;
+  items: { name: string; loginEmail: string; action: 'create' | 'update' | 'unchanged' }[];
+  errors: string[];
+}
+
+/** Bulk registry import with a mandatory check before the real write. */
+function ImportDialog({ onDone }: { onDone: () => void }) {
+  const { t } = useLanguage();
+  const toast = useToast();
+  const utils = trpc.useUtils();
+  const importJson = trpc.founders.importJson.useMutation();
+  const [json, setJson] = useState('');
+  const [check, setCheck] = useState<ImportResult | null>(null);
+
+  function edit(text: string) {
+    setJson(text);
+    setCheck(null);
+  }
+
+  async function run(dryRun: boolean) {
+    try {
+      const res = (await importJson.mutateAsync({ json, dryRun })) as ImportResult;
+      if (dryRun || res.errors.length > 0) {
+        setCheck(res);
+        return;
+      }
+      await utils.founders.list.invalidate();
+      toast.show(t('expenses.founders.importDialog.done'));
+      onDone();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
+  const summary = check
+    ? t('expenses.founders.importDialog.summary')
+        .replace('{created}', String(check.created))
+        .replace('{updated}', String(check.updated))
+        .replace('{unchanged}', String(check.unchanged))
+    : '';
+
+  return (
+    <Modal title={t('expenses.founders.importDialog.title')} sub={t('expenses.founders.importDialog.hint')} onClose={onDone}>
+      <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <label className="lab">
+          {t('expenses.founders.importDialog.json')}
+          <textarea
+            className="field num"
+            rows={10}
+            value={json}
+            placeholder='[{ "name": "…", "shortName": "…", "emails": ["…"], "loginEmail": "…@bumbleflies.de", "iban": "DE…" }]'
+            onChange={(e) => edit(e.target.value)}
+          />
+        </label>
+        <label className="lab">
+          {t('expenses.founders.importDialog.file')}
+          <input
+            type="file"
+            accept="application/json,.json"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (file) edit(await file.text());
+            }}
+          />
+        </label>
+        {check ? (
+          check.errors.length > 0 ? (
+            <ul style={{ color: 'var(--danger)', margin: 0, paddingLeft: 20 }}>
+              {check.errors.map((err) => <li key={err}>{err}</li>)}
+            </ul>
+          ) : (
+            <div>
+              <div className="lbl">{summary}</div>
+              <ul style={{ margin: '8px 0 0', paddingLeft: 20 }}>
+                {check.items.map((item) => (
+                  <li key={`${item.loginEmail}-${item.name}`}>
+                    <span>{item.name}</span>{' '}
+                    <span className={`badge ${item.action === 'create' ? 'b-paid' : item.action === 'update' ? 'b-sent' : 'b-draft'}`}>
+                      {t(`expenses.founders.importDialog.action.${item.action}`)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )
+        ) : null}
+      </div>
+      <div className="row acts" style={{ padding: 16 }}>
+        <button type="button" className="btn ghost" onClick={onDone}>{t('common.cancel')}</button>
+        <button type="button" className="btn ghost" disabled={json.trim() === '' || importJson.isPending} onClick={() => run(true)}>
+          {t('expenses.founders.importDialog.check')}
+        </button>
+        <button
+          type="button"
+          className="btn"
+          disabled={!check || check.errors.length > 0 || importJson.isPending}
+          onClick={() => run(false)}
+        >
+          {t('expenses.founders.importDialog.apply')}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 /** Admin registry for the addresses and payout target behind the expense flow. */
 export function FoundersSection() {
   const { t } = useLanguage();
@@ -238,6 +347,7 @@ export function FoundersSection() {
   const setActive = trpc.founders.setActive.useMutation();
   const [dialog, setDialog] = useState<{ founder: FounderRow | null } | null>(null);
   const [emailFor, setEmailFor] = useState<FounderRow | null>(null);
+  const [importing, setImporting] = useState(false);
 
   async function toggle(founder: FounderRow) {
     try {
@@ -256,9 +366,14 @@ export function FoundersSection() {
           <h2 style={{ margin: 0, fontSize: 18 }}>{t('expenses.founders.title')}</h2>
           <p className="muted" style={{ margin: '4px 0 0' }}>{t('expenses.founders.hint')}</p>
         </div>
-        <button type="button" className="btn" onClick={() => setDialog({ founder: null })}>
-          {t('expenses.founders.add')}
-        </button>
+        <div className="row">
+          <button type="button" className="btn ghost" onClick={() => setImporting(true)}>
+            {t('expenses.founders.import')}
+          </button>
+          <button type="button" className="btn" onClick={() => setDialog({ founder: null })}>
+            {t('expenses.founders.add')}
+          </button>
+        </div>
       </div>
 
       <div className="table-wrap">
@@ -311,6 +426,7 @@ export function FoundersSection() {
 
       {dialog ? <FounderDialog founder={dialog.founder} onClose={() => setDialog(null)} /> : null}
       {emailFor ? <AddEmailDialog founder={emailFor} onClose={() => setEmailFor(null)} /> : null}
+      {importing ? <ImportDialog onDone={() => setImporting(false)} /> : null}
     </section>
   );
 }

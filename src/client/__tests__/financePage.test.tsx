@@ -147,6 +147,7 @@ vi.mock('../lib/trpc', () => ({
         assignFounder: mut('claimAssign', async () => ({})),
         createManual: mut('claimManual', async () => ({})),
         confirm: mut('claimConfirm', async () => ({ id: 'c1', status: 'booked', rebooked: false })),
+        reimport: mut('claimReimport', async () => ({ ok: true, id: 'c1', fileName: 'c.pdf', founderName: null, status: 'received' })),
       },
     },
     founders: { list: q([{ id: 'f1', name: 'Test Person', shortName: 'TP', active: true }]) },

@@ -81,6 +81,20 @@ function isDuplicateKey(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 11000;
 }
 
+/** Cached `Spesen/<year>` folder resolution shared by intake and re-import. */
+function folderResolver(deps: ExpenseIntakeDeps) {
+  let spesenFolder: Promise<string> | null = null;
+  const yearFolders = new Map<number, Promise<string>>();
+  const spesen = () => (spesenFolder ??= ensureSubfolder(deps.drive, deps.receiptsFolderId, 'Spesen'));
+  return (year: number): Promise<string> => {
+    const cached = yearFolders.get(year);
+    if (cached) return cached;
+    const pending = spesen().then((folderId) => ensureSubfolder(deps.drive, folderId, String(year)));
+    yearFolders.set(year, pending);
+    return pending;
+  };
+}
+
 /**
  * Book a freshly recorded claim when the read is complete and the amount is
  * under the limit. A failure here is a note on the claim and a warning in the
@@ -190,16 +204,7 @@ export async function runExpenseIntake(deps: ExpenseIntakeDeps): Promise<Expense
   // `Spesen` and its year folder are shared by every mail of the run: resolve
   // each once, so a rerun creates no duplicate folder and a mail with three
   // PDFs lists the folders once.
-  let spesenFolder: Promise<string> | null = null;
-  const yearFolders = new Map<number, Promise<string>>();
-  const spesen = () => (spesenFolder ??= ensureSubfolder(deps.drive, deps.receiptsFolderId, 'Spesen'));
-  const yearFolder = (year: number): Promise<string> => {
-    const cached = yearFolders.get(year);
-    if (cached) return cached;
-    const pending = spesen().then((folderId) => ensureSubfolder(deps.drive, folderId, String(year)));
-    yearFolders.set(year, pending);
-    return pending;
-  };
+  const yearFolder = folderResolver(deps);
 
   for (const { id } of messages) {
     let msg;
@@ -344,6 +349,112 @@ export async function runExpenseIntake(deps: ExpenseIntakeDeps): Promise<Expense
   }
 
   return result;
+}
+
+/** Expected failure of a re-import: a human sentence, never a 5xx. */
+export class ReimportError extends Error {
+  constructor(public readonly code: 'NOT_FOUND' | 'PRECONDITION_FAILED', message: string) {
+    super(message);
+  }
+}
+
+export interface ReimportResult {
+  id: string;
+  fileName: string;
+  founderName: string | null;
+  status: string;
+}
+
+/**
+ * Redo the intake of one claim from the same mail — no new email needed. The
+ * claim is updated in place (claims are never deleted): the attachment is
+ * re-read, re-filed under the founder now known, and any hand correction is
+ * cleared because it belongs to the old read. No confirmation reply is sent.
+ */
+export async function reimportClaim(claimId: string, deps: ExpenseIntakeDeps): Promise<ReimportResult> {
+  const claim = await ExpenseClaim.findById(claimId);
+  if (!claim) throw new ReimportError('NOT_FOUND', 'Beleg nicht gefunden');
+  if (['booked', 'payoutPending', 'settled'].includes(claim.status)) {
+    throw new ReimportError('PRECONDITION_FAILED', 'Beleg ist bereits gebucht – ein Neuimport würde die Buchung verdoppeln');
+  }
+  if (claim.messageId.startsWith('manual:')) {
+    throw new ReimportError('PRECONDITION_FAILED', 'Ein manuell erfasster Beleg hat keine E-Mail');
+  }
+
+  let msg;
+  try {
+    msg = (await deps.gmail.users.messages.get({ userId: 'me', id: claim.messageId, format: 'full' })).data;
+  } catch (err) {
+    throw new ReimportError('PRECONDITION_FAILED', `E-Mail nicht gefunden: ${message(err)}`);
+  }
+  const from = headerValue(msg, 'From');
+  const founders = await Founder.find({ active: true }).lean();
+  const byEmail = new Map<string, FounderDoc>();
+  for (const founder of founders) {
+    for (const email of founder.emails) byEmail.set(email.toLowerCase(), founder);
+  }
+  const founder = byEmail.get(addressFromHeader(from)) ?? null;
+
+  let attachments;
+  try {
+    attachments = await fetchPdfAttachments(deps.gmail, claim.messageId, msg.payload);
+  } catch (err) {
+    throw new ReimportError('PRECONDITION_FAILED', `Anhänge nicht lesbar: ${message(err)}`);
+  }
+  const attachment = attachments.find((a) => a.attachmentId === claim.attachmentId);
+  if (!attachment) throw new ReimportError('PRECONDITION_FAILED', 'Der Anhang ist in der E-Mail nicht mehr vorhanden');
+
+  const extractText = deps.extractText ?? extractPdfText;
+  const parse = deps.parse ?? parseExpenseText;
+  const text = await extractText(attachment.buffer);
+  const parsed = text.trim().length >= 20 ? parse(text, { fromName: displayNameFromHeader(from) }) : null;
+
+  const period = periodOf(parsed?.date ?? claim.receivedAt);
+  const fileName = claimFileName({
+    shortName: founder?.shortName ?? 'Unbekannt',
+    period,
+    vendorName: parsed?.vendorName ?? '',
+    invoiceNumber: parsed?.invoiceNumber,
+  });
+  let filed;
+  try {
+    filed = await deps.upload({ buffer: attachment.buffer, fileName, folderId: await folderResolver(deps)(claim.receivedAt.getFullYear()) });
+  } catch (err) {
+    throw new ReimportError('PRECONDITION_FAILED', `PDF konnte nicht abgelegt werden: ${message(err)}`);
+  }
+
+  claim.set({
+    from,
+    subject: headerValue(msg, 'Subject'),
+    founderId: founder?._id ?? null,
+    fileName,
+    driveFileId: filed.fileId,
+    driveLink: filed.link,
+    period,
+    status: 'received',
+    error: parsed ? undefined : 'Kein lesbarer Text im PDF',
+  });
+  claim.set('parse', parsed ?? undefined);
+  claim.set('corrected', undefined);
+  await claim.save();
+
+  const errors: string[] = [];
+  if (parsed && founder) {
+    try {
+      await autoBookClaim({
+        claim,
+        parsed,
+        founder,
+        limitCents: deps.autoBookLimitCents ?? (await getExpenseAutoBookLimitCents()),
+        suggest: deps.suggestAccount ?? suggestAccount,
+        book: deps.bookClaim ?? bookExpenseClaim,
+        errors,
+      });
+    } catch (err) {
+      errors.push(message(err));
+    }
+  }
+  return { id: String(claim._id), fileName, founderName: founder?.name ?? null, status: claim.status };
 }
 
 /** Origin for the link in the reply; same setting the bills intake uses. */

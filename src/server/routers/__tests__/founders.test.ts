@@ -73,4 +73,36 @@ describe('founders', () => {
     const again = await caller.founders.addEmail({ id: f.id, email: 'a2@example.org' });
     expect(again.emails).toEqual(['a@example.org', 'a2@example.org']);
   });
+
+  it('imports founders from JSON, dry-running by default', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    const json = JSON.stringify([{
+      name: 'Test Person', shortName: 'TP', emails: ['TP@Example.org'],
+      loginEmail: 'tp@bumbleflies.de', iban: 'de89 3704 0044 0532 0130 00',
+    }]);
+    const check = await caller.founders.importJson({ json });
+    expect(check.created).toBe(1);
+    expect(await Founder.countDocuments()).toBe(0);
+    const applied = await caller.founders.importJson({ json, dryRun: false });
+    expect(applied.created).toBe(1);
+    expect((await Founder.findOne({ loginEmail: 'tp@bumbleflies.de' }).lean())?.iban).toBe('DE89370400440532013000');
+  });
+
+  it('writes nothing when an import row is invalid', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = adminCaller();
+    const res = await caller.founders.importJson({
+      json: JSON.stringify([{ name: 'A', shortName: 'A', emails: ['a@example.org'], loginEmail: 'a@gmail.com', iban: 'DE89370400440532013000' }]),
+      dryRun: false,
+    });
+    expect(res.errors.length).toBeGreaterThan(0);
+    expect(await Founder.countDocuments()).toBe(0);
+  });
+
+  it('is admin-only for the JSON import', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = appRouter.createCaller({ user: { sub: 'u', email: 'u@example.org', role: 'user' }, serviceAuth: false });
+    await expect(caller.founders.importJson({ json: '[]' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
 });

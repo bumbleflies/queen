@@ -222,6 +222,7 @@ export function ClaimsSection({ year, remember = true }: { year: number; remembe
   const setIgnored = trpc.expenses.claims.setIgnored.useMutation();
   const assignFounder = trpc.expenses.claims.assignFounder.useMutation();
   const confirm = trpc.expenses.claims.confirm.useMutation();
+  const reimport = trpc.expenses.claims.reimport.useMutation();
 
   const [correcting, setCorrecting] = useState<ClaimToCorrect | null>(null);
 
@@ -233,6 +234,21 @@ export function ClaimsSection({ year, remember = true }: { year: number; remembe
       const result = await confirm.mutateAsync({ id: row.id });
       await utils.expenses.claims.list.invalidate();
       toast.show(t(result.rebooked ? 'expenses.rebooked' : 'expenses.booked'));
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  }
+
+  /** Redo the intake of the same mail (e.g. after the founder was registered). */
+  async function reimportRow(row: ClaimRow) {
+    try {
+      const res = await reimport.mutateAsync({ id: row.id });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      await utils.expenses.claims.list.invalidate();
+      toast.show(t('expenses.reimported').replace('{file}', res.fileName));
     } catch (err) {
       toast.error((err as Error).message);
     }
@@ -393,6 +409,15 @@ export function ClaimsSection({ year, remember = true }: { year: number; remembe
                         <>
                           {row.status === 'received' ? (
                             <>
+                              <button
+                                type="button"
+                                className="btn ghost sm"
+                                disabled={reimport.isPending}
+                                onClick={() => reimportRow(row)}
+                                title={t('expenses.reimport')}
+                              >
+                                {t('expenses.reimport')}
+                              </button>
                               <button
                                 type="button"
                                 className="btn ghost sm"

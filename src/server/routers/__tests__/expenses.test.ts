@@ -271,4 +271,17 @@ describe('expenses.claims mutations', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toContain('Belege-Ordner');
   });
+
+  it('reimport is admin-only', async (ctx) => {
+    skipIfNoDb(ctx);
+    const caller = appRouter.createCaller({ user: { sub: 'u', email: 'u@example.org', role: 'user' }, serviceAuth: false });
+    await expect(caller.expenses.claims.reimport({ id: 'claim-1' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('reports reimport configuration errors without throwing', async (ctx) => {
+    skipIfNoDb(ctx);
+    const result = await adminCaller().expenses.claims.reimport({ id: 'claim-1' });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain('Belege-Ordner');
+  });
 });
