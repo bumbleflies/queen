@@ -43,6 +43,16 @@ describe('ClaimMenu', () => {
     expect(screen.queryByRole('menuitem', { name: 'Vorschau' })).not.toBeInTheDocument();
   });
 
+  it('keeps the menu open through the scroll caused by clicking the trigger', async () => {
+    renderMenu();
+    await userEvent.click(screen.getByRole('button', { name: /Aktionen/ }));
+    fireEvent.scroll(window);
+    expect(screen.getByRole('menuitem', { name: 'Vorschau' })).toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    fireEvent.scroll(window);
+    expect(screen.queryByRole('menuitem', { name: 'Vorschau' })).not.toBeInTheDocument();
+  });
+
   it('closes on an outside pointer down', async () => {
     renderMenu();
     await userEvent.click(screen.getByRole('button', { name: /Aktionen/ }));

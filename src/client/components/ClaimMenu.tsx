@@ -38,13 +38,16 @@ export function ClaimMenu({ onPreview, onCorrect, onReimport, onIgnore, reimport
       close();
     };
     const onScroll = () => close();
+    // Clicking a button the browser had to scroll into view would otherwise
+    // close the menu on the very scroll event caused by that click.
+    const scrollTimer = window.setTimeout(() => window.addEventListener('scroll', onScroll, true), 200);
     window.addEventListener('keydown', onKey);
     window.addEventListener('pointerdown', onPointer, true);
-    window.addEventListener('scroll', onScroll, true);
     return () => {
+      window.clearTimeout(scrollTimer);
+      window.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('pointerdown', onPointer, true);
-      window.removeEventListener('scroll', onScroll, true);
     };
   }, [open, close]);
 
