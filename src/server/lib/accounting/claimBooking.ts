@@ -46,8 +46,16 @@ export async function bookExpenseClaim(args: {
   if (!founder) throw new ClaimError('NO_FOUNDER', 'Kein Gesellschafter zugeordnet');
 
   const fields = claimFieldsOf(claim);
-  if (!fields || fields.grossCents == null || !fields.account) {
-    throw new ClaimError('INCOMPLETE', 'Betrag oder Konto fehlt');
+  if (!fields) throw new ClaimError('INCOMPLETE', 'Betrag fehlt – bitte zuerst korrigieren');
+  if (fields.grossCents == null || !fields.account) {
+    const what = [
+      fields.grossCents == null ? 'Betrag' : null,
+      !fields.account ? 'Aufwandskonto' : null,
+    ]
+      .filter(Boolean)
+      .join(' und ');
+    const verb = fields.grossCents == null && !fields.account ? ' fehlen' : ' fehlt';
+    throw new ClaimError('INCOMPLETE', `${what}${verb} – bitte zuerst korrigieren`);
   }
 
   const vatCents = fields.vatCents ?? 0;

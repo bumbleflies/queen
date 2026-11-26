@@ -323,6 +323,10 @@ export function ClaimsSection({ year, remember = true }: { year: number; remembe
               {rows.map((row) => {
                 const parsed = row.parse ?? {};
                 const isHighlighted = highlighted === row.id;
+                const blockers = [
+                  typeof parsed.grossCents !== 'number' ? t('expenses.missingAmount') : null,
+                  !parsed.account ? t('expenses.missingAccount') : null,
+                ].filter(Boolean);
                 return (
                   <tr
                     key={row.id}
@@ -381,7 +385,7 @@ export function ClaimsSection({ year, remember = true }: { year: number; remembe
                       {parsed.reverseCharge ? <div className="rc" style={{ fontSize: 12 }}>{t('expenses.reverseCharge')}</div> : null}
                       {typeof parsed.vatCents === 'number' && parsed.vatCents > 0 ? (
                         <div className="rc" style={{ fontSize: 12 }}>
-                          {parsed.addressedToCompany ? t('expenses.vatDeductible') : t('expenses.grossOnly')}
+                          {row.autoBookable?.vatDeductible ? t('expenses.vatDeductible') : t('expenses.grossOnly')}
                         </div>
                       ) : null}
                     </td>
@@ -406,52 +410,54 @@ export function ClaimsSection({ year, remember = true }: { year: number; remembe
                     </td>
                     <td>
                       {isAdmin && row.status !== 'payoutPending' && row.status !== 'settled' ? (
-                        <>
+                        <div className="claim-acts">
                           {row.status === 'received' ? (
-                            <>
-                              <button
-                                type="button"
-                                className="btn ghost sm"
-                                disabled={reimport.isPending}
-                                onClick={() => reimportRow(row)}
-                                title={t('expenses.reimport')}
-                              >
-                                {t('expenses.reimport')}
-                              </button>
-                              <button
-                                type="button"
-                                className="btn ghost sm"
-                                onClick={() => startCorrecting(row)}
-                                title={t('expenses.correct')}
-                              >
-                                {t('expenses.correctLabel')}
-                              </button>
-                              <button
-                                type="button"
-                                className="btn sm"
-                                disabled={confirm.isPending}
-                                onClick={() => book(row)}
-                                // A queued claim can still be booked by hand: say why it queued.
-                                title={row.autoBookable?.ok ? undefined : (row.autoBookable?.reasons ?? []).join(' · ')}
-                              >
-                                {confirm.isPending ? t('expenses.booking') : t('expenses.book')}
-                              </button>
-                            </>
+                            <button
+                              type="button"
+                              className="btn sm"
+                              disabled={confirm.isPending || blockers.length > 0}
+                              onClick={() => book(row)}
+                              // A queued claim can still be booked by hand; only a missing
+                              // amount or expense account is a hard blocker.
+                              title={blockers.length > 0 ? blockers.join(' · ') : (row.autoBookable?.reasons ?? []).join(' · ') || undefined}
+                            >
+                              {confirm.isPending ? t('expenses.booking') : t('expenses.book')}
+                            </button>
                           ) : null}
                           {row.status === 'booked' ? (
                             <button type="button" className="btn sm" onClick={() => startCorrecting(row)}>
                               {t('expenses.rebook')}
                             </button>
                           ) : null}
-                          <button
-                            type="button"
-                            className="btn ghost sm"
-                            onClick={() => toggleIgnored(row)}
-                            disabled={setIgnored.isPending || row.status === 'payoutPending' || row.status === 'settled'}
-                          >
-                            {row.status === 'ignored' ? t('expenses.unignore') : t('expenses.ignore')}
-                          </button>
-                        </>
+                          <details className="claim-menu">
+                            <summary>{t('expenses.actions')}</summary>
+                            <div className="claim-menu-list">
+                              {row.status === 'received' ? (
+                                <>
+                                  <button type="button" className="btn ghost sm" onClick={() => startCorrecting(row)}>
+                                    {t('expenses.correctLabel')}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn ghost sm"
+                                    disabled={reimport.isPending}
+                                    onClick={() => reimportRow(row)}
+                                  >
+                                    {t('expenses.reimport')}
+                                  </button>
+                                </>
+                              ) : null}
+                              <button
+                                type="button"
+                                className="btn ghost sm"
+                                onClick={() => toggleIgnored(row)}
+                                disabled={setIgnored.isPending}
+                              >
+                                {row.status === 'ignored' ? t('expenses.unignore') : t('expenses.ignore')}
+                              </button>
+                            </div>
+                          </details>
+                        </div>
                       ) : null}
                     </td>
                   </tr>

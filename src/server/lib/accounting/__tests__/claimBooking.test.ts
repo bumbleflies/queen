@@ -118,14 +118,30 @@ describe('bookExpenseClaim', () => {
     ).rejects.toBeInstanceOf(ClaimError);
   });
 
-  it('refuses a claim without an amount or account', async (ctx) => {
+  it('names the field that blocks booking', async (ctx) => {
     skipIfNoDb(ctx);
-    const { claim } = await createClaim({
+    const { claim: noAccount } = await createClaim({
+      parse: { vendorName: 'Bahn', grossCents: 11900, account: null, addressedToCompany: true },
+    });
+    await expect(
+      bookExpenseClaim({ claimId: String(noAccount._id), actor: 'admin-id-1' }),
+    ).rejects.toThrow('Aufwandskonto fehlt – bitte zuerst korrigieren');
+
+    const { claim: noAmount } = await createClaim({
+      messageId: 'm2', attachmentId: 'a2', sha256: 'hash-2',
+      parse: { vendorName: 'Bahn', grossCents: null, account: '6837', addressedToCompany: true },
+    });
+    await expect(
+      bookExpenseClaim({ claimId: String(noAmount._id), actor: 'admin-id-1' }),
+    ).rejects.toThrow('Betrag fehlt – bitte zuerst korrigieren');
+
+    const { claim: neither } = await createClaim({
+      messageId: 'm3', attachmentId: 'a3', sha256: 'hash-3',
       parse: { vendorName: 'Bahn', grossCents: null, account: null, addressedToCompany: true },
     });
     await expect(
-      bookExpenseClaim({ claimId: String(claim._id), actor: 'admin-id-1' }),
-    ).rejects.toMatchObject({ code: 'INCOMPLETE' });
+      bookExpenseClaim({ claimId: String(neither._id), actor: 'admin-id-1' }),
+    ).rejects.toThrow('Betrag und Aufwandskonto fehlen – bitte zuerst korrigieren');
   });
 
   it('uses the founder liability account, defaulting to 3500', async (ctx) => {
