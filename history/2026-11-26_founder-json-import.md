@@ -47,8 +47,15 @@ the Finance → Expenses table: the founder column now shows the person and the
 `Gesellschafter inaktiv` review reason is gone. On user confirmation, the missing
 BIC was looked up from the IBAN's bank code in the Deutsche Bundesbank register
 and set on the founder, and both private address variants found for another
-founder were added. The import endpoint/UI itself is pending deployment
-(production needs explicit approval).
+founder were added.
+
+The feature shipped in `queen-v0.37.0`. The first live re-import failed because
+the stored Gmail attachment id no longer matched the API's view; `queen-v0.37.1`
+made re-import fall back to the PDF's content hash. After that release the
+Porkbun claim was re-imported successfully from its original mail: the single
+claim was updated in place with the founder's short name in the file name and a
+fresh Drive file, no duplicate was created, and no second confirmation mail was
+sent. Production deployed through the release pipeline with explicit approval.
 
 ## Verification commands
 
