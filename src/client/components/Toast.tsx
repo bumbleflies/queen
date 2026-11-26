@@ -28,7 +28,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const push = useCallback((message: string, kind: 'info' | 'error', action?: ToastAction) => {
     const id = Date.now() + Math.random();
-    setItems((prev) => [...prev, { id, message, kind, action }]);
+    // A double click must not stack identical red toasts.
+    setItems((prev) => [...prev.filter((t) => t.message !== message || t.kind !== kind), { id, message, kind, action }]);
     setTimeout(() => dismiss(id), action ? 9000 : 4000);
   }, [dismiss]);
 

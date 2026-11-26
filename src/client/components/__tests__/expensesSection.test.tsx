@@ -97,6 +97,11 @@ function renderPage() {
   );
 }
 
+/** Secondary actions live behind the compact Aktionen menu. */
+async function openActions() {
+  await userEvent.click(await screen.findByText('Aktionen'));
+}
+
 beforeEach(() => {
   localStorage.setItem('queen-lang', 'de');
   rows.current = [];
@@ -141,6 +146,7 @@ describe('ExpensesSection', () => {
     rows.current = [claimRow()];
     renderPage();
 
+    await openActions();
     await userEvent.click(await screen.findByRole('button', { name: 'Korrigieren' }));
     const gross = screen.getByLabelText('Bruttobetrag');
     expect(gross).toHaveValue('41,20');
@@ -174,6 +180,7 @@ describe('ExpensesSection', () => {
     rows.current = [claimRow()];
     renderPage();
 
+    await openActions();
     await userEvent.click(await screen.findByRole('button', { name: 'Neu importieren' }));
     expect(reimportMutation).toHaveBeenCalledTimes(1);
     expect(reimportMutation.mock.calls[0][0]).toEqual({ id: 'claim-1' });
@@ -198,6 +205,30 @@ describe('ExpensesSection', () => {
     );
   });
 
+  it('disables Book when the read lacks a hard booking field', async () => {
+    rows.current = [claimRow({ parse: { ...claimRow().parse, account: null } })];
+    renderPage();
+
+    const book = await screen.findByRole('button', { name: 'Buchen' });
+    expect(book).toBeDisabled();
+    expect(book).toHaveAttribute('title', 'Aufwandskonto fehlt – bitte zuerst korrigieren');
+  });
+
+  it('never claims input VAT is deductible when the rate is unknown', async () => {
+    rows.current = [
+      claimRow({
+        parse: { ...claimRow().parse, addressedToCompany: true, vatRate: null, vatCents: 8053800 },
+        autoBookable: {
+          ok: false, reasons: ['USt-Satz unklar'], vatDeductible: false, grossOnly: true,
+        },
+      }),
+    ];
+    renderPage();
+
+    expect(await screen.findByText('brutto, ohne Vorsteuer')).toBeInTheDocument();
+    expect(screen.queryByText('Vorsteuer abziehbar')).not.toBeInTheDocument();
+  });
+
   it('corrects and rebooks a booked claim in one action', async () => {
     correctMutation.mockResolvedValueOnce({ id: 'claim-1', parse: {}, needsRebook: true });
     rows.current = [claimRow({ status: 'booked' })];
@@ -220,7 +251,7 @@ describe('ExpensesSection', () => {
 
     expect(await screen.findByText('Bahn')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Jetzt abrufen' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Korrigieren' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Aktionen')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Buchen' })).not.toBeInTheDocument();
   });
 
