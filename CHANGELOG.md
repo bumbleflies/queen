@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.37.2](https://github.com/bumbleflies/queen/compare/queen-v0.37.1...queen-v0.37.2) (2026-11-26)
+
+
+### Bug Fixes
+
+* make claim review feedback specific and actions compact ([#408](https://github.com/bumbleflies/queen/issues/408)) ([97bdd24](https://github.com/bumbleflies/queen/commit/97bdd242830edf5663616f015a889257142c1837))
+
 ## [0.37.1](https://github.com/bumbleflies/queen/compare/queen-v0.37.0...queen-v0.37.1) (2026-11-26)
 
 
