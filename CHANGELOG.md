@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.37.0](https://github.com/bumbleflies/queen/compare/queen-v0.36.7...queen-v0.37.0) (2026-11-26)
+
+
+### Features
+
+* founder JSON import and same-mail claim re-import ([#403](https://github.com/bumbleflies/queen/issues/403)) ([cda1770](https://github.com/bumbleflies/queen/commit/cda1770907745155bc3ba2519f28a4f6eacfdf32))
+
 ## [0.36.7](https://github.com/bumbleflies/queen/compare/queen-v0.36.6...queen-v0.36.7) (2026-11-25)
 
 
