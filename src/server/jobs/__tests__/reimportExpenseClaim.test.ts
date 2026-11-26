@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import mongoose from 'mongoose';
 import { Founder } from '../../models/Founder';
@@ -103,6 +104,16 @@ describe('reimportClaim', () => {
     expect(stored?.parse?.vendorName).toBe('Bahn');
     expect(stored?.corrected).toBeUndefined();
     expect(stored?.driveLink).toBe('https://drive/f1');
+  });
+
+  it('finds the attachment by content hash when Gmail changed its id', async (ctx) => {
+    skipIfNoDb(ctx);
+    const { deps } = setup();
+    const sha256 = createHash('sha256').update(Buffer.from('%PDF-1.4 test')).digest('hex');
+    const old = await claim({ attachmentId: 'stale-gmail-id', sha256 });
+    const res = await reimportClaim(String(old._id), deps);
+    expect(res.fileName).toMatch(/^Spesen-TP-202601-Bahn/);
+    expect((await ExpenseClaim.findById(old._id))?.status).toBe('received');
   });
 
   it('refuses to re-import a booked claim', async (ctx) => {
