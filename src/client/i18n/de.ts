@@ -722,6 +722,7 @@ export const de = {
   'expenses.preview.title': 'Belegvorschau',
   'expenses.preview.open': 'In Drive öffnen',
   'expenses.preview.none': 'Für diesen Beleg liegt keine Drive-Datei vor.',
+  'expenses.preview.failed': 'Die Vorschau konnte nicht geladen werden.',
   'expenses.accountSuggestion': 'Vorschlag: {account} ({source}) – übernehmen',
   'expenses.accountSuggestion.hint': 'Nur ein Vorschlag – die Buchung erfolgt erst nach dem Speichern.',
   'expenses.accountSource.history': 'aus früheren Belegen',

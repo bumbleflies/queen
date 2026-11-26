@@ -725,6 +725,7 @@ export const en: Dict = {
   'expenses.preview.title': 'Receipt preview',
   'expenses.preview.open': 'Open in Drive',
   'expenses.preview.none': 'No Drive file for this receipt.',
+  'expenses.preview.failed': 'The preview could not be loaded.',
   'expenses.accountSuggestion': 'Suggestion: {account} ({source}) – apply',
   'expenses.accountSuggestion.hint': 'Only a suggestion – nothing is booked until you save.',
   'expenses.accountSource.history': 'from earlier receipts',

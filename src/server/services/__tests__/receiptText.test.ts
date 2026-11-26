@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import PDFDocument from 'pdfkit';
-import { extractPdfText, receiptText } from '../receiptText';
+import { downloadDrivePdf, extractPdfText, receiptText } from '../receiptText';
 
 function pdf(draw: (doc: PDFKit.PDFDocument) => void): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -16,6 +16,13 @@ function pdf(draw: (doc: PDFKit.PDFDocument) => void): Promise<Buffer> {
 }
 
 describe('receiptText', () => {
+  it('returns the raw bytes for an in-app PDF preview', async () => {
+    const bytes = await pdf((doc) => doc.text('Preview'));
+    const get = vi.fn(async () => ({ data: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) }));
+    const data = await downloadDrivePdf({ files: { list: vi.fn(), get } }, 'file-1');
+    expect(Buffer.from(data).equals(bytes)).toBe(true);
+  });
+
   it('downloads the file from Drive and extracts its text layer', async () => {
     const bytes = await pdf((doc) => doc.text('Muster Café — Summe 54,60 EUR'));
     const get = vi.fn(async () => ({ data: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) }));

@@ -228,6 +228,10 @@ export function ClaimsSection({ year, remember = true }: { year: number; remembe
 
   const [correcting, setCorrecting] = useState<ClaimToCorrect | null>(null);
   const [preview, setPreview] = useState<ClaimRow | null>(null);
+  const pdf = trpc.expenses.claims.preview.useQuery(
+    { id: preview?.id ?? '' },
+    { enabled: !!preview?.driveFileId },
+  );
 
   const rows = (claims.data ?? []) as unknown as ClaimRow[];
 
@@ -467,11 +471,19 @@ export function ClaimsSection({ year, remember = true }: { year: number; remembe
         >
           <div style={{ padding: 16, display: 'grid', gap: 12 }}>
             {preview.driveFileId ? (
-              <iframe
-                title={preview.fileName}
-                src={`https://drive.google.com/file/d/${encodeURIComponent(preview.driveFileId)}/preview`}
-                style={{ width: '100%', height: 'min(70vh, 720px)', border: 0 }}
-              />
+              pdf.isLoading ? (
+                <p className="muted">{t('common.loading')}</p>
+              ) : pdf.data ? (
+                <iframe
+                  title={preview.fileName}
+                  src={`data:application/pdf;base64,${pdf.data.pdfBase64}`}
+                  style={{ width: '100%', height: 'min(70vh, 720px)', border: 0 }}
+                />
+              ) : (
+                <p style={{ color: 'var(--danger)', margin: 0 }}>
+                  {(pdf.error as unknown as Error)?.message ?? t('expenses.preview.failed')}
+                </p>
+              )
             ) : (
               <p className="muted">{t('expenses.preview.none')}</p>
             )}

@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'crypto';
 import { z } from 'zod';
+import { google } from 'googleapis';
 import { TRPCError } from '@trpc/server';
 import { router, authedProcedure, adminProcedure } from '../trpcInit';
 import { ExpenseClaim } from '../models/ExpenseClaim';
@@ -13,6 +14,9 @@ import { LedgerError } from '../lib/accounting/ledger';
 import { PostingError } from '../lib/accounting/postingRules';
 import { addressFromHeader } from '../services/GmailService';
 import { getExpenseAutoBookLimitCents } from '../services/appSettings';
+import { downloadDrivePdf } from '../services/receiptText';
+import { createOAuth2Client } from '../services/DriveService';
+import { googleAccessForCron } from '../services/driveForUser';
 import { describeIntakeError } from '../jobs/billIntake';
 import { resolveExpenseIntakeDeps, reimportClaim, ReimportError, runExpenseIntake } from '../jobs/expenseIntake';
 import { addFounderEmail } from './founders';
@@ -63,6 +67,17 @@ function claimErrorToTRPC(err: unknown): TRPCError {
   return err instanceof TRPCError
     ? err
     : new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: (err as Error).message });
+}
+
+/** The PDF is served from our own origin: Google's viewer shows a cookie wall in an iframe. */
+async function claimPdfBase64(fileId: string): Promise<string> {
+  const access = await googleAccessForCron();
+  if (!access) throw new Error('Kein Google-Zugang hinterlegt — bitte in den Einstellungen erneuern');
+  const auth = createOAuth2Client(access.refreshToken);
+  auth.setCredentials({ refresh_token: access.refreshToken, access_token: access.accessToken });
+  const drive = google.drive({ version: 'v3', auth });
+  const bytes = await downloadDrivePdf(drive, fileId);
+  return Buffer.from(bytes).toString('base64');
 }
 
 const claimsRouter = router({
@@ -160,6 +175,20 @@ const claimsRouter = router({
       return { ok: false as const, error: describeIntakeError(err) };
     }
   }),
+
+  /** PDF bytes for the in-app preview, proxied through queen (admin). */
+  preview: adminProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .query(async ({ input }) => {
+      const claim = await ExpenseClaim.findById(input.id);
+      if (!claim) throw new TRPCError({ code: 'NOT_FOUND', message: 'Beleg nicht gefunden' });
+      if (!claim.driveFileId) throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Keine Drive-Datei vorhanden' });
+      try {
+        return { fileName: claim.fileName, pdfBase64: await claimPdfBase64(claim.driveFileId) };
+      } catch (err) {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: (err as Error).message });
+      }
+    }),
 
   /**
    * Redo the intake of one claim from the same mail (admin). The claim is

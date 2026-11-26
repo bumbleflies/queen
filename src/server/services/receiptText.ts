@@ -30,8 +30,13 @@ export async function extractPdfText(bytes: Uint8Array): Promise<string> {
   return text;
 }
 
+/** Raw bytes of a Drive file; used for previews as well as text extraction. */
+export async function downloadDrivePdf(drive: DriveFilesLike, fileId: string): Promise<Uint8Array> {
+  const res = await drive.files.get({ fileId, alt: 'media', supportsAllDrives: true }, { responseType: 'arraybuffer' });
+  return toBytes(res.data);
+}
+
 /** Downloads a receipt PDF from Drive and extracts its text. */
 export async function receiptText(drive: DriveFilesLike, fileId: string): Promise<string> {
-  const res = await drive.files.get({ fileId, alt: 'media', supportsAllDrives: true }, { responseType: 'arraybuffer' });
-  return extractPdfText(toBytes(res.data));
+  return extractPdfText(await downloadDrivePdf(drive, fileId));
 }
