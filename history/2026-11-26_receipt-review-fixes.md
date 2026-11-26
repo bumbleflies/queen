@@ -39,6 +39,17 @@ help choosing an account.
 `npm run lint && npm run typecheck && npm run typecheck:server && npm test -- --maxWorkers=2`
 — all green (112 files, 998 tests).
 
+## Deployment results
+
+Shipped in `queen-v0.38.0`, with follow-ups `0.38.2` (menu stayed open through
+the trigger's scroll-into-view) and `0.38.3` (PDF preview proxied through queen
+after Google's iframe showed a cookie wall). Verified live in DE/EN: the portal
+menu stays open and renders outside the card, the preview shows the real PDF,
+and the correction dialog offers `Vorschlag: 6837 (aus dem Belegaussteller)`.
+The Porkbun claim was re-imported; its read now holds `date = 2026-11-18`,
+`vatCents = null`, `grossCents = 510` (USD), `currency = 'other'`, and the old
+hand correction was cleared in favour of the corrected read.
+
 ## Success criteria / known issues
 
 - A re-import of the Porkbun receipt now stores `date = 2026-11-18`,
