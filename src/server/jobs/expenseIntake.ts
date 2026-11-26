@@ -401,8 +401,19 @@ export async function reimportClaim(claimId: string, deps: ExpenseIntakeDeps): P
   } catch (err) {
     throw new ReimportError('PRECONDITION_FAILED', `Anhänge nicht lesbar: ${message(err)}`);
   }
-  const attachment = attachments.find((a) => a.attachmentId === claim.attachmentId);
-  if (!attachment) throw new ReimportError('PRECONDITION_FAILED', 'Der Anhang ist in der E-Mail nicht mehr vorhanden');
+  // Gmail attachment ids are not stable across API views. The content hash is
+  // what intake uses to identify a PDF, so it is the reliable fallback.
+  const hashOf = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
+  const attachment =
+    attachments.find((a) => a.attachmentId === claim.attachmentId) ??
+    attachments.find((a) => hashOf(a.buffer) === claim.sha256) ??
+    (attachments.length === 1 ? attachments[0] : undefined);
+  if (!attachment) {
+    throw new ReimportError(
+      'PRECONDITION_FAILED',
+      `Der Anhang ist in der E-Mail nicht mehr vorhanden (vorhanden: ${attachments.map((a) => a.attachmentId).join(', ') || 'keine'})`,
+    );
+  }
 
   const extractText = deps.extractText ?? extractPdfText;
   const parse = deps.parse ?? parseExpenseText;
