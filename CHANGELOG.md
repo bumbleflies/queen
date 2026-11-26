@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.38.2](https://github.com/bumbleflies/queen/compare/queen-v0.38.1...queen-v0.38.2) (2026-11-26)
+
+
+### Bug Fixes
+
+* keep claim menu open through the trigger's scroll into view ([#417](https://github.com/bumbleflies/queen/issues/417)) ([7ebecb3](https://github.com/bumbleflies/queen/commit/7ebecb3f7e5b0b6eb31921e1a5a34c2aba807de0))
+
 ## [0.38.1](https://github.com/bumbleflies/queen/compare/queen-v0.38.0...queen-v0.38.1) (2026-11-26)
 
 
