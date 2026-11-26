@@ -18,6 +18,20 @@ describe('claim helpers', () => {
     expect(claim.currency).toBe('EUR');
   });
 
+  it('reads a receipt date with a qualifier but never a due or update date', () => {
+    const paid = parseExpenseText('Porkbun LLC\nDate Paid: 2026-11-18\nTotal Paid USD $5.10');
+    expect(paid.date && [paid.date.getFullYear(), paid.date.getMonth() + 1, paid.date.getDate()]).toEqual([2026, 11, 18]);
+    expect(paid.currency).toBe('other');
+    expect(paid.grossCents).toBe(510);
+
+    const issued = parseExpenseText('Bahn AG\nDate issued: 18.11.2026\nGesamt 41,20 EUR');
+    expect(issued.date && [issued.date.getFullYear(), issued.date.getMonth() + 1, issued.date.getDate()]).toEqual([2026, 11, 18]);
+
+    expect(parseExpenseText('Bahn AG\nDue date: 15.10.2026\nGesamt 41,20 EUR').date).toBeNull();
+    expect(parseExpenseText('Bahn AG\nUpdated: 18.11.2026\nGesamt 41,20 EUR').date).toBeNull();
+    expect(parseExpenseText('Bahn AG\nZahlbar bis 15.10.2026\nGesamt 41,20 EUR').date).toBeNull();
+  });
+
   it('queues a claim addressed to a private person when VAT is stated', () => {
     const claim = parseExpenseText('Test Person\nHotel 119,00 EUR\n19 % USt 19,00 EUR', { fromName: 'Hotel' });
     const result = isConfidentClaim({

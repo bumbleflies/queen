@@ -7,6 +7,7 @@ import { Founder } from '../models/Founder';
 import { Account } from '../models/Account';
 import { FiscalYear } from '../models/FiscalYear';
 import { claimFieldsOf, isConfidentClaim, periodOf } from '../lib/expenses/claimFields';
+import { suggestReviewAccount } from '../lib/expenses/suggestAccount';
 import { bookExpenseClaim, ClaimError, rebookExpenseClaim } from '../lib/accounting/claimBooking';
 import { LedgerError } from '../lib/accounting/ledger';
 import { PostingError } from '../lib/accounting/postingRules';
@@ -102,7 +103,7 @@ const claimsRouter = router({
     const shaCounts = new Map<string, number>();
     for (const claim of claims) shaCounts.set(claim.sha256, (shaCounts.get(claim.sha256) ?? 0) + 1);
 
-    return claims.map((claim) => {
+    return Promise.all(claims.map(async (claim) => {
       const merged = claimFieldsOf(claim);
       const founder = claim.founderId ? founderById.get(String(claim.founderId)) ?? null : null;
       const autoBookable = merged
@@ -138,8 +139,11 @@ const claimsRouter = router({
           : null,
         payoutId: claim.payoutId ? String(claim.payoutId) : null,
         autoBookable,
+        accountSuggestion: merged
+          ? await suggestReviewAccount({ iban: merged.iban ?? '', vendorName: merged.vendorName ?? '' })
+          : null,
       };
-    });
+    }));
   }),
 
   /**

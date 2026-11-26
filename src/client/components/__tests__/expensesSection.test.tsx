@@ -99,7 +99,7 @@ function renderPage() {
 
 /** Secondary actions live behind the compact Aktionen menu. */
 async function openActions() {
-  await userEvent.click(await screen.findByText('Aktionen'));
+  await userEvent.click(await screen.findByText(/Aktionen/));
 }
 
 beforeEach(() => {
@@ -147,7 +147,7 @@ describe('ExpensesSection', () => {
     renderPage();
 
     await openActions();
-    await userEvent.click(await screen.findByRole('button', { name: 'Korrigieren' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Korrigieren' }));
     const gross = screen.getByLabelText('Bruttobetrag');
     expect(gross).toHaveValue('41,20');
     await userEvent.clear(gross);
@@ -181,7 +181,7 @@ describe('ExpensesSection', () => {
     renderPage();
 
     await openActions();
-    await userEvent.click(await screen.findByRole('button', { name: 'Neu importieren' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Neu importieren' }));
     expect(reimportMutation).toHaveBeenCalledTimes(1);
     expect(reimportMutation.mock.calls[0][0]).toEqual({ id: 'claim-1' });
   });
@@ -203,6 +203,34 @@ describe('ExpensesSection', () => {
       'title',
       'über Auto-Buchungsgrenze',
     );
+  });
+
+  it('offers an account suggestion that only applies after a click', async () => {
+    rows.current = [
+      claimRow({
+        parse: { ...claimRow().parse, account: null },
+        accountSuggestion: { account: '6837', source: 'keyword', lastDate: null },
+      }),
+    ];
+    renderPage();
+
+    await openActions();
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Korrigieren' }));
+    const apply = screen.getByRole('button', { name: /Vorschlag: 6837/ });
+    expect(screen.getByLabelText('Aufwandskonto')).toHaveValue('');
+    await userEvent.click(apply);
+    expect(screen.getByLabelText('Aufwandskonto')).toHaveValue('6837');
+  });
+
+  it('previews the receipt from the Drive file', async () => {
+    rows.current = [claimRow()];
+    renderPage();
+
+    await openActions();
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Vorschau' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Belegvorschau' });
+    expect(dialog.querySelector('iframe')).toHaveAttribute('src', 'https://drive.google.com/file/d/drive-1/preview');
+    expect(screen.getByRole('link', { name: 'In Drive öffnen' })).toHaveAttribute('href', 'https://drive.example/1');
   });
 
   it('disables Book when the read lacks a hard booking field', async () => {

@@ -63,7 +63,46 @@ describe('parseAmountToken', () => {
   });
 });
 
+const PORKBUN = `INVOICE PA I D
+Porkbun LLC
+11575 SW Pacific Hwy PMB 40649 Tigard, OR 97223, US
+EIN: 46-3699764
+Sold to:
+bumbleflies UG (haftungsbeschränkt) Christian Reitmorstr. 54 Munich, Bavaria 80538 DE VAT:
+DE336262972
+Invoice #: 12610616
+Date Paid: 2026-11-18
+Paid With:
+Account Credit
+DOMAIN PRODUCT TERM STATUS AMOUNT (USD)
+bumbleflies.de Domain Transfer 1 yr SUCCESS $5.10
+Total Paid USD $5.10
+Paid in full. This invoice serves as your receipt.`;
+
 describe('parseBillText', () => {
+  it('does not read a ZIP code as VAT when the label trails the address line', () => {
+    const bill = parseBillText(PORKBUN, { fromName: 'Porkbun LLC' });
+    expect(bill.vatCents).toBeNull();
+    expect(bill.vatRate).toBeNull();
+    expect(bill.grossCents).toBe(510);
+  });
+
+  it('still reads VAT when the amount follows the label', () => {
+    expect(parseBillText('Rechnung\n19 % USt 19,00 EUR\nSumme brutto 119,00 EUR', { fromName: 'X GmbH' })).toMatchObject({
+      vatCents: 1900,
+      vatRate: 0.19,
+    });
+    expect(parseBillText('Invoice\nVAT (19%) € 1.94\nTotal € 12.14', { fromName: 'X Ltd' })).toMatchObject({
+      vatCents: 194,
+      vatRate: 0.19,
+    });
+    expect(parseBillText('Invoice\nTax $0.00\nTotal $5.10', { fromName: 'X LLC' })).toMatchObject({ vatCents: 0 });
+  });
+
+  it('never reads a total line that merely mentions VAT as the VAT amount', () => {
+    expect(parseBillText('Invoice\nTotal 12,14 EUR (inkl. USt)', { fromName: 'X GmbH' }).vatCents).toBeNull();
+    expect(parseBillText('Invoice\nVAT Reg. No.: DE812871812\nTotal 12,14 EUR', { fromName: 'X GmbH' }).vatCents).toBeNull();
+  });
   it('reads a German invoice: net, VAT rate, gross, IBAN, number, due date', () => {
     const bill = parseBillText(HETZNER, { fromName: 'Hetzner Online GmbH' });
     expect(bill).toMatchObject({

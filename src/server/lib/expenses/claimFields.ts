@@ -57,12 +57,20 @@ export function parseExpenseText(text: string, opts: { fromName?: string } = {})
 }
 
 // A receipt states its own date far more often than an invoice states a due date.
+// Only an explicit receipt/issue qualifier is allowed after `date`: "Date Paid:"
+// and "Date issued:" are real, while "Updated:" and bare `datum` inside another
+// word are not.
 const RECEIPT_DATE =
-  /(?:rechnungsdatum|belegdatum|datum|date)\s*:?\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{4}-\d{2}-\d{2})/i;
+  /(?<!\w)(?:rechnungsdatum|belegdatum|datum|date)(?:\s+(?:paid|issued))?\s*:?\s*(\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{4}-\d{2}-\d{2})/i;
+const NOT_RECEIPT_DATE = /\b(?:due|fällig|zahlbar|payment|updated)\b/i;
 
 function receiptDate(text: string): Date | null {
-  const match = text.match(RECEIPT_DATE);
-  return match ? parseGermanDate(match[1]) : null;
+  for (const line of text.split(/\r?\n/)) {
+    if (NOT_RECEIPT_DATE.test(line)) continue;
+    const match = line.match(RECEIPT_DATE);
+    if (match) return parseGermanDate(match[1]);
+  }
+  return null;
 }
 
 const EXPENSE_ACCOUNT = /^[67]\d{3}$/;

@@ -396,42 +396,24 @@ h3 {
 .claim-acts .btn {
   width: 100%;
 }
-.claim-menu {
-  position: relative;
+.claim-menu-trigger {
+  white-space: nowrap;
 }
-.claim-menu > summary {
-  min-height: 36px;
-  padding: 0 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #cfccc2;
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--ink);
-  font: 600 13px 'IBM Plex Sans', sans-serif;
-  cursor: pointer;
-  list-style: none;
-}
-.claim-menu > summary::-webkit-details-marker {
-  display: none;
-}
-.claim-menu > summary::after {
-  content: ' ▾';
-}
-.claim-menu[open] > summary::after {
-  content: ' ▴';
-}
-/* In-flow, not a floating popup: the table wraps and the card clip overflow. */
-.claim-menu-list {
+/* Portal popup: never clipped by the card and never resizes the table row. */
+.claim-popover {
+  position: fixed;
+  z-index: 100;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-top: 6px;
   padding: 8px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+}
+.claim-popover .btn {
+  white-space: nowrap;
 }
 
 .chip {
