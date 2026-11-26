@@ -32,6 +32,15 @@ stacked identical red toasts.
 `npm run lint && npm run typecheck && npm run typecheck:server && npm test -- --maxWorkers=2`
 — all green (110 files, 986 tests).
 
+## Deployment results
+
+Shipped in `queen-v0.37.2`; `queen-v0.37.3` followed when browser verification
+found the floating action menu was clipped by the table's overflow, so it now
+expands in flow. Verified live in DE and EN, light and mobile-dark: the Porkbun
+claim shows "brutto, ohne Vorsteuer", Book is disabled with the tooltip
+"Aufwandskonto fehlt – bitte zuerst korrigieren", and all three secondary
+actions are visible inside the compact menu.
+
 ## Success criteria / known issues
 
 - The error names the field; Book cannot be clicked when booking is impossible.
