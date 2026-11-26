@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.38.3](https://github.com/bumbleflies/queen/compare/queen-v0.38.2...queen-v0.38.3) (2026-11-26)
+
+
+### Bug Fixes
+
+* serve claim PDF previews from queen instead of Drive iframe ([#419](https://github.com/bumbleflies/queen/issues/419)) ([89762b8](https://github.com/bumbleflies/queen/commit/89762b8b6f36bab61f527e9ab25cdb2638b12708))
+
 ## [0.38.2](https://github.com/bumbleflies/queen/compare/queen-v0.38.1...queen-v0.38.2) (2026-11-26)
 
 
