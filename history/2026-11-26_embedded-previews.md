@@ -32,6 +32,15 @@ for its classes, so labels, values and copy buttons ran together in one line.
 `npm run lint && npm run typecheck && npm run typecheck:server && npm test -- --maxWorkers=2`
 — all green (112 files, 1001 tests).
 
+## Deployment results
+
+Shipped in `queen-v0.39.0`. Verified live on the released payout
+`SP-2026-0002`: the receipt row has a `Vorschau` button that opens the real
+PDF, and the GiroCode card shows the QR on the left with reference, total,
+purpose and copy/approval actions on the right. That claim is `payoutPending`,
+so its correction actions are locked by design; the embedded preview in the
+correction dialog is covered by the component test.
+
 ## Success criteria / known issues
 
 - Both decisions can be made while looking at the actual receipt.
