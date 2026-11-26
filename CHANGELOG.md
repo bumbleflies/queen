@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.38.0](https://github.com/bumbleflies/queen/compare/queen-v0.37.3...queen-v0.38.0) (2026-11-26)
+
+
+### Features
+
+* receipt preview, account hint and safer receipt parsing ([#413](https://github.com/bumbleflies/queen/issues/413)) ([daec2e7](https://github.com/bumbleflies/queen/commit/daec2e7fda60a4067603418ea8306ddfbcef622a))
+
 ## [0.37.3](https://github.com/bumbleflies/queen/compare/queen-v0.37.2...queen-v0.37.3) (2026-11-26)
 
 
