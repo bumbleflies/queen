@@ -19,6 +19,8 @@ export interface ClaimToCorrect {
   vatCents: number | null;
   vatRate: number | null;
   account: string | null;
+  /** Review-only hint; never applied without a click. */
+  accountSuggestion?: { account: string; source: string; lastDate: string | Date | null } | null;
 }
 
 /** 1214 → "12,14"; a field the read left empty stays empty. */
@@ -173,6 +175,27 @@ export function ClaimCorrectDialog({
           {t('expenses.correct.account')}
           <input className="field" inputMode="numeric" value={account} onChange={(e) => setAccount(e.target.value)} />
         </label>
+        {claim.accountSuggestion ? (
+          <button
+            type="button"
+            className="btn ghost sm"
+            onClick={() => setAccount(claim.accountSuggestion!.account)}
+            title={t('expenses.accountSuggestion.hint')}
+          >
+            {t('expenses.accountSuggestion')
+              .replace('{account}', claim.accountSuggestion.account)
+              .replace(
+                '{source}',
+                t(
+                  claim.accountSuggestion.source === 'history'
+                    ? 'expenses.accountSource.history'
+                    : claim.accountSuggestion.source === 'rule'
+                      ? 'expenses.accountSource.rule'
+                      : 'expenses.accountSource.keyword',
+                ),
+              )}
+          </button>
+        ) : null}
       </div>
       <div className="row acts" style={{ padding: 16 }}>
         <button type="button" className="btn ghost" onClick={onClose}>{t('common.cancel')}</button>

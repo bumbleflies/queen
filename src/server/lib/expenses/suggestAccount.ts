@@ -1,10 +1,12 @@
+import { Account } from '../../models/Account';
+import { Supplier } from '../../models/Supplier';
 import { ExpenseClaim } from '../../models/ExpenseClaim';
 import { normalizeIban, normalizeVendor } from '../accounting/normalize';
 
 export interface AccountSuggestion {
   account: string;
   /** Only history for now; a receipt reader can become a second source later. */
-  source: 'history';
+  source: 'history' | 'rule' | 'keyword';
   /** Date of the newest matching receipt, for the review tooltip. */
   lastDate: Date | null;
 }
@@ -58,4 +60,39 @@ export async function suggestAccount(input: {
     source: 'history',
     lastDate: dates[0] ?? null,
   };
+}
+
+/**
+ * A review-only suggestion for the correction dialog. It never writes to the
+ * claim and is never used by intake's auto-booking: a human still applies it.
+ * Sources in priority order: earlier booked claims, an admin's booking rule,
+ * then the chart account this workspace uses for digital services.
+ */
+export async function suggestReviewAccount(input: {
+  iban?: string;
+  vendorName?: string;
+}): Promise<AccountSuggestion | null> {
+  const history = await suggestAccount(input);
+  if (history) return history;
+
+  const vendor = normalizeVendor(input.vendorName ?? '').toLowerCase();
+  if (vendor) {
+    const rules = await Supplier.find(
+      { archived: { $ne: true }, defaultAccount: { $exists: true, $ne: null } },
+      { name: 1, namePatterns: 1, defaultAccount: 1 },
+    ).lean();
+    const matches = rules.filter(
+      (r) =>
+        r.namePatterns?.some((pattern) => vendor.includes(normalizeVendor(pattern).toLowerCase())) ||
+        vendor.includes(normalizeVendor(r.name).toLowerCase()),
+    );
+    const accounts = new Set(matches.map((r) => r.defaultAccount).filter(Boolean));
+    if (accounts.size === 1) return { account: [...accounts][0]!, source: 'rule', lastDate: null };
+  }
+
+  if (/\b(porkbun|godaddy|namecheap|domain|hosting|hetzner|google cloud|cloudflare)\b/i.test(vendor)) {
+    const exists = await Account.exists({ number: '6837', archived: { $ne: true } });
+    if (exists) return { account: '6837', source: 'keyword', lastDate: null };
+  }
+  return null;
 }

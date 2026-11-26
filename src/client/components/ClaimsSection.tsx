@@ -7,6 +7,7 @@ import { formatDate, formatEUR } from '../lib/format';
 import { parseGermanAmount } from '../../server/lib/money';
 import { claimStatusClass, claimStatusKey } from '../lib/expenseLabel';
 import { ClaimCorrectDialog, type ClaimToCorrect } from './ClaimCorrectDialog';
+import { ClaimMenu } from './ClaimMenu';
 import { Modal } from './FinanceDialogs';
 
 interface ClaimParse {
@@ -37,6 +38,7 @@ interface ClaimRow {
   founder?: { id: string; name: string; shortName: string; active: boolean } | null;
   parse?: ClaimParse | null;
   corrected?: { at: string | Date | null; by: string } | null;
+  accountSuggestion?: { account: string; source: string; lastDate: string | Date | null } | null;
   payoutId?: string | null;
   autoBookable?: { ok: boolean; reasons: string[]; vatDeductible: boolean; grossOnly: boolean };
 }
@@ -225,6 +227,7 @@ export function ClaimsSection({ year, remember = true }: { year: number; remembe
   const reimport = trpc.expenses.claims.reimport.useMutation();
 
   const [correcting, setCorrecting] = useState<ClaimToCorrect | null>(null);
+  const [preview, setPreview] = useState<ClaimRow | null>(null);
 
   const rows = (claims.data ?? []) as unknown as ClaimRow[];
 
@@ -289,6 +292,7 @@ export function ClaimsSection({ year, remember = true }: { year: number; remembe
       vatCents: parsed.vatCents ?? null,
       vatRate: parsed.vatRate ?? null,
       account: parsed.account ?? null,
+      accountSuggestion: row.accountSuggestion ?? null,
     });
   }
 
@@ -429,34 +433,14 @@ export function ClaimsSection({ year, remember = true }: { year: number; remembe
                               {t('expenses.rebook')}
                             </button>
                           ) : null}
-                          <details className="claim-menu">
-                            <summary>{t('expenses.actions')}</summary>
-                            <div className="claim-menu-list">
-                              {row.status === 'received' ? (
-                                <>
-                                  <button type="button" className="btn ghost sm" onClick={() => startCorrecting(row)}>
-                                    {t('expenses.correctLabel')}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="btn ghost sm"
-                                    disabled={reimport.isPending}
-                                    onClick={() => reimportRow(row)}
-                                  >
-                                    {t('expenses.reimport')}
-                                  </button>
-                                </>
-                              ) : null}
-                              <button
-                                type="button"
-                                className="btn ghost sm"
-                                onClick={() => toggleIgnored(row)}
-                                disabled={setIgnored.isPending}
-                              >
-                                {row.status === 'ignored' ? t('expenses.unignore') : t('expenses.ignore')}
-                              </button>
-                            </div>
-                          </details>
+                          <ClaimMenu
+                            booked={row.status !== 'received'}
+                            reimportPending={reimport.isPending}
+                            onPreview={() => setPreview(row)}
+                            onCorrect={() => startCorrecting(row)}
+                            onReimport={() => void reimportRow(row)}
+                            onIgnore={() => void toggleIgnored(row)}
+                          />
                         </div>
                       ) : null}
                     </td>
@@ -474,6 +458,28 @@ export function ClaimsSection({ year, remember = true }: { year: number; remembe
           booked={correcting.status === 'booked'}
           onClose={() => setCorrecting(null)}
         />
+      ) : null}
+      {preview ? (
+        <Modal
+          title={t('expenses.preview.title')}
+          sub={preview.fileName}
+          onClose={() => setPreview(null)}
+        >
+          <div style={{ padding: 16, display: 'grid', gap: 12 }}>
+            {preview.driveFileId ? (
+              <iframe
+                title={preview.fileName}
+                src={`https://drive.google.com/file/d/${encodeURIComponent(preview.driveFileId)}/preview`}
+                style={{ width: '100%', height: 'min(70vh, 720px)', border: 0 }}
+              />
+            ) : (
+              <p className="muted">{t('expenses.preview.none')}</p>
+            )}
+            {preview.driveLink ? (
+              <a href={preview.driveLink} target="_blank" rel="noreferrer">{t('expenses.preview.open')}</a>
+            ) : null}
+          </div>
+        </Modal>
       ) : null}
     </section>
   );

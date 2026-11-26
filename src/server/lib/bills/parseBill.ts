@@ -138,6 +138,23 @@ function amountOnLine(line: string): number | null {
   return null;
 }
 
+/**
+ * VAT is the only label whose value must follow it: an address line can end in
+ * a dangling `VAT:` while the number before it is a ZIP or house number. Only
+ * a currency-marked or decimal money token in the *suffix* counts; a bare
+ * integer (`80538`, `19`) never does.
+ */
+function vatAmountOnLine(line: string): number | null {
+  const match = VAT_LABEL.exec(line);
+  if (!match) return null;
+  const suffix = line.slice(match.index + match[0].length);
+  const currency = currencyAmounts(suffix);
+  if (currency.length > 0) return currency[0];
+  const decimal = suffix.match(/(?<![\d/.,-])\d[\d.,]*[.,]\d{1,2}(?!\d)/);
+  if (!decimal) return null;
+  return parseAmountToken(decimal[0]);
+}
+
 /** First bare amount that carries decimals (real money), else the first bare amount.
  * Used for value-before-label gross so a bare day/year on the same line isn't
  * mistaken for the total. */
@@ -298,7 +315,7 @@ export function parseBillText(text: string, hints: BillHints = {}): ParsedBill {
         const rate = Number(percent[1].replace(',', '.'));
         if (rate >= 0 && rate <= 100) vatRate ??= rate / 100;
       }
-      const cents = amountOnLine(line);
+      const cents = vatAmountOnLine(line);
       if (cents !== null) vatCents ??= cents;
     }
   }
