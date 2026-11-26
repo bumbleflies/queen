@@ -3,6 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { router, adminProcedure } from '../trpcInit';
 import { Founder } from '../models/Founder';
 import { normalizeIban } from '../lib/accounting/normalize';
+import { applyFounderImport } from '../lib/expenses/founderImport';
 import { Supplier } from '../models/Supplier';
 
 const emailInput = z.string().trim().toLowerCase().email();
@@ -117,4 +118,9 @@ export const foundersRouter = router({
       const emails = await addFounderEmail(input.id, input.email);
       return { id: input.id, emails };
     }),
+
+  /** Upsert founders from JSON. Dry run by default; one bad row writes nothing. */
+  importJson: adminProcedure
+    .input(z.object({ json: z.string().min(1), dryRun: z.boolean().default(true) }))
+    .mutation(async ({ ctx, input }) => applyFounderImport(input.json, input.dryRun, ctx.user.sub)),
 });

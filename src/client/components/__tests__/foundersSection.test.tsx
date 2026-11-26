@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { FoundersSection } from '../FoundersSection';
 import { LanguageProvider } from '../../i18n/LanguageContext';
@@ -24,6 +24,14 @@ const state = vi.hoisted(() => ({
   update: vi.fn(async (_input: Record<string, unknown>) => ({ id: 'f1' })),
   setActive: vi.fn(async (_input: Record<string, unknown>) => ({})),
   addEmail: vi.fn(async (_input: Record<string, unknown>) => ({})),
+  importJson: vi.fn(async (input: { dryRun?: boolean }) => ({
+    rows: 1,
+    created: input.dryRun ? 1 : 1,
+    updated: 0,
+    unchanged: 0,
+    items: [{ name: 'Neu', loginEmail: 'neu@bumbleflies.de', action: 'create' }],
+    errors: [],
+  })),
 }));
 
 vi.mock('../../lib/trpc', () => ({
@@ -35,6 +43,7 @@ vi.mock('../../lib/trpc', () => ({
       update: { useMutation: () => ({ mutateAsync: state.update, isPending: false }) },
       setActive: { useMutation: () => ({ mutateAsync: state.setActive, isPending: false }) },
       addEmail: { useMutation: () => ({ mutateAsync: state.addEmail, isPending: false }) },
+      importJson: { useMutation: () => ({ mutateAsync: state.importJson, isPending: false }) },
     },
   },
 }));
@@ -69,6 +78,7 @@ beforeEach(() => {
   state.update.mockClear();
   state.setActive.mockClear();
   state.addEmail.mockClear();
+  state.importJson.mockClear();
 });
 
 describe('FoundersSection', () => {
@@ -164,5 +174,31 @@ describe('FoundersSection', () => {
     await userEvent.type(within(dialog).getByLabelText('Eingangs-Adressen (mit Komma trennen)'), 'Privat@Example.org');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Speichern' }));
     await waitFor(() => expect(state.addEmail).toHaveBeenCalledWith({ id: 'f1', email: 'privat@example.org' }));
+  });
+
+  it('checks a JSON import before applying it', async () => {
+    renderSection();
+    await userEvent.click(screen.getByRole('button', { name: 'JSON importieren' }));
+    const dialog = screen.getByRole('dialog', { name: 'Gesellschafter aus JSON importieren' });
+    const json = '[{"name":"Neu","shortName":"N","emails":["n@example.org"],"loginEmail":"neu@bumbleflies.de","iban":"DE89370400440532013000"}]';
+    fireEvent.change(within(dialog).getByLabelText('JSON'), { target: { value: json } });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Prüfen' }));
+    await waitFor(() => expect(state.importJson).toHaveBeenCalledWith({ json, dryRun: true }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Importieren' }));
+    await waitFor(() => expect(state.importJson).toHaveBeenCalledWith({ json, dryRun: false }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('keeps the import button disabled when the check found errors', async () => {
+    state.importJson.mockResolvedValueOnce({
+      rows: 1, created: 0, updated: 0, unchanged: 0, items: [], errors: ['Eintrag 1: Login-Adresse ungültig'],
+    });
+    renderSection();
+    await userEvent.click(screen.getByRole('button', { name: 'JSON importieren' }));
+    const dialog = screen.getByRole('dialog', { name: 'Gesellschafter aus JSON importieren' });
+    fireEvent.change(within(dialog).getByLabelText('JSON'), { target: { value: '[]' } });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Prüfen' }));
+    await waitFor(() => expect(screen.getByText('Eintrag 1: Login-Adresse ungültig')).toBeInTheDocument());
+    expect(within(dialog).getByRole('button', { name: 'Importieren' })).toBeDisabled();
   });
 });

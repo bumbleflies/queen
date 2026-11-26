@@ -16,6 +16,13 @@ const confirmMutation = vi.fn(async () => ({
   entryId: 'entry-1',
   rebooked: false,
 }));
+const reimportMutation = vi.fn(async () => ({
+  ok: true as const,
+  id: 'claim-1',
+  fileName: 'Spesen-TP-202601-Bahn.pdf',
+  founderName: 'Test Person',
+  status: 'received',
+}));
 
 const FOUNDER = { id: 'f1', name: 'Test Person', shortName: 'TP', active: true };
 
@@ -61,6 +68,7 @@ vi.mock('../../lib/trpc', () => {
     createManual: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
     correct: { useMutation: () => ({ mutateAsync: correctMutation, isPending: false }) },
     confirm: { useMutation: () => ({ mutateAsync: confirmMutation, isPending: false }) },
+    reimport: { useMutation: () => ({ mutateAsync: reimportMutation, isPending: false }) },
   };
   return {
     trpc: {
@@ -95,6 +103,7 @@ beforeEach(() => {
   role.current = 'admin';
   correctMutation.mockClear();
   confirmMutation.mockClear();
+  reimportMutation.mockClear();
 });
 
 describe('ExpensesSection', () => {
@@ -159,6 +168,15 @@ describe('ExpensesSection', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Buchen' }));
     expect(confirmMutation).toHaveBeenCalledTimes(1);
     expect(confirmMutation.mock.calls[0][0]).toEqual({ id: 'claim-1' });
+  });
+
+  it('re-imports a claim from the same mail without a new email', async () => {
+    rows.current = [claimRow()];
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Neu importieren' }));
+    expect(reimportMutation).toHaveBeenCalledTimes(1);
+    expect(reimportMutation.mock.calls[0][0]).toEqual({ id: 'claim-1' });
   });
 
   it('shows why a queued claim was not booked itself on the booking button', async () => {

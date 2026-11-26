@@ -13,7 +13,7 @@ import { PostingError } from '../lib/accounting/postingRules';
 import { addressFromHeader } from '../services/GmailService';
 import { getExpenseAutoBookLimitCents } from '../services/appSettings';
 import { describeIntakeError } from '../jobs/billIntake';
-import { resolveExpenseIntakeDeps, runExpenseIntake } from '../jobs/expenseIntake';
+import { resolveExpenseIntakeDeps, reimportClaim, ReimportError, runExpenseIntake } from '../jobs/expenseIntake';
 import { addFounderEmail } from './founders';
 
 const yearInput = z.object({ year: z.number().int().min(2000).max(2100) });
@@ -156,6 +156,22 @@ const claimsRouter = router({
       return { ok: false as const, error: describeIntakeError(err) };
     }
   }),
+
+  /**
+   * Redo the intake of one claim from the same mail (admin). The claim is
+   * updated in place, never deleted; configuration and mail failures are
+   * returned as sentences rather than 5xx.
+   */
+  reimport: adminProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      try {
+        const deps = await resolveExpenseIntakeDeps();
+        return { ok: true as const, ...(await reimportClaim(input.id, deps)) };
+      } catch (err) {
+        return { ok: false as const, error: err instanceof ReimportError ? err.message : describeIntakeError(err) };
+      }
+    }),
 
   /**
    * A receipt the founder cannot forward (a paper receipt): the values are
