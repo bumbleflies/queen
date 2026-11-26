@@ -224,6 +224,7 @@ export const payoutsRouter = router({
         vendorName: claimFieldsOf(claim)?.vendorName ?? '',
         fileName: claim.fileName,
         driveLink: claim.driveLink ?? '',
+        driveFileId: claim.driveFileId ?? '',
       })),
       qr: showQr ? qrPayload(founder, payout) : null,
     };

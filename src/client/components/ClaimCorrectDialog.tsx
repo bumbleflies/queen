@@ -4,6 +4,7 @@ import { parseGermanAmount } from '../../server/lib/money';
 import { useToast } from './Toast';
 import { useLanguage } from '../i18n/LanguageContext';
 import { Modal } from './FinanceDialogs';
+import { ClaimPdf } from './ClaimPdf';
 
 /** The claim as the table shows it: the read, or a correction already on file. */
 export interface ClaimToCorrect {
@@ -141,8 +142,9 @@ export function ClaimCorrectDialog({
   }
 
   return (
-    <Modal title={t('expenses.correct.title')} sub={`${claim.fileName} — ${t('expenses.correct.sub')}`} onClose={onClose}>
-      <div style={{ padding: 16, display: 'grid', gap: 10 }}>
+    <Modal title={t('expenses.correct.title')} sub={`${claim.fileName} — ${t('expenses.correct.sub')}`} onClose={onClose} wide>
+      <div className="correct-layout">
+      <div style={{ padding: 16, display: 'grid', gap: 10, alignContent: 'start' }}>
         <label className="lab">
           {t('expenses.correct.date')}
           <input className="field" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -196,6 +198,10 @@ export function ClaimCorrectDialog({
               )}
           </button>
         ) : null}
+      </div>
+      <div style={{ padding: 16, borderLeft: '1px solid var(--line)' }}>
+        <ClaimPdf claimId={claim.id} height={560} />
+      </div>
       </div>
       <div className="row acts" style={{ padding: 16 }}>
         <button type="button" className="btn ghost" onClick={onClose}>{t('common.cancel')}</button>
