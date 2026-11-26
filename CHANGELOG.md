@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.37.3](https://github.com/bumbleflies/queen/compare/queen-v0.37.2...queen-v0.37.3) (2026-11-26)
+
+
+### Bug Fixes
+
+* expand claim actions inline so the menu is not clipped ([#410](https://github.com/bumbleflies/queen/issues/410)) ([62074e9](https://github.com/bumbleflies/queen/commit/62074e903277d091618419779718b8756cbf6fef))
+
 ## [0.37.2](https://github.com/bumbleflies/queen/compare/queen-v0.37.1...queen-v0.37.2) (2026-11-26)
 
 
