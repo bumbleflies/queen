@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.39.0](https://github.com/bumbleflies/queen/compare/queen-v0.38.4...queen-v0.39.0) (2026-11-26)
+
+
+### Features
+
+* embed receipt preview in payout and correction, fix QR layout ([#424](https://github.com/bumbleflies/queen/issues/424)) ([a9ec0c7](https://github.com/bumbleflies/queen/commit/a9ec0c775bc18794669ea4a258d8e9c0d369c19b))
+
 ## [0.38.4](https://github.com/bumbleflies/queen/compare/queen-v0.38.3...queen-v0.38.4) (2026-11-26)
 
 
