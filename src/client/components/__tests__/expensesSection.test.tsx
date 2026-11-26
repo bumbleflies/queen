@@ -219,6 +219,10 @@ describe('ExpensesSection', () => {
 
     await openActions();
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Korrigieren' }));
+    expect(screen.getByRole('dialog').querySelector('iframe')).toHaveAttribute(
+      'src',
+      'data:application/pdf;base64,JVBERi0xLjQ=',
+    );
     const apply = screen.getByRole('button', { name: /Vorschlag: 6837/ });
     expect(screen.getByLabelText('Aufwandskonto')).toHaveValue('');
     await userEvent.click(apply);

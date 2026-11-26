@@ -6,6 +6,7 @@ import { formatDate, formatEUR } from '../lib/format';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useToast } from '../components/Toast';
 import { payoutStatusClass, payoutStatusKey } from '../lib/expenseLabel';
+import { ReceiptPreview } from '../components/ReceiptPreview';
 
 function CopyField({ label, value }: { label: string; value: string }) {
   const { t } = useLanguage();
@@ -126,6 +127,12 @@ export function PayoutPage() {
               ) : null}
               {' · '}
               <span className="num">{formatEUR(claim.grossCents)}</span>
+              {claim.driveFileId ? (
+                <>
+                  {' · '}
+                  <ReceiptPreview claimId={claim.id} fileName={claim.fileName} />
+                </>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -169,35 +176,41 @@ export function PayoutPage() {
       {showQr ? (
         <section className="card qr-card">
           <h2>{t('payout.qrTitle')}</h2>
-          {qrSrc ? <img src={qrSrc} alt={t('payout.qrTitle')} className="qr-image" /> : <p>{t('payout.loading')}</p>}
-          <p className="muted">{t('payout.qrHint')}</p>
-          <CopyField label={t('payout.reference')} value={data.reference} />
-          <CopyField label={t('payout.total')} value={formatEUR(data.amountCents)} />
-          <CopyField label={t('payout.purpose')} value={data.purpose} />
-          {status === 'released' ? (
-            <>
-              <button
-                type="button"
-                className="btn ghost"
-                disabled={busy || markExecuted.isPending}
-                onClick={() => void act(() => markExecuted.mutateAsync({ id: data.id }), t('payout.executed'))}
-              >
-                {t('payout.markExecuted')}
-              </button>
-              <button
-                type="button"
-                className="btn ghost"
-                disabled={busy}
-                onClick={() => {
-                  if (window.confirm(t('payout.cancel'))) {
-                    void act(() => cancel.mutateAsync({ id: data.id }), t('payout.canceled'));
-                  }
-                }}
-              >
-                {t('payout.cancel')}
-              </button>
-            </>
-          ) : null}
+          <div className="qr-layout">
+            <div>
+              {qrSrc ? <img src={qrSrc} alt={t('payout.qrTitle')} className="qr-image" /> : <p>{t('payout.loading')}</p>}
+              <p className="muted">{t('payout.qrHint')}</p>
+            </div>
+            <div>
+              <CopyField label={t('payout.reference')} value={data.reference} />
+              <CopyField label={t('payout.total')} value={formatEUR(data.amountCents)} />
+              <CopyField label={t('payout.purpose')} value={data.purpose} />
+              {status === 'released' ? (
+                <div className="row acts" style={{ marginTop: 12 }}>
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    disabled={busy || markExecuted.isPending}
+                    onClick={() => void act(() => markExecuted.mutateAsync({ id: data.id }), t('payout.executed'))}
+                  >
+                    {t('payout.markExecuted')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    disabled={busy}
+                    onClick={() => {
+                      if (window.confirm(t('payout.cancel'))) {
+                        void act(() => cancel.mutateAsync({ id: data.id }), t('payout.canceled'));
+                      }
+                    }}
+                  >
+                    {t('payout.cancel')}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </div>
         </section>
       ) : null}
     </>

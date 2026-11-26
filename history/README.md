@@ -38,3 +38,4 @@ The plans in `docs/plans/` say what was intended. These logs say what actually s
 | 2026-11-26 | [Founder registry JSON import](2026-11-26_founder-json-import.md) | pending |
 | 2026-11-26 | [Claim review feedback and compact actions](2026-11-26_claim-review-feedback.md) | pending |
 | 2026-11-26 | [Receipt review: parser, preview, menu, account hint](2026-11-26_receipt-review-fixes.md) | pending |
+| 2026-11-26 | [Receipt preview embedded where decisions happen](2026-11-26_embedded-previews.md) | pending |

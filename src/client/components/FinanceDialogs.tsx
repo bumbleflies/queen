@@ -5,7 +5,7 @@ import { useToast } from './Toast';
 import { useLanguage } from '../i18n/LanguageContext';
 
 /** Shared modal frame: backdrop click and Escape close it. */
-export function Modal({ title, sub, onClose, children }: { title: string; sub?: ReactNode; onClose: () => void; children: ReactNode }) {
+export function Modal({ title, sub, onClose, children, wide }: { title: string; sub?: ReactNode; onClose: () => void; children: ReactNode; wide?: boolean }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -26,7 +26,7 @@ export function Modal({ title, sub, onClose, children }: { title: string; sub?: 
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        style={{ width: '100%', maxWidth: 560, maxHeight: 'calc(100vh - 80px)', overflowY: 'auto' }}
+        style={{ width: '100%', maxWidth: wide ? 980 : 560, maxHeight: 'calc(100vh - 80px)', overflowY: 'auto' }}
       >
         <div className="card-head">
           <div>

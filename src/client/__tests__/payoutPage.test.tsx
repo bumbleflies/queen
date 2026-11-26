@@ -21,6 +21,13 @@ vi.mock('../lib/trpc', () => ({
       payouts: { get: { invalidate: async () => {} }, list: { invalidate: async () => {} } },
     }),
     me: { useQuery: () => ({ data: { user: { role: state.role } }, isLoading: false }) },
+    expenses: {
+      claims: {
+        preview: {
+          useQuery: () => ({ data: { fileName: 'beleg.pdf', pdfBase64: 'JVBERi0xLjQ=' }, isLoading: false, error: null }),
+        },
+      },
+    },
     payouts: {
       get: { useQuery: () => ({ data: state.payout, isLoading: false }) },
       qr: { useQuery: () => ({ data: state.qr, isLoading: false }) },
@@ -59,6 +66,7 @@ function payout(status: string) {
         vendorName: 'Bahn',
         fileName: 'beleg.pdf',
         driveLink: '',
+        driveFileId: 'drive-1',
       },
     ],
   };
@@ -123,6 +131,13 @@ describe('PayoutPage', () => {
     renderPage();
     expect(screen.getByRole('button', { name: 'Freigeben' })).toBeInTheDocument();
     expect(screen.queryByAltText('Girocode')).not.toBeInTheDocument();
+  });
+
+  it('embeds the receipt PDF preview on the payout page', async () => {
+    renderPage();
+    await userEvent.click(screen.getByRole('button', { name: 'Vorschau' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Belegvorschau' });
+    expect(dialog.querySelector('iframe')).toHaveAttribute('src', 'data:application/pdf;base64,JVBERi0xLjQ=');
   });
 
   it('releases from the page', async () => {
