@@ -14,8 +14,10 @@ help choosing an account.
   label, so a trailing `VAT:` on an address line no longer reads the ZIP.
   Receipt dates accept `Date Paid:` / `Date issued:` per line, while `Due date`,
   `Zahlbar`, `Payment date` and `Updated:` are skipped.
-- **Preview:** a `Vorschau` action opens a modal with the Drive PDF preview and
-  a fallback link; manual receipts without a Drive file show a hint.
+- **Preview:** a `Vorschau` action opens a modal with the PDF served from our own
+  origin through `claims.preview` (base64 from Drive). Google's viewer shows a
+  cookie-consent wall inside an iframe, so the Drive URL is only a fallback link;
+  manual receipts without a Drive file show a hint.
 - **Actions menu:** rendered in a portal at `document.body` with fixed
   positioning, so it never clips inside the card and never resizes the table;
   closes on Escape, outside click and scroll.

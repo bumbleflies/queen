@@ -69,6 +69,9 @@ vi.mock('../../lib/trpc', () => {
     correct: { useMutation: () => ({ mutateAsync: correctMutation, isPending: false }) },
     confirm: { useMutation: () => ({ mutateAsync: confirmMutation, isPending: false }) },
     reimport: { useMutation: () => ({ mutateAsync: reimportMutation, isPending: false }) },
+    preview: {
+      useQuery: () => ({ data: { fileName: 'Spesen-TP-202601-Bahn.pdf', pdfBase64: 'JVBERi0xLjQ=' }, isLoading: false, error: null }),
+    },
   };
   return {
     trpc: {
@@ -229,7 +232,7 @@ describe('ExpensesSection', () => {
     await openActions();
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Vorschau' }));
     const dialog = await screen.findByRole('dialog', { name: 'Belegvorschau' });
-    expect(dialog.querySelector('iframe')).toHaveAttribute('src', 'https://drive.google.com/file/d/drive-1/preview');
+    expect(dialog.querySelector('iframe')).toHaveAttribute('src', 'data:application/pdf;base64,JVBERi0xLjQ=');
     expect(screen.getByRole('link', { name: 'In Drive öffnen' })).toHaveAttribute('href', 'https://drive.example/1');
   });
 
