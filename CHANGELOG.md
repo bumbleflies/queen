@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.39.3](https://github.com/bumbleflies/queen/compare/queen-v0.39.2...queen-v0.39.3) (2026-11-27)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @trpc/react-query to v11.31.8 ([#431](https://github.com/bumbleflies/queen/issues/431)) ([f425479](https://github.com/bumbleflies/queen/commit/f42547903626bbc92d5c29e142bbb13e66912d20))
+
 ## [0.39.2](https://github.com/bumbleflies/queen/compare/queen-v0.39.1...queen-v0.39.2) (2026-11-27)
 
 
